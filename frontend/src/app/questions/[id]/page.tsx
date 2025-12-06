@@ -1,12 +1,32 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { allQuestions } from "../../data/mock";
+import type { Question } from "@/app/data/mock";
 
-function StatsCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+export const dynamic = "force-dynamic";
+
+async function fetchQuestion(id: string): Promise<Question | null> {
+  try {
+    const base = process.env.NEXT_PUBLIC_BASE_URL ?? "";
+    const res = await fetch(`${base}/api/questions/${id}`, { cache: "no-store" });
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data?.question as Question) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function StatsCard({
+  label,
+  value,
+  hint,
+  valueClassName,
+}: { label: string; value: string; hint?: string; valueClassName?: string }) {
   return (
     <div className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-md shadow-black/20">
       <span className="text-xs uppercase tracking-wide text-slate-300">{label}</span>
-      <span className="text-lg font-semibold text-white">{value}</span>
+      <span className={`break-words text-lg font-semibold text-white ${valueClassName ?? ""}`}>{value}</span>
       {hint ? <span className="text-xs text-slate-400">{hint}</span> : null}
     </div>
   );
@@ -55,10 +75,12 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
 
 export default async function QuestionDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const question = allQuestions.find((q) => q.id === id);
+  const question = await fetchQuestion(id);
   if (!question) {
     notFound();
   }
+  const votedLabel =
+    question.userChoice === "yes" ? "Du hast Ja gestimmt" : question.userChoice === "no" ? "Du hast Nein gestimmt" : null;
 
   return (
     <main className="min-h-screen bg-transparent text-slate-50">
@@ -81,9 +103,16 @@ export default async function QuestionDetail({ params }: { params: Promise<{ id:
                 <span className="text-sm text-slate-200">{question.summary}</span>
               </div>
             </div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">
-              ⏳ {formatDeadline(question.closesAt)}
-            </span>
+            <div className="flex flex-col items-end gap-2 text-right">
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">
+                ? {formatDeadline(question.closesAt)}
+              </span>
+              {votedLabel && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
+                  {votedLabel}
+                </span>
+              )}
+            </div>
           </div>
           <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
           <p className="text-base text-slate-200">{question.description}</p>
@@ -99,7 +128,7 @@ export default async function QuestionDetail({ params }: { params: Promise<{ id:
             <div className="flex items-center justify-between text-sm text-slate-200">
               <span>Community glaubt</span>
               <span className="font-semibold text-white">
-                {question.yesPct}% Ja · {question.noPct}% Nein
+                {question.yesPct}% Ja ú {question.noPct}% Nein
               </span>
             </div>
             <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
@@ -110,9 +139,14 @@ export default async function QuestionDetail({ params }: { params: Promise<{ id:
             <h3 className="text-sm font-semibold text-white">Meta & Stats</h3>
             <div className="grid grid-cols-2 gap-3">
               <StatsCard label="Votes (rel.)" value={`${question.yesPct + question.noPct}%`} hint="Absolutwerte folgen" />
-              <StatsCard label="Views" value="—" hint="Platzhalter bis API" />
-              <StatsCard label="Ranking-Score" value="—" hint="Platzhalter bis API" />
-              <StatsCard label="Status" value={question.status ?? "aktiv"} hint={formatDeadline(question.closesAt)} />
+              <StatsCard label="Views" value="-" hint="Platzhalter bis API" />
+              <StatsCard label="Ranking-Score" value="-" hint="Platzhalter bis API" />
+              <StatsCard
+                label="Status"
+                value={question.status ?? "aktiv"}
+                hint={formatDeadline(question.closesAt)}
+                valueClassName="text-base"
+              />
             </div>
             <div className="space-y-2 text-sm text-slate-200">
               <div className="flex justify-between"><span>Endet</span><span>{formatDeadline(question.closesAt)}</span></div>
@@ -132,4 +166,3 @@ export default async function QuestionDetail({ params }: { params: Promise<{ id:
     </main>
   );
 }
-
