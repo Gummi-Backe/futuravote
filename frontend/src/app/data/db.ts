@@ -87,7 +87,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     noVotes: row.noVotes,
     yesPct,
     noPct,
-    status: row.status ?? undefined,
+    status: row.status === null ? undefined : (row.status as Question["status"]),
     userChoice: sessionChoice,
   };
 }
