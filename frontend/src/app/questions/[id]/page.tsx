@@ -88,8 +88,8 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-export default async function QuestionDetail({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function QuestionDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const question = await fetchQuestion(id);
   if (!question) {
     notFound();

@@ -5,10 +5,10 @@ import { getQuestionById } from "@/app/data/store";
 
 export const revalidate = 0;
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, { params }: Params) {
-  const { id } = params;
+  const { id } = await params;
   const cookieStore = await cookies();
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
