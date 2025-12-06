@@ -49,7 +49,7 @@ if (!hasQuestions) {
   for (const q of allQuestions) {
     const yesVotes = Math.round((q.yesPct / Math.max(1, q.yesPct + q.noPct)) * baseline);
     const noVotes = Math.max(0, baseline - yesVotes);
-    insert.run({ ...q, yesVotes, noVotes });
+    insert.run({ ...q, yesVotes, noVotes, status: q.status ?? null });
   }
 }
 
