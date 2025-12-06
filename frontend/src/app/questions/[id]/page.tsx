@@ -1,13 +1,28 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies, headers } from "next/headers";
 import type { Question } from "@/app/data/mock";
 
 export const dynamic = "force-dynamic";
 
+function getBaseUrl() {
+  const headerStore = headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const protocol = headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  if (host) return `${protocol}://${host}`;
+  return process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+}
+
 async function fetchQuestion(id: string): Promise<Question | null> {
+  const cookieStore = cookies();
+  const cookieHeader = cookieStore.get("fv_session")?.value;
+  const baseUrl = getBaseUrl();
+
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL ?? "";
-    const res = await fetch(`${base}/api/questions/${id}`, { cache: "no-store" });
+    const res = await fetch(`${baseUrl}/api/questions/${id}`, {
+      cache: "no-store",
+      headers: cookieHeader ? { cookie: `fv_session=${cookieHeader}` } : undefined,
+    });
     if (res.status === 404) return null;
     if (!res.ok) return null;
     const data = await res.json();
@@ -73,8 +88,8 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-export default async function QuestionDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function QuestionDetail({ params }: { params: { id: string } }) {
+  const { id } = params;
   const question = await fetchQuestion(id);
   if (!question) {
     notFound();
