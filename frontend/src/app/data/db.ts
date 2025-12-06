@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS votes (
 
 // Seed if empty
 const countStmt = db.prepare("SELECT COUNT(*) as cnt FROM questions");
-const hasQuestions = countStmt.get().cnt > 0;
+const hasQuestions = ((countStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasQuestions) {
   const insert = db.prepare(
     `INSERT INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, status)
