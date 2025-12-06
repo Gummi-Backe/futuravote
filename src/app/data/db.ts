@@ -3,11 +3,11 @@ import fs from "fs";
 import path from "path";
 import { allQuestions, draftQueue, type Question } from "./mock";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "dev.db");
+const DATA_ROOT = process.env.DATA_DIR ?? (process.env.VERCEL ? "/tmp/futuravote" : path.join(process.cwd(), "data"));
+const DB_PATH = path.join(DATA_ROOT, "dev.db");
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DATA_ROOT)) {
+  fs.mkdirSync(DATA_ROOT, { recursive: true });
 }
 
 const db = new Database(DB_PATH);
