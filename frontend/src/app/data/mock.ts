@@ -10,6 +10,7 @@ export type Question = {
   yesPct: number;
   noPct: number;
   status?: "closingSoon" | "new" | "trending" | "top";
+  views?: number;
   userChoice?: "yes" | "no";
 };
 
