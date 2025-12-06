@@ -13,4 +13,6 @@
 - [x] Hover-Highlight fuer Feed-Tabs (Alle/Top/Trending/Neu/Unbeantwortet)
 - [x] Leichtes Anheben (Hover) fuer Tabs und Kategorie-Chips
 - [x] Detailseite lädt Frage über API mit Loading/Error-State
+- [x] Vote-Feedback im Feed (Info/Fehler-Message)
+- [x] Einfaches Rate-Limit pro Session beim Voting (Fehlermeldung bei zu schneller Abgabe)
 - [ ] Mobile Swipe-Modus / erweiterte Mobile-Navigation
