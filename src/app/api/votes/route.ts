@@ -39,7 +39,12 @@ export async function POST(request: Request) {
   lastVoteBySession.set(sessionId, now);
   const response = NextResponse.json({ question: updated });
   if (!existingSession) {
-    response.cookies.set("fv_session", sessionId, { path: "/", httpOnly: true, sameSite: "lax" });
+    response.cookies.set("fv_session", sessionId, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
   }
   return response;
 }
