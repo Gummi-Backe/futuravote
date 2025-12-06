@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getQuestionById, voteOnQuestion, type VoteChoice } from "@/app/data/store";
+import { getQuestionById, voteOnQuestion, type VoteChoice } from "@/app/data/db";
 
 const RATE_LIMIT_MS = 5000;
 const lastVoteBySession = new Map<string, number>();
@@ -30,12 +30,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const existing = await getQuestionById(questionId, sessionId);
+  const existing = getQuestionById(questionId, sessionId);
   if (!existing) {
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
 
-  const updated = await voteOnQuestion(questionId, normalizedChoice, sessionId);
+  const updated = voteOnQuestion(questionId, normalizedChoice, sessionId);
   lastVoteBySession.set(sessionId, now);
   const response = NextResponse.json({ question: updated });
   if (!existingSession) {
