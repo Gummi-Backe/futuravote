@@ -5,4 +5,12 @@
 - [x] Kategorien-Leiste mit Icons (scrollbar)
 - [x] Micro-Interactions (Hover/Pop, animierte Balken)
 - [x] Detailseite-Stats/Typografie
+- [x] Vote-Lock pro Session (Voting ohne Login, Cookie-basiert)
+- [x] Markierung abgestimmter Kacheln (Rahmen/Badge)
+- [x] Persistente Votes (Datei-basiert, sessiongebunden)
+- [x] Kategorie-Filter klickbar (per Kategorie einschränken)
+- [x] Kategorien-Chips ohne Farbpunkte (nur Icon + Text)
+- [x] Hover-Highlight fuer Feed-Tabs (Alle/Top/Trending/Neu/Unbeantwortet)
+- [x] Leichtes Anheben (Hover) fuer Tabs und Kategorie-Chips
+- [x] Detailseite lädt Frage über API mit Loading/Error-State
 - [ ] Mobile Swipe-Modus / erweiterte Mobile-Navigation

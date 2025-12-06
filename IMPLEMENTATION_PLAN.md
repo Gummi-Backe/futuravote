@@ -125,6 +125,16 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Micro-Interactions (Hover-Lift, animierte Balken, Hot-Puls)
 - [x] Detailseite-Stats/Typografie (fertig im MVP-UI)
 - [x] Mobile: groessere Touch-Ziele, horizontale Kategorie-Scroll (Swipe-Modus spaeter optional)
+### Voting-Logik/UX (Stand)
+- [x] Ja/Nein-Voting ohne Login (Session-Cookie)
+- [x] Vote-Lock pro Session (eine Stimme pro Frage, kein Wechsel)
+- [x] Abgestimmte Kachel klar markiert (Rahmen/Badge), Detailseite zeigt Vote-Badge
+- [x] Votes persistent gespeichert (Datei-basiert, sessiongebunden)
+- [x] Kategorien klickbar filterbar im Feed
+- [x] Kategorien-Chips ohne Farbpunkte (nur Icon + Text)
+- [x] Hover-Highlight fuer Feed-Tabs (Alle/Top/Trending/Neu/Unbeantwortet)
+- [x] Leichtes Anheben (Hover) fuer Tabs und Kategorie-Chips
+- [x] Detailseite bezieht Daten ueber API (mit Loading/Error)
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.

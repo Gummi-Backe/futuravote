@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   allQuestions as initialQuestions,
   categories,
@@ -60,11 +60,23 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-function EventCard({ question }: { question: Question }) {
+function EventCard({
+  question,
+  onVote,
+  isSubmitting,
+}: { question: Question; onVote?: (choice: "yes" | "no") => void; isSubmitting?: boolean }) {
   const badge = statusBadge(question.status);
+  const votedChoice = question.userChoice;
+  const voted = Boolean(votedChoice);
+  const votedLabel = votedChoice ? (votedChoice === "yes" ? "Abgestimmt: Ja" : "Abgestimmt: Nein") : null;
+  const voteLocked = voted;
 
   return (
-    <article className="group relative flex h-full flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-emerald-500/10 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25">
+    <article
+      className={`group relative flex h-full flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-emerald-500/10 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 ${
+        voted ? "border-emerald-300/50 shadow-emerald-400/30" : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
           <span
@@ -82,6 +94,11 @@ function EventCard({ question }: { question: Question }) {
           {badge && (
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>
               {badge.label}
+            </span>
+          )}
+          {votedLabel && (
+            <span className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
+              {votedLabel}
             </span>
           )}
           {question.status === "trending" && (
@@ -110,17 +127,25 @@ function EventCard({ question }: { question: Question }) {
       <div className="grid grid-cols-2 gap-4">
         <button
           type="button"
+          onClick={() => {
+            if (!voteLocked) onVote?.("yes");
+          }}
+          disabled={isSubmitting || voteLocked}
           className={`card-button yes ${
             question.userChoice === "yes" ? "ring-2 ring-emerald-200" : "hover:shadow-emerald-400/40"
-          }`}
+          } ${isSubmitting ? "opacity-70" : ""}`}
         >
           Ja
         </button>
         <button
           type="button"
+          onClick={() => {
+            if (!voteLocked) onVote?.("no");
+          }}
+          disabled={isSubmitting || voteLocked}
           className={`card-button no ${
             question.userChoice === "no" ? "ring-2 ring-rose-200" : "hover:shadow-rose-400/40"
-          }`}
+          } ${isSubmitting ? "opacity-70" : ""}`}
         >
           Nein
         </button>
@@ -169,46 +194,77 @@ function DraftCard({ draft }: { draft: Draft }) {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [drafts, setDrafts] = useState<Draft[]>(initialDrafts);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    fetch("/api/questions")
-      .then(async (res) => {
-        if (!res.ok) throw new Error("API Response not ok");
-        return res.json();
-      })
-      .then((data) => {
-        if (!isMounted) return;
-        setQuestions(data.questions ?? initialQuestions);
-        setDrafts(data.drafts ?? initialDrafts);
-        setError(null);
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setQuestions(initialQuestions);
-        setDrafts(initialDrafts);
-        setError("Konnte Daten nicht laden (zeige Mock-Daten).");
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
+  const fetchLatest = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/questions");
+      if (!res.ok) throw new Error("API Response not ok");
+      const data = await res.json();
+      setQuestions(data.questions ?? initialQuestions);
+      setDrafts(data.drafts ?? initialDrafts);
+      setError(null);
+    } catch {
+      setQuestions(initialQuestions);
+      setDrafts(initialDrafts);
+      setError("Konnte Daten nicht laden (zeige Mock-Daten).");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchLatest();
+  }, [fetchLatest]);
+
   const filteredQuestions = useMemo(() => {
-    if (activeTab === "all") return questions;
-    if (activeTab === "trending") return questions.filter((q) => q.status === "trending");
-    if (activeTab === "new") return questions.filter((q) => q.status === "new");
-    if (activeTab === "unanswered") return questions.filter((q) => !q.userChoice);
-    return questions.filter((q) => q.status === "top" || q.status === "closingSoon");
-  }, [activeTab, questions]);
+    let result = questions;
+    if (activeTab === "trending") result = result.filter((q) => q.status === "trending");
+    else if (activeTab === "new") result = result.filter((q) => q.status === "new");
+    else if (activeTab === "unanswered") result = result.filter((q) => !q.userChoice);
+    else if (activeTab === "top") result = result.filter((q) => q.status === "top" || q.status === "closingSoon");
+
+    if (activeCategory) {
+      result = result.filter((q) => q.category === activeCategory);
+    }
+    return result;
+  }, [activeTab, activeCategory, questions]);
+
+  const handleVote = useCallback(
+    async (questionId: string, choice: "yes" | "no") => {
+      const alreadyVoted = questions.find((q) => q.id === questionId)?.userChoice;
+      if (alreadyVoted) return;
+
+      setSubmittingId(questionId);
+      setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: choice } : q)));
+      try {
+        const res = await fetch("/api/votes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionId, choice }),
+        });
+        if (!res.ok) throw new Error("Vote failed");
+        const data = await res.json();
+        const updated = data.question as Question;
+        setQuestions((prev) =>
+          prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
+        );
+        setError(null);
+      } catch {
+        setError("Vote fehlgeschlagen. Bitte versuche es erneut.");
+        await fetchLatest();
+      } finally {
+        setSubmittingId(null);
+      }
+    },
+    [fetchLatest, questions]
+  );
 
   const tabLabel = feedTabs.find((t) => t.id === activeTab)?.label ?? "Feed";
 
@@ -243,7 +299,7 @@ export default function Home() {
           </div>
 
           <div className="sticky top-3 z-20 -mx-4 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 backdrop-blur md:static md:-mx-0 md:border-0 md:bg-transparent md:p-0">
-            <div className="flex gap-2 overflow-x-auto pb-2 text-sm text-slate-100 snap-x snap-mandatory">
+            <div className="flex gap-2 overflow-x-auto overflow-y-visible py-1 pb-2 text-sm text-slate-100 snap-x snap-mandatory">
               {feedTabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -251,8 +307,8 @@ export default function Home() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex min-w-[132px] items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
                     activeTab === tab.id
-                      ? "bg-white/20 border border-white/30 text-white"
-                      : "bg-white/10 border border-white/15 text-slate-200"
+                      ? "bg-white/20 border border-white/30 text-white hover:border-emerald-300/60 hover:-translate-y-0.5"
+                      : "bg-white/10 border border-white/15 text-slate-200 hover:border-emerald-300/40 hover:-translate-y-0.5"
                   }`}
                 >
                   <span>{tab.icon}</span>
@@ -261,21 +317,36 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-1 flex gap-2 overflow-x-auto pb-1 text-sm text-slate-100 snap-x snap-mandatory">
-              {categories.map((cat) => (
-                <span
-                  key={cat.label}
-                  className="inline-flex min-w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 shadow-sm shadow-black/20 snap-center"
-                >
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: cat.color }}
-                    aria-hidden
-                  />
-                  <span>{cat.icon}</span>
-                  <span>{cat.label}</span>
-                </span>
-              ))}
+            <div className="mt-1 flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory">
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className={`inline-flex min-w-fit items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
+                  activeCategory === null
+                    ? "border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
+                    : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                }`}
+              >
+                <span>Alle Kategorien</span>
+              </button>
+              {categories.map((cat) => {
+                const isActive = activeCategory === cat.label;
+                return (
+                  <button
+                    key={cat.label}
+                    type="button"
+                    onClick={() => setActiveCategory(isActive ? null : cat.label)}
+                    className={`inline-flex min-w-fit items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
+                      isActive
+                        ? "border-emerald-300/60 bg-emerald-500/25 text-white hover:-translate-y-0.5"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </header>
@@ -292,7 +363,12 @@ export default function Home() {
           {error && <div className="text-sm text-rose-200">{error}</div>}
           <div className="grid gap-5 md:grid-cols-2">
             {filteredQuestions.map((q) => (
-              <EventCard key={q.id} question={q} />
+              <EventCard
+                key={q.id}
+                question={q}
+                isSubmitting={submittingId === q.id}
+                onVote={(choice) => handleVote(q.id, choice)}
+              />
             ))}
           </div>
         </section>
