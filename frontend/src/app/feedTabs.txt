@@ -1,0 +1,7 @@
+const feedTabs = [
+  { id: "all", label: "Alle", icon: "✨" },
+  { id: "top", label: "Top heute", icon: "🔥" },
+  { id: "trending", label: "Trending", icon: "📈" },
+  { id: "new", label: "Neu & unbewertet", icon: "🆕" },
+  { id: "unanswered", label: "Unbeantwortet", icon: "⭕" },
+];
