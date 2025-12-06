@@ -5,8 +5,8 @@ import type { Question } from "@/app/data/mock";
 
 export const dynamic = "force-dynamic";
 
-function getBaseUrl() {
-  const headerStore = headers();
+async function getBaseUrl() {
+  const headerStore = await headers();
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
   const protocol = headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
   if (host) return `${protocol}://${host}`;
@@ -14,9 +14,9 @@ function getBaseUrl() {
 }
 
 async function fetchQuestion(id: string): Promise<Question | null> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const cookieHeader = cookieStore.get("fv_session")?.value;
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
 
   try {
     const res = await fetch(`${baseUrl}/api/questions/${id}`, {
