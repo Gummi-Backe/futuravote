@@ -199,6 +199,7 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>(initialDrafts);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   const fetchLatest = useCallback(async () => {
@@ -210,6 +211,7 @@ export default function Home() {
       setQuestions(data.questions ?? initialQuestions);
       setDrafts(data.drafts ?? initialDrafts);
       setError(null);
+      setInfo(null);
     } catch {
       setQuestions(initialQuestions);
       setDrafts(initialDrafts);
@@ -249,6 +251,12 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ questionId, choice }),
         });
+        if (res.status === 429) {
+          const retry = Math.ceil(((await res.json().retryAfterMs) ?? 1000) / 1000);
+          setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
+          setInfo(null);
+          return;
+        }
         if (!res.ok) throw new Error("Vote failed");
         const data = await res.json();
         const updated = data.question as Question;
@@ -256,8 +264,10 @@ export default function Home() {
           prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
         );
         setError(null);
+        setInfo("Deine Stimme wurde gezählt.");
       } catch {
         setError("Vote fehlgeschlagen. Bitte versuche es erneut.");
+        setInfo(null);
         await fetchLatest();
       } finally {
         setSubmittingId(null);
@@ -361,6 +371,7 @@ export default function Home() {
           </div>
           {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
           {error && <div className="text-sm text-rose-200">{error}</div>}
+          {info && <div className="text-sm text-emerald-200">{info}</div>}
           <div className="grid gap-5 md:grid-cols-2">
             {filteredQuestions.map((q) => (
               <EventCard
