@@ -137,6 +137,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Detailseite bezieht Daten ueber API (mit Loading/Error)
 - [x] Vote-Feedback im Feed (Info bei Erfolg, Fehlertext bei Fehlschlag)
 - [x] Einfaches Vote-Rate-Limit pro Session (429 + Hinweis)
+- [x] Persistenz auf SQLite (better-sqlite3) umgesetzt
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.

@@ -15,4 +15,5 @@
 - [x] Detailseite lädt Frage über API mit Loading/Error-State
 - [x] Vote-Feedback im Feed (Info/Fehler-Message)
 - [x] Einfaches Rate-Limit pro Session beim Voting (Fehlermeldung bei zu schneller Abgabe)
+- [x] Persistenz via SQLite (better-sqlite3) statt Datei
 - [ ] Mobile Swipe-Modus / erweiterte Mobile-Navigation

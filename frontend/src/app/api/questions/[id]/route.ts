@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getQuestionById } from "@/app/data/store";
+import { getQuestionById } from "@/app/data/db";
 
 export const revalidate = 0;
 
@@ -13,7 +13,7 @@ export async function GET(_: Request, { params }: Params) {
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
 
-  const question = await getQuestionById(id, sessionId);
+  const question = getQuestionById(id, sessionId);
   if (!question) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
