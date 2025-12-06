@@ -199,7 +199,8 @@ export default function Home() {
   const [drafts, setDrafts] = useState<Draft[]>(initialDrafts);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   const fetchLatest = useCallback(async () => {
@@ -211,7 +212,7 @@ export default function Home() {
       setQuestions(data.questions ?? initialQuestions);
       setDrafts(data.drafts ?? initialDrafts);
       setError(null);
-      setInfo(null);
+      setToast(null);
     } catch {
       setQuestions(initialQuestions);
       setDrafts(initialDrafts);
@@ -221,8 +222,19 @@ export default function Home() {
     }
   }, []);
 
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current);
+    }
+    setToast({ message, type });
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
   useEffect(() => {
     fetchLatest();
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, [fetchLatest]);
 
   const filteredQuestions = useMemo(() => {
@@ -255,7 +267,7 @@ export default function Home() {
           const { retryAfterMs } = (await res.json()) as { retryAfterMs?: number };
           const retry = Math.ceil(((retryAfterMs ?? 1000) as number) / 1000);
           setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
-          setInfo(null);
+          showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
           return;
         }
         if (!res.ok) throw new Error("Vote failed");
@@ -265,16 +277,16 @@ export default function Home() {
           prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
         );
         setError(null);
-        setInfo("Deine Stimme wurde gezählt.");
+        showToast("Deine Stimme wurde gezählt.", "success");
       } catch {
         setError("Vote fehlgeschlagen. Bitte versuche es erneut.");
-        setInfo(null);
+        showToast("Vote fehlgeschlagen. Bitte versuche es erneut.", "error");
         await fetchLatest();
       } finally {
         setSubmittingId(null);
       }
     },
-    [fetchLatest, questions]
+    [fetchLatest, questions, showToast]
   );
 
   const tabLabel = feedTabs.find((t) => t.id === activeTab)?.label ?? "Feed";
@@ -372,7 +384,6 @@ export default function Home() {
           </div>
           {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
           {error && <div className="text-sm text-rose-200">{error}</div>}
-          {info && <div className="text-sm text-emerald-200">{info}</div>}
           <div className="grid gap-5 md:grid-cols-2">
             {filteredQuestions.map((q) => (
               <EventCard
@@ -384,6 +395,18 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        {toast && (
+          <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-white/15 bg-slate-900/90 px-4 py-3 shadow-lg shadow-black/40">
+            <div
+              className={`text-sm font-semibold ${
+                toast.type === "success" ? "text-emerald-200" : "text-rose-200"
+              }`}
+            >
+              {toast.message}
+            </div>
+          </div>
+        )}
 
         <section className="mt-10 space-y-4">
           <div className="flex items-center justify-between">

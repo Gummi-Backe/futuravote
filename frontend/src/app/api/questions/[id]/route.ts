@@ -19,7 +19,12 @@ export async function GET(_: Request, { params }: Params) {
   }
   const response = NextResponse.json({ question });
   if (!existingSession) {
-    response.cookies.set("fv_session", sessionId, { path: "/", httpOnly: true, sameSite: "lax" });
+    response.cookies.set("fv_session", sessionId, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
   }
   return response;
 }

@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS questions (
   closesAt TEXT NOT NULL,
   yesVotes INTEGER NOT NULL DEFAULT 0,
   noVotes INTEGER NOT NULL DEFAULT 0,
+  views INTEGER NOT NULL DEFAULT 0,
   status TEXT
 );
 
@@ -37,19 +38,26 @@ CREATE TABLE IF NOT EXISTS votes (
 );
 `);
 
+// Backfill views column if missing (older local DBs).
+const columns = db.prepare("PRAGMA table_info(questions)").all() as { name: string }[];
+const hasViews = columns.some((c) => c.name === "views");
+if (!hasViews) {
+  db.exec("ALTER TABLE questions ADD COLUMN views INTEGER NOT NULL DEFAULT 0");
+}
+
 // Seed if empty
 const countStmt = db.prepare("SELECT COUNT(*) as cnt FROM questions");
 const hasQuestions = ((countStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasQuestions) {
   const insert = db.prepare(
-    `INSERT INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, status)
-     VALUES (@id, @title, @summary, @description, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @status)`
+    `INSERT INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+     VALUES (@id, @title, @summary, @description, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
   );
   const baseline = 120;
   for (const q of allQuestions) {
     const yesVotes = Math.round((q.yesPct / Math.max(1, q.yesPct + q.noPct)) * baseline);
     const noVotes = Math.max(0, baseline - yesVotes);
-    insert.run({ ...q, yesVotes, noVotes, status: q.status ?? null });
+    insert.run({ ...q, yesVotes, noVotes, views: q.views ?? 0, status: q.status ?? null });
   }
 }
 
@@ -65,9 +73,10 @@ type QuestionRow = {
   yesVotes: number;
   noVotes: number;
   status?: string | null;
+  views: number;
 };
 
-export type QuestionWithVotes = Question & { yesVotes: number; noVotes: number };
+export type QuestionWithVotes = Question & { yesVotes: number; noVotes: number; views: number };
 export type VoteChoice = "yes" | "no";
 
 function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWithVotes {
@@ -88,6 +97,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     yesPct,
     noPct,
     status: row.status === null ? undefined : (row.status as Question["status"]),
+    views: row.views ?? 0,
     userChoice: sessionChoice,
   };
 }
@@ -145,4 +155,8 @@ export function voteOnQuestion(id: string, choice: VoteChoice, sessionId: string
 
   txn();
   return getQuestionById(id, sessionId);
+}
+
+export function incrementViewsForAll() {
+  db.prepare("UPDATE questions SET views = views + 1").run();
 }
