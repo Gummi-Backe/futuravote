@@ -1,0 +1,3 @@
+cd frontend
+npm run dev
+Browser auf http://localhost:3000 → Reload, ggf. Cache leeren, dann solltest du das neue Favicon sehen.
