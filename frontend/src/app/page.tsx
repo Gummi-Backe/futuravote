@@ -252,7 +252,8 @@ export default function Home() {
           body: JSON.stringify({ questionId, choice }),
         });
         if (res.status === 429) {
-          const retry = Math.ceil(((await res.json().retryAfterMs) ?? 1000) / 1000);
+          const { retryAfterMs } = (await res.json()) as { retryAfterMs?: number };
+          const retry = Math.ceil(((retryAfterMs ?? 1000) as number) / 1000);
           setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
           setInfo(null);
           return;
