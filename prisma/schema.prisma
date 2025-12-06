@@ -1,0 +1,40 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Question {
+  id            String   @id
+  title         String
+  summary       String
+  description   String?
+  category      String
+  categoryIcon  String
+  categoryColor String
+  closesAt      DateTime
+  yesVotes      Int      @default(0)
+  noVotes       Int      @default(0)
+  status        String?
+
+  votes Vote[]
+}
+
+model Vote {
+  id         String   @id @default(uuid())
+  questionId String
+  sessionId  String
+  choice     String
+  createdAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, sessionId])
+}
