@@ -1,82 +1,18 @@
-1. VS Code → GitHub (automatisch, nachdem DU pushst)
+# Code aus VS Code auf GitHub pushen
 
-VS Code ist jetzt mit deinem GitHub-Repository verbunden.
+1) Terminal in VS Code öffnen (`Ctrl + Shift + ö` oder Ansicht → Terminal).
+2) Sicherstellen, dass du im Projektordner bist:
+   cd D:\Roland\FuturaVote
+3) Status prüfen (optional):
+   git status
+4) Änderungen vormerken:
+   git add .
+5) Commit erstellen (Kurze Nachricht anpassen):
+   git commit -m "Update"
+6) Push zu GitHub (Branch: master):
+   git push
 
-Das bedeutet:
-
-✔ Du machst Änderungen in VS Code
-✔ Du speicherst
-✔ Du führst aus:
-git add .
-git commit -m "Update"
-git push
-
-
-Dann landen die Änderungen sofort in deinem GitHub-Repo.
-
-🔸 Das ist der einzige manuelle Schritt, den du brauchst.
-
-✅ 2. GitHub → Vercel (100% automatisch)
-
-Sobald deine Änderungen in GitHub sind:
-
-✔ Vercel erkennt automatisch den neuen Commit
-✔ Vercel startet automatisch einen Deployment-Build
-✔ Wenn der Build durchläuft, aktualisiert Vercel deine Website:
-
-👉 https://futuravote.vercel.app
-
-Du musst NICHTS drücken, NICHTS kopieren – es passiert automatisch.
-
-💡 Das nennt man CI/CD: Continuous Integration & Continuous Deployment.
-
-❗ WICHTIG
-Vercel baut immer die neueste Version, die auf GitHub im main-Branch liegt.
-
-Du musst also nur pushen – der Rest passiert vollautomatisch.
-
-✅ 3. Vercel → futuravote.de (wird nach DNS-Einrichtung auch automatisch)
-
-Sobald STRATO deine Domain aktiviert hat (Status wird grün), und du den A-Record:
-
-A   @   216.198.79.1
-
-
-gesetzt hast, passiert Folgendes:
-
-✔ futuravote.de zeigt direkt auf Vercel
-✔ Vercel liefert deine Website dort aus
-✔ Jeder neue Build wird automatisch auch auf futuravote.de sichtbar
-
-Das heißt:
-
-🟢 Du musst STRATO NIE mehr anfassen
-🟢 Vercel regelt alles Weitere
-🟢 Wenn du auf GitHub pushst → Vercel → futuravote.de
-
-🔥 Kurz gesagt:
-Bereich	Wer aktualisiert ihn?
-VS Code	DU durch Commit + Push
-GitHub	Automatisch erhält deinen Code
-Vercel	Baut automatisch neu bei jedem Push
-futuravote.de (STRATO)	Lädt automatisch die neue Version über Vercel
-🔵 Also dein Workflow ab jetzt:
-1️⃣ In VS Code programmieren
-2️⃣ Terminal:
-git add .
-git commit -m "Update"
-git push
-
-3️⃣ Der Rest passiert vollautomatisch:
-
-GitHub aktualisiert sich
-
-Vercel baut automatisch neu
-
-futuravote.de (sobald DNS fertig ist) zeigt immer die neueste Version
-
-⭐ Deine Aufgabe reduziert sich also auf EINEN Befehl:
-
-👉 git push
-
-Der Rest ist komplett automatisiert.
+Hinweise:
+- Remote ist gesetzt auf: https://github.com/Gummi-Backe/futuravote
+- Falls nach Login gefragt wird, GitHub-Daten eingeben oder Token nutzen.
+- Nach dem Push baut Vercel automatisch und veröffentlicht die Seite.
