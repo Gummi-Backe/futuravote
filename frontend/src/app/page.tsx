@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   allQuestions as initialQuestions,
   categories,
@@ -202,6 +202,8 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const tabTouchStart = useRef<number | null>(null);
+  const categoryTouchStart = useRef<number | null>(null);
 
   const fetchLatest = useCallback(async () => {
     setLoading(true);
@@ -291,6 +293,33 @@ export default function Home() {
 
   const tabLabel = feedTabs.find((t) => t.id === activeTab)?.label ?? "Feed";
 
+  const handleTabTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    tabTouchStart.current = e.touches[0]?.clientX ?? null;
+  };
+  const handleTabTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (tabTouchStart.current === null) return;
+    const delta = e.changedTouches[0]?.clientX - tabTouchStart.current;
+    tabTouchStart.current = null;
+    if (!delta || Math.abs(delta) < 40) return;
+    const currentIndex = feedTabs.findIndex((t) => t.id === activeTab);
+    const nextIndex = delta < 0 ? Math.min(feedTabs.length - 1, currentIndex + 1) : Math.max(0, currentIndex - 1);
+    setActiveTab(feedTabs[nextIndex].id);
+  };
+
+  const handleCategoryTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    categoryTouchStart.current = e.touches[0]?.clientX ?? null;
+  };
+  const handleCategoryTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (categoryTouchStart.current === null) return;
+    const delta = e.changedTouches[0]?.clientX - categoryTouchStart.current;
+    categoryTouchStart.current = null;
+    if (!delta || Math.abs(delta) < 40) return;
+    const order = [null, ...categories.map((c) => c.label)];
+    const currentIndex = order.indexOf(activeCategory ?? null);
+    const nextIndex = delta < 0 ? Math.min(order.length - 1, currentIndex + 1) : Math.max(0, currentIndex - 1);
+    setActiveCategory(order[nextIndex]);
+  };
+
   return (
     <main className="min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
@@ -322,7 +351,11 @@ export default function Home() {
           </div>
 
           <div className="sticky top-3 z-20 -mx-4 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 backdrop-blur md:static md:-mx-0 md:border-0 md:bg-transparent md:p-0">
-            <div className="flex gap-2 overflow-x-auto overflow-y-visible py-1 pb-2 text-sm text-slate-100 snap-x snap-mandatory">
+            <div
+              className="flex gap-2 overflow-x-auto overflow-y-visible py-1 pb-2 text-sm text-slate-100 snap-x snap-mandatory"
+              onTouchStart={handleTabTouchStart}
+              onTouchEnd={handleTabTouchEnd}
+            >
               {feedTabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -340,7 +373,11 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-1 flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory">
+            <div
+              className="mt-1 flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory"
+              onTouchStart={handleCategoryTouchStart}
+              onTouchEnd={handleCategoryTouchEnd}
+            >
               <button
                 type="button"
                 onClick={() => setActiveCategory(null)}
