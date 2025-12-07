@@ -138,6 +138,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Vote-Feedback im Feed (Info bei Erfolg, Fehlertext bei Fehlschlag)
 - [x] Einfaches Vote-Rate-Limit pro Session (429 + Hinweis)
 - [x] Persistenz auf SQLite (better-sqlite3) umgesetzt
+- [x] Next.js 16: params/cookies nun als Promise awaited (keine params.id/cookies().get Fehler)
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.
@@ -146,3 +147,4 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Detailseite: Mehr Stats (rel. Votes, Platzhalter Views/Score), Typografie/Weissraum, Trend-Placeholder.
 - [x] Mobile: groessere Touch-Ziele, horizontale Kategorie-Scroll (Swipe-Modus spaeter optional).
 - [x] Micro-Interactions: Hover-Lift Karten, Button-Pop, animierte Balken, Countdown-Blinken <24h.
+- [x] Mobile Swipe-Navigation: Tabs & Kategorien per Wisch gewechselt (Snap-Scroll + Touch-Handler)

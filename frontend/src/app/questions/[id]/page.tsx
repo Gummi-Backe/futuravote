@@ -88,8 +88,9 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-export default async function QuestionDetail({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function QuestionDetail(props: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await props.params;
+  const { id } = resolvedParams;
   const question = await fetchQuestion(id);
   if (!question) {
     notFound();
@@ -175,10 +176,10 @@ export default async function QuestionDetail({ params }: { params: { id: string 
 
         <section className="mt-8 grid gap-4 sm:grid-cols-2">
           <button className="card-button yes opacity-70 cursor-not-allowed" disabled>
-            Ja (bald verfügbar)
+            Ja (bald verfuegbar)
           </button>
           <button className="card-button no opacity-70 cursor-not-allowed" disabled>
-            Nein (bald verfügbar)
+            Nein (bald verfuegbar)
           </button>
         </section>
       </div>

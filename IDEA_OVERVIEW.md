@@ -16,4 +16,5 @@
 - [x] Vote-Feedback im Feed (Info/Fehler-Message)
 - [x] Einfaches Rate-Limit pro Session beim Voting (Fehlermeldung bei zu schneller Abgabe)
 - [x] Persistenz via SQLite (better-sqlite3) statt Datei
-- [ ] Mobile Swipe-Modus / erweiterte Mobile-Navigation
+- [x] Detail-/API-Routen an Next.js 16 Promise-params angepasst (keine params/cookies Fehler)
+- [x] Mobile Swipe-Modus / erweiterte Mobile-Navigation (Tabs & Kategorien per Wisch wechselbar)

@@ -7,8 +7,9 @@ export const revalidate = 0;
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, { params }: Params) {
-  const { id } = await params;
+export async function GET(_: Request, context: Params) {
+  const resolvedParams = await context.params;
+  const { id } = resolvedParams;
   const cookieStore = await cookies();
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
