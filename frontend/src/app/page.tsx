@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   allQuestions as initialQuestions,
@@ -64,7 +65,12 @@ function EventCard({
   question,
   onVote,
   isSubmitting,
-}: { question: Question; onVote?: (choice: "yes" | "no") => void; isSubmitting?: boolean }) {
+  }: {
+  question: Question;
+  onVote?: (choice: "yes" | "no") => void;
+  isSubmitting?: boolean;
+  onOpenDetails?: (href: string) => void;
+}) {
   const badge = statusBadge(question.status);
   const votedChoice = question.userChoice;
   const voted = Boolean(votedChoice);
@@ -155,16 +161,28 @@ function EventCard({
         <Link href={`/questions/${question.id}`} className="text-emerald-100 hover:text-emerald-200">
           Details ansehen →
         </Link>
-        <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-slate-200">ID: {question.id}</span>
       </div>
     </article>
   );
 }
 
-function DraftCard({ draft }: { draft: Draft }) {
+type DraftReviewChoice = "good" | "bad";
+
+function DraftCard({
+  draft,
+  onVote,
+  isSubmitting,
+  hasVoted,
+}: {
+  draft: Draft;
+  onVote?: (choice: DraftReviewChoice) => void;
+  isSubmitting?: boolean;
+  hasVoted?: boolean;
+}) {
   const total = Math.max(1, draft.votesFor + draft.votesAgainst);
   const yesPct = Math.round((draft.votesFor / total) * 100);
   const noPct = 100 - yesPct;
+  const disabled = Boolean(isSubmitting || hasVoted);
 
   return (
     <article className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30">
@@ -174,6 +192,11 @@ function DraftCard({ draft }: { draft: Draft }) {
       </div>
       <h4 className="text-lg font-semibold text-white leading-snug">{draft.title}</h4>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
+      {draft.description && (
+        <p className="text-xs text-slate-200">
+          {draft.description}
+        </p>
+      )}
       <div className="flex items-center gap-2 text-xs text-slate-200">
         <span className="font-semibold text-emerald-200">{yesPct}% gute Frage</span>
         <span className="text-slate-400">·</span>
@@ -181,10 +204,24 @@ function DraftCard({ draft }: { draft: Draft }) {
       </div>
       <VoteBar yesPct={yesPct} noPct={noPct} />
       <div className="flex gap-3">
-        <button type="button" className="card-button yes w-full">
+        <button
+          type="button"
+          className="card-button yes w-full"
+          disabled={disabled}
+          onClick={() => {
+            if (!disabled) onVote?.("good");
+          }}
+        >
           Gute Frage
         </button>
-        <button type="button" className="card-button no w-full">
+        <button
+          type="button"
+          className="card-button no w-full"
+          disabled={disabled}
+          onClick={() => {
+            if (!disabled) onVote?.("bad");
+          }}
+        >
           Ablehnen
         </button>
       </div>
@@ -193,6 +230,7 @@ function DraftCard({ draft }: { draft: Draft }) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
@@ -204,6 +242,34 @@ export default function Home() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const tabTouchStart = useRef<number | null>(null);
   const categoryTouchStart = useRef<number | null>(null);
+  const [draftSubmittingId, setDraftSubmittingId] = useState<string | null>(null);
+  const [reviewedDrafts, setReviewedDrafts] = useState<Record<string, boolean>>({});
+  const [debugMultiReview, setDebugMultiReview] = useState(false);
+  const [showExtraCategories, setShowExtraCategories] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  const categoryOptions = useMemo(() => {
+    const map = new Map<string, { label: string; icon: string; color: string }>();
+    for (const cat of categories) {
+      map.set(cat.label, cat);
+    }
+    for (const q of questions) {
+      if (!map.has(q.category)) {
+        map.set(q.category, { label: q.category, icon: "?", color: "#64748b" });
+      }
+    }
+    for (const d of drafts) {
+      if (!map.has(d.category)) {
+        map.set(d.category, { label: d.category, icon: "?", color: "#64748b" });
+      }
+    }
+    return Array.from(map.values());
+  }, [questions, drafts]);
+
+  const extraCategories = useMemo(
+    () => categoryOptions.filter((c) => !categories.some((base) => base.label === c.label)),
+    [categoryOptions]
+  );
 
   const fetchLatest = useCallback(async () => {
     setLoading(true);
@@ -239,6 +305,17 @@ export default function Home() {
     };
   }, [fetchLatest]);
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "F1") {
+        event.preventDefault();
+        setDebugMultiReview((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const filteredQuestions = useMemo(() => {
     let result = questions;
     if (activeTab === "trending") result = result.filter((q) => q.status === "trending");
@@ -251,6 +328,17 @@ export default function Home() {
     }
     return result;
   }, [activeTab, activeCategory, questions]);
+
+  const filteredDrafts = useMemo(() => {
+    let result = drafts;
+    if (activeCategory) {
+      result = result.filter((d) => d.category === activeCategory);
+    }
+    return [...result].sort((a, b) => {
+      if (b.votesFor !== a.votesFor) return b.votesFor - a.votesFor;
+      return a.timeLeftHours - b.timeLeftHours;
+    });
+  }, [activeCategory, drafts]);
 
   const handleVote = useCallback(
     async (questionId: string, choice: "yes" | "no") => {
@@ -291,6 +379,49 @@ export default function Home() {
     [fetchLatest, questions, showToast]
   );
 
+  const handleDraftVote = useCallback(
+    async (draftId: string, choice: DraftReviewChoice) => {
+      if (!debugMultiReview && reviewedDrafts[draftId]) return;
+
+      setDraftSubmittingId(draftId);
+      setDrafts((prev) =>
+        prev.map((d) =>
+          d.id === draftId
+            ? {
+                ...d,
+                votesFor: choice === "good" ? d.votesFor + 1 : d.votesFor,
+                votesAgainst: choice === "bad" ? d.votesAgainst + 1 : d.votesAgainst,
+              }
+            : d
+        )
+      );
+
+      try {
+        const res = await fetch("/api/drafts/vote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftId, choice }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error ?? "Draft-Review fehlgeschlagen");
+        }
+        const updated = data.draft as Draft;
+        setDrafts((prev) => prev.map((d) => (d.id === draftId ? updated : d)));
+        setReviewedDrafts((prev) => ({ ...prev, [draftId]: true }));
+        showToast("Dein Review wurde gespeichert.", "success");
+        await fetchLatest();
+      } catch {
+        setError("Draft-Review fehlgeschlagen. Bitte versuche es erneut.");
+        showToast("Draft-Review fehlgeschlagen. Bitte versuche es erneut.", "error");
+        await fetchLatest();
+      } finally {
+        setDraftSubmittingId(null);
+      }
+    },
+    [debugMultiReview, fetchLatest, reviewedDrafts, showToast]
+  );
+
   const tabLabel = feedTabs.find((t) => t.id === activeTab)?.label ?? "Feed";
 
   const handleTabTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -314,15 +445,30 @@ export default function Home() {
     const delta = e.changedTouches[0]?.clientX - categoryTouchStart.current;
     categoryTouchStart.current = null;
     if (!delta || Math.abs(delta) < 40) return;
-    const order = [null, ...categories.map((c) => c.label)];
+    const order = [null, ...categoryOptions.map((c) => c.label)];
     const currentIndex = order.indexOf(activeCategory ?? null);
     const nextIndex = delta < 0 ? Math.min(order.length - 1, currentIndex + 1) : Math.max(0, currentIndex - 1);
     setActiveCategory(order[nextIndex]);
   };
 
+  const navigateWithTransition = useCallback(
+    (href: string) => {
+      setIsLeaving(true);
+      setTimeout(() => {
+        router.push(href);
+      }, 190);
+    },
+    [router]
+  );
+
   return (
-    <main className="min-h-screen bg-transparent text-slate-50">
+    <main className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}>
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
+        {debugMultiReview && (
+          <div className="mb-2 rounded-full border border-amber-400/60 bg-amber-500/15 px-4 py-1 text-xs text-amber-100 shadow-sm shadow-amber-500/30">
+            Testmodus aktiv: Mehrfach-Reviews fuer Drafts erlaubt (F1 zum Deaktivieren).
+          </div>
+        )}
         <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-6 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -338,9 +484,16 @@ export default function Home() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50">
+              <Link
+                href="/drafts/new"
+                className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
+                onClick={(event) => {
+                  event.preventDefault()
+                  navigateWithTransition("/drafts/new")
+                }}
+              >
                 Frage stellen
-              </button>
+              </Link>
               <button className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60">
                 Review
               </button>
@@ -407,6 +560,20 @@ export default function Home() {
                   </button>
                 );
               })}
+              {extraCategories.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowExtraCategories((open) => !open)}
+                  className={`inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm shadow-black/20 snap-center transition ${
+                    showExtraCategories
+                      ? "border-emerald-300/60 bg-emerald-500/25 text-white hover:-translate-y-0.5"
+                      : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                  }`}
+                  aria-label="Weitere Kategorien"
+                >
+                  <span className="text-lg leading-none">…</span>
+                </button>
+              )}
             </div>
           </div>
         </header>
@@ -421,20 +588,24 @@ export default function Home() {
           </div>
           {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
           {error && <div className="text-sm text-rose-200">{error}</div>}
-          <div className="grid gap-5 md:grid-cols-2">
+          <div
+            key={`${activeTab}-${activeCategory ?? "all"}`}
+            className="list-enter grid gap-5 md:grid-cols-2"
+          >
             {filteredQuestions.map((q) => (
               <EventCard
                 key={q.id}
                 question={q}
                 isSubmitting={submittingId === q.id}
                 onVote={(choice) => handleVote(q.id, choice)}
+                onOpenDetails={(href) => navigateWithTransition(href)}
               />
             ))}
           </div>
         </section>
 
-        {toast && (
-          <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-white/15 bg-slate-900/90 px-4 py-3 shadow-lg shadow-black/40">
+          {toast && (
+          <div className="toast-enter fixed bottom-4 right-4 z-50 rounded-2xl border border-white/15 bg-slate-900/90 px-4 py-3 shadow-lg shadow-black/40">
             <div
               className={`text-sm font-semibold ${
                 toast.type === "success" ? "text-emerald-200" : "text-rose-200"
@@ -452,13 +623,67 @@ export default function Home() {
             </h2>
             <span className="text-sm text-slate-300">Community entscheidet, was live geht</span>
           </div>
-          <div className="grid gap-5 md:grid-cols-2">
-            {drafts.map((draft) => (
-              <DraftCard key={draft.id} draft={draft} />
+          <div
+            key={`drafts-${activeCategory ?? "all"}`}
+            className="list-enter grid gap-5 md:grid-cols-2"
+          >
+            {filteredDrafts.map((draft) => (
+              <DraftCard
+                key={draft.id}
+                draft={draft}
+                onVote={(choice) => handleDraftVote(draft.id, choice)}
+                isSubmitting={draftSubmittingId === draft.id}
+                hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
+              />
             ))}
           </div>
         </section>
       </div>
+      {showExtraCategories && extraCategories.length > 0 && (
+        <div
+          className="overlay-enter fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowExtraCategories(false)}
+        >
+          <div
+            className="absolute left-1/2 top-24 w-full max-w-sm -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-900/95 p-4 shadow-2xl shadow-black/40"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-white">Weitere Kategorien</h3>
+              <button
+                type="button"
+                className="rounded-full border border-white/20 px-2 py-1 text-xs text-slate-100 hover:border-emerald-300/60"
+                onClick={() => setShowExtraCategories(false)}
+              >
+                Schliessen
+              </button>
+            </div>
+            <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+              {extraCategories.map((cat) => {
+                const isActive = activeCategory === cat.label;
+                return (
+                  <button
+                    key={cat.label}
+                    type="button"
+                    onClick={() => {
+                      setActiveCategory(isActive ? null : cat.label);
+                      setShowExtraCategories(false);
+                    }}
+                    className={`flex w-full items-center justify-start gap-2 rounded-xl px-3 py-2 text-left text-xs ${
+                      isActive
+                        ? "bg-emerald-500/25 text-white"
+                        : "bg-white/5 text-slate-100 hover:bg-white/10"
+                    }`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span className="truncate">{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

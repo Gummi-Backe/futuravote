@@ -99,7 +99,7 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
     question.userChoice === "yes" ? "Du hast Ja gestimmt" : question.userChoice === "no" ? "Du hast Nein gestimmt" : null;
 
   return (
-    <main className="min-h-screen bg-transparent text-slate-50">
+    <main className="page-enter min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-10 lg:px-6">
         <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
           &larr; Zurueck zum Feed
