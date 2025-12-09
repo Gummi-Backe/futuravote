@@ -8,11 +8,11 @@
 - [x] Vote-Lock pro Session (Voting ohne Login, Cookie-basiert)
 - [x] Markierung abgestimmter Kacheln (Rahmen/Badge)
 - [x] Persistente Votes (Datei-basiert, sessiongebunden)
-- [x] Kategorie-Filter klickbar (per Kategorie einschränken)
+- [x] Kategorie-Filter klickbar (per Kategorie einschraenken)
 - [x] Kategorien-Chips ohne Farbpunkte (nur Icon + Text)
 - [x] Hover-Highlight fuer Feed-Tabs (Alle/Top/Trending/Neu/Unbeantwortet)
 - [x] Leichtes Anheben (Hover) fuer Tabs und Kategorie-Chips
-- [x] Detailseite lädt Frage über API mit Loading/Error-State
+- [x] Detailseite laedt Frage ueber API mit Loading/Error-State
 - [x] Vote-Feedback im Feed (Info/Fehler-Message)
 - [x] Einfaches Rate-Limit pro Session beim Voting (Fehlermeldung bei zu schneller Abgabe)
 - [x] Persistenz via SQLite (better-sqlite3) statt Datei
@@ -21,4 +21,6 @@
 - [x] Einfache Seite "Frage vorschlagen" mit Formular + Draft-API (inkl. optionaler Langbeschreibung fuer Review-Karten und Detailansicht)
 - [x] Mobile Swipe-Modus / erweiterte Mobile-Navigation (Tabs & Kategorien per Wisch wechselbar)
 - [x] Draft-Review-Buttons (Gute Frage/Ablehnen) schreiben Votes in SQLite und sind im UI gelockt
-- [x] Temporärer Testmodus (F1) erlaubt mehrfaches Review pro Draft in einer Session (leicht wieder entfernbar)
+- [x] Temporaerer Testmodus (F1) erlaubt mehrfaches Review pro Draft in einer Session (leicht wieder entfernbar)
+- [x] Feed-Sortierung nach RankingScore (Alle/Top/Trending/Neu/Unbeantwortet) basierend auf Views, Votes und Alter der Frage
+- [x] Branding aktualisiert: Seitentitel im Browser auf "Future-Vote" gesetzt

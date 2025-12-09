@@ -139,6 +139,8 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Einfaches Vote-Rate-Limit pro Session (429 + Hinweis)
 - [x] Persistenz auf SQLite (better-sqlite3) umgesetzt
 - [x] Next.js 16: params/cookies nun als Promise awaited (keine params.id/cookies().get Fehler)
+- [x] Feed-Sortierung nach RankingScore (Alle/Top/Trending/Neu/Unbeantwortet) im Feed umgesetzt (Client-Sortierung basierend auf Views/Votes/Alter)
+- [x] Branding: Projektname in Meta-Daten auf "Future-Vote" aktualisiert; SQLite-Migration fuer createdAt/rankingScore verhaeltnissmaessig stabil (Vercel-Build laeuft durch)
 ### Draft-Einreichung (Stand)
 - [x] Drafts liegen in SQLite (Tabelle `drafts`, Seed aus Mock-Daten)
 - [x] API-Endpunkt `/api/drafts` fuer neue Drafts (Titel, optionale Beschreibung, Kategorie, Review-Zeitraum)

@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS questions (
   yesVotes INTEGER NOT NULL DEFAULT 0,
   noVotes INTEGER NOT NULL DEFAULT 0,
   views INTEGER NOT NULL DEFAULT 0,
-  status TEXT
+  status TEXT,
+  rankingScore REAL NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS votes (
@@ -63,7 +65,7 @@ if (!hasRanking) {
 }
 const hasCreatedAt = columns.some((c) => c.name === "createdAt");
 if (!hasCreatedAt) {
-  db.exec("ALTER TABLE questions ADD COLUMN createdAt TEXT NOT NULL DEFAULT (datetime('now'))");
+  db.exec("ALTER TABLE questions ADD COLUMN createdAt TEXT");
   db.exec("UPDATE questions SET createdAt = datetime('now') WHERE createdAt IS NULL OR createdAt = ''");
 }
 
@@ -107,6 +109,8 @@ type QuestionRow = {
   noVotes: number;
   status?: string | null;
   views: number;
+  rankingScore?: number | null;
+  createdAt?: string | null;
 };
 
 type DraftRow = {
@@ -120,14 +124,45 @@ type DraftRow = {
   status?: string | null;
 };
 
-export type QuestionWithVotes = Question & { yesVotes: number; noVotes: number; views: number };
+export type QuestionWithVotes = Question & {
+  yesVotes: number;
+  noVotes: number;
+  views: number;
+  rankingScore: number;
+  createdAt: string;
+};
 export type VoteChoice = "yes" | "no";
 export type DraftReviewChoice = "good" | "bad";
+
+function computeRankingScore(row: QuestionRow): number {
+  const votes = Math.max(0, row.yesVotes + row.noVotes);
+  const views = Math.max(0, row.views ?? 0);
+  const engagementScore = Math.log(1 + votes);
+  const voteRate = votes / Math.max(views, 1);
+  const qualityScore = voteRate;
+
+  let createdMs = row.createdAt ? Date.parse(row.createdAt) : NaN;
+  if (!Number.isFinite(createdMs)) {
+    createdMs = Date.now();
+  }
+  const ageHours = Math.max(0, (Date.now() - createdMs) / (1000 * 60 * 60));
+  const freshnessScore = 1 / (1 + ageHours / 24);
+
+  const creatorScore = 1.0;
+  const base = 0.5 * engagementScore + 0.5 * qualityScore;
+  let score = base * freshnessScore * creatorScore;
+  if (ageHours < 12) {
+    score += 1.0;
+  }
+  return score;
+}
 
 function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWithVotes {
   const total = Math.max(1, row.yesVotes + row.noVotes);
   const yesPct = Math.round((row.yesVotes / total) * 100);
   const noPct = 100 - yesPct;
+  const createdAt = row.createdAt ?? new Date().toISOString();
+  const rankingScore = computeRankingScore({ ...row, createdAt });
   return {
     id: row.id,
     title: row.title,
@@ -143,6 +178,8 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     noPct,
     status: row.status === null ? undefined : (row.status as Question["status"]),
     views: row.views ?? 0,
+    rankingScore,
+    createdAt,
     userChoice: sessionChoice,
   };
 }
