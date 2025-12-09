@@ -123,6 +123,16 @@ function EventCard({
       </div>
 
       <div className="space-y-3">
+        {question.imageUrl && (
+          <div className="h-32 w-full overflow-hidden rounded-2xl bg-black/30">
+            <img
+              src={question.imageUrl}
+              alt={question.title}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              loading="lazy"
+            />
+          </div>
+        )}
         <h3 className="text-xl font-bold leading-tight text-white">{question.title}</h3>
         <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200">
           <span
@@ -211,6 +221,16 @@ function DraftCard({
         <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">{draft.timeLeftHours}h</span>
       </div>
+      {draft.imageUrl && (
+        <div className="h-24 w-full overflow-hidden rounded-2xl bg-black/30">
+          <img
+            src={draft.imageUrl}
+            alt={draft.title}
+            className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+            loading="lazy"
+          />
+        </div>
+      )}
       <h4 className="text-lg font-semibold text-white leading-snug">{draft.title}</h4>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
       {draft.description && (
