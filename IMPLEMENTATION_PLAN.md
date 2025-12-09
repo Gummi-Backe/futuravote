@@ -161,6 +161,9 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Mobile Swipe-Navigation: Tabs & Kategorien per Wisch gewechselt (Snap-Scroll + Touch-Handler)
 - [x] Animations-Prinzip: bei neuen Views standardmaessig Seiten-Transitionen, Overlays mit Fade/Scale und Listen/Toasts mit kurzen Einblend-Animationen verwenden
 - [ ] Erweiterte Animationen (Zahlen-Animationen, Status-Wechsel im Review-Bereich, weiche Uebergaenge im Frage-vorschlagen-Flow) fuer spaetere Feintuning-Phase vorm Launch
+- [ ] Optionaler Bild-Upload fuer Fragen/Drafts:
+  - Zunaechst einfache Bild-URL-Variante (kleines Vorschaubild in Kachel/Detail, via CSS skaliert).
+  - Spaeter: echter Upload mit serverseitigem Resize (z. B. auf feste Kachel-Groesse), Speicherung der verkleinerten Variante und Entfernen des Original-Uploads nach erfolgreicher Verarbeitung.
 ### Feed-Verbesserungen (Stand)
 - [x] Visuelle Hervorhebung von Fragen mit Status "Endet bald" (Badge + Rahmen)
 - [x] Neuer Tab "Endet bald" im Feed, sortiert nach naechstem Enddatum, ohne die Standard-"Alle"-Sortierung zu veraendern
