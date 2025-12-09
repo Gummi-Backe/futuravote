@@ -3,6 +3,10 @@ export type Question = {
   title: string;
   summary: string;
   description?: string;
+  /**
+   * Optionale Region, z. B. "Global", "Deutschland", "Europa", "Stadt/Region".
+   */
+  region?: string;
   category: string;
   categoryIcon: string;
   categoryColor: string;
@@ -22,6 +26,10 @@ export type Draft = {
   id: string;
   title: string;
   description?: string;
+  /**
+   * Optionale Region, z. B. "Global", "Deutschland", "Stadt/Region".
+   */
+  region?: string;
   category: string;
   votesFor: number;
   votesAgainst: number;

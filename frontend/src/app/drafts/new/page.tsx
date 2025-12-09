@@ -12,6 +12,7 @@ export default function NewDraftPage() {
   const [category, setCategory] = useState<string>(categories[0]?.label ?? "");
   const [useCustomCategory, setUseCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
+  const [region, setRegion] = useState<string>("Global");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +68,7 @@ export default function NewDraftPage() {
           title: trimmedTitle,
           description: trimmedDescription || undefined,
           category: finalCategory,
+          region: region.trim() || "Global",
           timeLeftHours: Number.isFinite(timeLeftHours) ? timeLeftHours : 72,
         }),
       });
@@ -173,6 +175,28 @@ export default function NewDraftPage() {
                   placeholder="z. B. Gesundheit, Bildung, Energie …"
                 />
               )}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="region" className="text-sm font-medium text-slate-100">
+                Region (optional)
+              </label>
+              <select
+                id="region"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+              >
+                <option value="Global">Alle / Global</option>
+                <option value="Deutschland">Deutschland</option>
+                <option value="Europa">Europa</option>
+                <option value="DACH">DACH (Deutschland, Oesterreich, Schweiz)</option>
+                <option value="Stadt/Region">Stadt oder Region (siehe Freitext)</option>
+              </select>
+              <p className="text-xs text-slate-400">
+                Du kannst hier eingeben, fuer welche Region deine Prognose gedacht ist. Wenn du nichts aenderst, gilt die
+                Frage global.
+              </p>
             </div>
 
             <div className="space-y-2">

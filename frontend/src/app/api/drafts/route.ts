@@ -7,6 +7,7 @@ type DraftInput = {
   title?: string;
   description?: string;
   category?: string;
+  region?: string;
   timeLeftHours?: number;
 };
 
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
   const title = (body.title ?? "").trim();
   const category = (body.category ?? "").trim();
   const description = (body.description ?? "").trim() || undefined;
+  const region = (body.region ?? "").trim() || undefined;
 
   if (!title) {
     return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
@@ -34,6 +36,6 @@ export async function POST(request: Request) {
       ? body.timeLeftHours
       : 72;
 
-  const draft = createDraft({ title, category, description, timeLeftHours });
+  const draft = createDraft({ title, category, description, region, timeLeftHours });
   return NextResponse.json({ draft }, { status: 201 });
 }

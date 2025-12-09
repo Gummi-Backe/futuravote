@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS questions (
   title TEXT NOT NULL,
   summary TEXT NOT NULL,
   description TEXT,
+  region TEXT,
   category TEXT NOT NULL,
   categoryIcon TEXT NOT NULL,
   categoryColor TEXT NOT NULL,
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
+  region TEXT,
   category TEXT NOT NULL,
   votesFor INTEGER NOT NULL DEFAULT 0,
   votesAgainst INTEGER NOT NULL DEFAULT 0,
@@ -68,6 +70,14 @@ if (!hasCreatedAt) {
   db.exec("ALTER TABLE questions ADD COLUMN createdAt TEXT");
   db.exec("UPDATE questions SET createdAt = datetime('now') WHERE createdAt IS NULL OR createdAt = ''");
 }
+const hasRegion = columns.some((c) => c.name === "region");
+if (!hasRegion) {
+  try {
+    db.exec("ALTER TABLE questions ADD COLUMN region TEXT");
+  } catch {
+    // Falls die Spalte in einer bestehenden lokalen DB bereits existiert, Fehler ignorieren.
+  }
+}
 
 // Backfill description / status column for drafts if missing.
 const draftColumns = db.prepare("PRAGMA table_info(drafts)").all() as { name: string }[];
@@ -79,20 +89,35 @@ const draftsHaveStatus = draftColumns.some((c) => c.name === "status");
 if (!draftsHaveStatus) {
   db.exec("ALTER TABLE drafts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'");
 }
+const draftsHaveRegion = draftColumns.some((c) => c.name === "region");
+if (!draftsHaveRegion) {
+  try {
+    db.exec("ALTER TABLE drafts ADD COLUMN region TEXT");
+  } catch {
+    // Spalte existiert bereits – lokal entstandene Duplikate ignorieren.
+  }
+}
 
 // Seed if empty
 const countStmt = db.prepare("SELECT COUNT(*) as cnt FROM questions");
 const hasQuestions = ((countStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasQuestions) {
   const insert = db.prepare(
-    `INSERT INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-     VALUES (@id, @title, @summary, @description, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
+    `INSERT INTO questions (id, title, summary, description, region, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+     VALUES (@id, @title, @summary, @description, @region, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
   );
   const baseline = 120;
   for (const q of allQuestions) {
     const yesVotes = Math.round((q.yesPct / Math.max(1, q.yesPct + q.noPct)) * baseline);
     const noVotes = Math.max(0, baseline - yesVotes);
-    insert.run({ ...q, yesVotes, noVotes, views: q.views ?? 0, status: q.status ?? null });
+    insert.run({
+      ...q,
+      region: q.region ?? null,
+      yesVotes,
+      noVotes,
+      views: q.views ?? 0,
+      status: q.status ?? null,
+    });
   }
 }
 
@@ -101,6 +126,7 @@ type QuestionRow = {
   title: string;
   summary: string;
   description?: string | null;
+  region?: string | null;
   category: string;
   categoryIcon: string;
   categoryColor: string;
@@ -117,6 +143,7 @@ type DraftRow = {
   id: string;
   title: string;
   description?: string | null;
+  region?: string | null;
   category: string;
   votesFor: number;
   votesAgainst: number;
@@ -180,6 +207,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     title: row.title,
     summary: row.summary,
     description: row.description ?? undefined,
+    region: row.region ?? undefined,
     category: row.category,
     categoryIcon: row.categoryIcon,
     categoryColor: row.categoryColor,
@@ -201,8 +229,8 @@ const draftCountStmt = db.prepare("SELECT COUNT(*) as cnt FROM drafts");
 const hasDrafts = ((draftCountStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasDrafts) {
   const insertDraft = db.prepare(
-    `INSERT INTO drafts (id, title, description, category, votesFor, votesAgainst, timeLeftHours, status)
-     VALUES (@id, @title, @description, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
+    `INSERT INTO drafts (id, title, description, region, category, votesFor, votesAgainst, timeLeftHours, status)
+     VALUES (@id, @title, @description, @region, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
   );
   for (const d of draftQueue) {
     insertDraft.run(d);
@@ -212,13 +240,14 @@ if (!hasDrafts) {
 export function getDrafts(): Draft[] {
   const rows = db
     .prepare(
-      "SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts"
+      "SELECT id, title, description, region, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts"
     )
     .all() as DraftRow[];
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
     description: row.description ?? undefined,
+    region: row.region ?? undefined,
     category: row.category,
     votesFor: row.votesFor,
     votesAgainst: row.votesAgainst,
@@ -231,6 +260,7 @@ export function createDraft(input: {
   title: string;
   category: string;
   description?: string;
+  region?: string;
   timeLeftHours?: number;
 }): Draft {
   const id = randomUUID();
@@ -242,6 +272,7 @@ export function createDraft(input: {
     id,
     title: input.title,
     description: input.description,
+    region: input.region,
     category: input.category,
     votesFor: 0,
     votesAgainst: 0,
@@ -249,11 +280,12 @@ export function createDraft(input: {
     status: "open",
   };
   db.prepare(
-    "INSERT INTO drafts (id, title, description, category, votesFor, votesAgainst, timeLeftHours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO drafts (id, title, description, region, category, votesFor, votesAgainst, timeLeftHours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     draft.id,
     draft.title,
     draft.description ?? null,
+    draft.region ?? null,
     draft.category,
     draft.votesFor,
     draft.votesAgainst,
@@ -277,13 +309,14 @@ function maybePromoteDraft(row: DraftRow) {
     const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
 
     db.prepare(
-      `INSERT OR IGNORE INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR IGNORE INTO questions (id, title, summary, description, region, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       questionId,
       row.title,
       row.title,
       row.description ?? null,
+      row.region ?? null,
       row.category,
       cat?.icon ?? "?",
       cat?.color ?? "#22c55e",
@@ -393,3 +426,4 @@ export function voteOnQuestion(id: string, choice: VoteChoice, sessionId: string
 export function incrementViewsForAll() {
   db.prepare("UPDATE questions SET views = views + 1").run();
 }
+
