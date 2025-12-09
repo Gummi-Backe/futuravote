@@ -147,7 +147,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Seite `/drafts/new` ("Frage vorschlagen") mit Formular (inkl. optionaler Langbeschreibung, sichtbar in Review-Karten und spaeter in der Detailansicht); verlinkt aus dem Hero-Button "Frage stellen"
 - [x] Draft-Review-Interaktion (Gute Frage/Ablehnen) an Backend angebunden; Votes werden in SQLite gespeichert
 - [x] Einfache Auto-Promotion: ab Mindestanzahl/Kanten (>=5 Reviews, deutlich mehr "Gute Frage" als "Ablehnen") wird Draft als neue Frage in `questions` uebernommen
-- [ ] Draft-Status/Filter im Review-Bereich (offen/angenommen/abgelehnt)
+- [x] Draft-Status/Filter im Review-Bereich (Offen/Angenommen/Abgelehnt) inkl. visueller Badges in den Karten
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.

@@ -199,7 +199,9 @@ if (!hasDrafts) {
 
 export function getDrafts(): Draft[] {
   const rows = db
-    .prepare("SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE status IS NULL OR status = 'open'")
+    .prepare(
+      "SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts"
+    )
     .all() as DraftRow[];
   return rows.map((row) => ({
     id: row.id,
@@ -209,6 +211,7 @@ export function getDrafts(): Draft[] {
     votesFor: row.votesFor,
     votesAgainst: row.votesAgainst,
     timeLeftHours: row.timeLeftHours,
+    status: (row.status ?? "open") as Draft["status"],
   }));
 }
 
@@ -231,6 +234,7 @@ export function createDraft(input: {
     votesFor: 0,
     votesAgainst: 0,
     timeLeftHours: timeLeft,
+    status: "open",
   };
   db.prepare(
     "INSERT INTO drafts (id, title, description, category, votesFor, votesAgainst, timeLeftHours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -255,31 +259,33 @@ function maybePromoteDraft(row: DraftRow) {
   }
   const total = row.votesFor + row.votesAgainst;
   if (total < 5) return;
-  if (row.votesFor < row.votesAgainst + 2) return;
+  if (row.votesFor >= row.votesAgainst + 2) {
+    const cat = categories.find((c) => c.label === row.category) ?? categories[0];
+    const closesAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().split("T")[0];
+    const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
 
-  const cat = categories.find((c) => c.label === row.category) ?? categories[0];
-  const closesAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().split("T")[0];
-  const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
+    db.prepare(
+      `INSERT OR IGNORE INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      questionId,
+      row.title,
+      row.title,
+      row.description ?? null,
+      row.category,
+      cat?.icon ?? "?",
+      cat?.color ?? "#22c55e",
+      closesAt,
+      0,
+      0,
+      0,
+      "new"
+    );
 
-  db.prepare(
-    `INSERT OR IGNORE INTO questions (id, title, summary, description, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    questionId,
-    row.title,
-    row.title,
-    row.description ?? null,
-    row.category,
-    cat?.icon ?? '?',
-    cat?.color ?? '#22c55e',
-    closesAt,
-    0,
-    0,
-    0,
-    'new'
-  );
-
-  db.prepare("UPDATE drafts SET status = 'accepted' WHERE id = ?").run(row.id);
+    db.prepare("UPDATE drafts SET status = 'accepted' WHERE id = ?").run(row.id);
+  } else if (row.votesAgainst >= row.votesFor + 2) {
+    db.prepare("UPDATE drafts SET status = 'rejected' WHERE id = ?").run(row.id);
+  }
 }
 
 export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null {
@@ -294,20 +300,30 @@ export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null
   txn();
 
   const row = db
-    .prepare("SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?")
+    .prepare(
+      "SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
     .get(id) as DraftRow | undefined;
   if (!row) return null;
 
   maybePromoteDraft(row);
 
+  const updatedRow = db
+    .prepare(
+      "SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
+    .get(id) as DraftRow | undefined;
+  const effective = updatedRow ?? row;
+
   return {
-    id: row.id,
-    title: row.title,
-    description: row.description ?? undefined,
-    category: row.category,
-    votesFor: row.votesFor,
-    votesAgainst: row.votesAgainst,
-    timeLeftHours: row.timeLeftHours,
+    id: effective.id,
+    title: effective.title,
+    description: effective.description ?? undefined,
+    category: effective.category,
+    votesFor: effective.votesFor,
+    votesAgainst: effective.votesAgainst,
+    timeLeftHours: effective.timeLeftHours,
+    status: (effective.status ?? "open") as Draft["status"],
   };
 }
 

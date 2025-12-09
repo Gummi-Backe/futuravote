@@ -24,3 +24,4 @@
 - [x] Temporaerer Testmodus (F1) erlaubt mehrfaches Review pro Draft in einer Session (leicht wieder entfernbar)
 - [x] Feed-Sortierung nach RankingScore (Alle/Top/Trending/Neu/Unbeantwortet) basierend auf Views, Votes und Alter der Frage
 - [x] Branding aktualisiert: Seitentitel im Browser auf "Future-Vote" gesetzt
+- [x] Draft-Status im Review-Bereich sichtbar (Offen/Angenommen/Abgelehnt) inkl. Filter-Chips

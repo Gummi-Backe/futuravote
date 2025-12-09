@@ -182,12 +182,21 @@ function DraftCard({
   const total = Math.max(1, draft.votesFor + draft.votesAgainst);
   const yesPct = Math.round((draft.votesFor / total) * 100);
   const noPct = 100 - yesPct;
-  const disabled = Boolean(isSubmitting || hasVoted);
+  const isClosed = draft.status === "accepted" || draft.status === "rejected";
+  const disabled = Boolean(isSubmitting || hasVoted || isClosed);
+  const statusLabel =
+    draft.status === "accepted" ? "Angenommen" : draft.status === "rejected" ? "Abgelehnt" : "Offen";
+  const statusClass =
+    draft.status === "accepted"
+      ? "bg-emerald-500/15 text-emerald-100 border border-emerald-400/40"
+      : draft.status === "rejected"
+      ? "bg-rose-500/15 text-rose-100 border border-rose-400/40"
+      : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
 
   return (
     <article className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30">
       <div className="flex items-center justify-between text-xs text-slate-200">
-        <span className="rounded-full bg-sky-500/15 px-3 py-1 font-semibold text-sky-100">Draft Review</span>
+        <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">{draft.timeLeftHours}h</span>
       </div>
       <h4 className="text-lg font-semibold text-white leading-snug">{draft.title}</h4>
@@ -247,6 +256,7 @@ export default function Home() {
   const [debugMultiReview, setDebugMultiReview] = useState(false);
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
 
   const categoryOptions = useMemo(() => {
     const map = new Map<string, { label: string; icon: string; color: string }>();
@@ -350,11 +360,14 @@ export default function Home() {
     if (activeCategory) {
       result = result.filter((d) => d.category === activeCategory);
     }
+    if (draftStatusFilter !== "all") {
+      result = result.filter((d) => (d.status ?? "open") === draftStatusFilter);
+    }
     return [...result].sort((a, b) => {
       if (b.votesFor !== a.votesFor) return b.votesFor - a.votesFor;
       return a.timeLeftHours - b.timeLeftHours;
     });
-  }, [activeCategory, drafts]);
+  }, [activeCategory, drafts, draftStatusFilter]);
 
   const handleVote = useCallback(
     async (questionId: string, choice: "yes" | "no") => {
@@ -637,7 +650,55 @@ export default function Home() {
             <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
               <span>🗳️</span> <span>Review-Bereich (Drafts)</span>
             </h2>
-            <span className="text-sm text-slate-300">Community entscheidet, was live geht</span>
+            <div className="flex items-center gap-3 text-sm text-slate-300">
+              <span className="hidden sm:inline">Community entscheidet, was live geht</span>
+              <div className="inline-flex rounded-full bg-white/5 p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDraftStatusFilter("open")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    draftStatusFilter === "open"
+                      ? "bg-sky-500/30 text-white"
+                      : "text-slate-200 hover:bg-white/10"
+                  }`}
+                >
+                  Offen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftStatusFilter("accepted")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    draftStatusFilter === "accepted"
+                      ? "bg-emerald-500/30 text-white"
+                      : "text-slate-200 hover:bg-white/10"
+                  }`}
+                >
+                  Angenommen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftStatusFilter("rejected")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    draftStatusFilter === "rejected"
+                      ? "bg-rose-500/30 text-white"
+                      : "text-slate-200 hover:bg-white/10"
+                  }`}
+                >
+                  Abgelehnt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftStatusFilter("all")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    draftStatusFilter === "all"
+                      ? "bg-slate-700/80 text-white"
+                      : "text-slate-200 hover:bg-white/10"
+                  }`}
+                >
+                  Alle
+                </button>
+              </div>
+            </div>
           </div>
           <div
             key={`drafts-${activeCategory ?? "all"}`}
