@@ -53,11 +53,11 @@ export default function NewDraftPage() {
     event.preventDefault();
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setError("Bitte gib einen Titel fuer deine Frage ein.");
+      setError("Bitte gib einen Titel für deine Frage ein.");
       return;
     }
     if (trimmedTitle.length < 10) {
-      setError("Der Titel sollte mindestens 10 Zeichen lang sein, damit die Frage verstaendlich ist.");
+      setError("Der Titel sollte mindestens 10 Zeichen lang sein, damit die Frage verständlich ist.");
       return;
     }
     const finalCategory = (useCustomCategory ? customCategory : category).trim();
@@ -99,7 +99,7 @@ export default function NewDraftPage() {
       }
       const end = new Date(raw);
       if (Number.isNaN(end.getTime())) {
-        setError("Das gewaehlte Enddatum ist ungueltig.");
+        setError("Das gewählte Enddatum ist ungültig.");
         return;
       }
       const now = new Date();
@@ -220,8 +220,8 @@ export default function NewDraftPage() {
                 placeholder="https://… (kleines Vorschaubild fuer die Kachel)"
               />
               <p className="text-xs text-slate-400">
-                Optionales Vorschaubild fuer deine Frage. Am besten ein querformatiges Bild; es wird automatisch in einer
-                kleinen Box in der Kachel zugeschnitten (ohne das Original zu aendern).
+                Optionales Vorschaubild für deine Frage. Am besten ein querformatiges Bild; es wird automatisch in einer
+                kleinen Box in der Kachel zugeschnitten (ohne das Original zu ändern).
               </p>
             </div>
 
