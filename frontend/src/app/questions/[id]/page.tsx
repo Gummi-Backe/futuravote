@@ -144,6 +144,16 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
               )}
             </div>
           </div>
+          {question.imageUrl && (
+            <div className="mt-4 h-56 w-full overflow-hidden rounded-2xl bg-black/30">
+              <img
+                src={question.imageUrl}
+                alt={question.title}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          )}
           <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
           <p className="text-base text-slate-200">{question.description}</p>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">

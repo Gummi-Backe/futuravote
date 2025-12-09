@@ -30,6 +30,7 @@ export default function NewDraftPage() {
   const [reviewMode, setReviewMode] = useState<"duration" | "endDate">("duration");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
   const [endDateTime, setEndDateTime] = useState<string>("");
+  const [imageUrl, setImageUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -134,6 +135,7 @@ export default function NewDraftPage() {
           description: trimmedDescription || undefined,
           category: finalCategory,
           region: finalRegion,
+          imageUrl: imageUrl.trim() || undefined,
           timeLeftHours: finalTimeLeftHours,
         }),
       });
@@ -202,6 +204,24 @@ export default function NewDraftPage() {
               <p className="text-xs text-slate-400">
                 Dieser Text dient dazu, das Thema genauer zu erklaeren. Er wird nicht in der Kachel im Feed angezeigt,
                 sondern in der Detailansicht der Frage.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="imageUrl" className="text-sm font-medium text-slate-100">
+                Bild-URL (optional)
+              </label>
+              <input
+                id="imageUrl"
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                placeholder="https://… (kleines Vorschaubild fuer die Kachel)"
+              />
+              <p className="text-xs text-slate-400">
+                Optionales Vorschaubild fuer deine Frage. Am besten ein querformatiges Bild; es wird automatisch in einer
+                kleinen Box in der Kachel zugeschnitten (ohne das Original zu aendern).
               </p>
             </div>
 
