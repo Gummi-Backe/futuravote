@@ -17,9 +17,9 @@ Next.js + Tailwind (App Router) mit Kachel-Feed fuer Ja/Nein-Prognosen, Draft-Re
 - `src/app/globals.css` → Basis-Theme (Gradient, Buttons)
 
 ### Deployment Hinweis (Strato + Vercel)
-- In Vercel `futuravote.de` als Domain hinterlegen, DNS bei Strato per CNAME/A auf Vercel zeigen (siehe Vercel Domain-Settings).
+- In Vercel `future-vote.de` als Domain hinterlegen, DNS bei Strato per CNAME/A auf Vercel zeigen (siehe Vercel Domain-Settings).
 - SSL erledigt Vercel automatisch nach DNS-Propagation.
-- Backend spaeter auf eigener Subdomain (z. B. `api.futuravote.de`).
+- Backend spaeter auf eigener Subdomain (z. B. `api.future-vote.de`).
 
 ### Weiteres
 - Produkt-/Scope-Idee: `../IDEA_OVERVIEW.md`

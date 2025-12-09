@@ -163,6 +163,18 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
   const noPct = 100 - yesPct;
   const createdAt = row.createdAt ?? new Date().toISOString();
   const rankingScore = computeRankingScore({ ...row, createdAt });
+  let status: Question["status"] | undefined;
+  const closesMs = Date.parse(row.closesAt);
+  if (Number.isFinite(closesMs)) {
+    const daysLeft = (closesMs - Date.now()) / (1000 * 60 * 60 * 24);
+    if (daysLeft <= 14) {
+      status = "closingSoon";
+    }
+  }
+  if (!status && row.status && row.status !== "closingSoon") {
+    status = row.status as Question["status"];
+  }
+
   return {
     id: row.id,
     title: row.title,
@@ -176,7 +188,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     noVotes: row.noVotes,
     yesPct,
     noPct,
-    status: row.status === null ? undefined : (row.status as Question["status"]),
+    status,
     views: row.views ?? 0,
     rankingScore,
     createdAt,

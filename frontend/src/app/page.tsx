@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   allQuestions as initialQuestions,
@@ -10,6 +10,9 @@ import {
   type Draft,
   type Question,
 } from "./data/mock";
+
+const QUESTIONS_PAGE_SIZE = 8;
+const DRAFTS_PAGE_SIZE = 6;
 
 const feedTabs = [
   { id: "all", label: "Alle", icon: "✨" },
@@ -76,11 +79,14 @@ function EventCard({
   const voted = Boolean(votedChoice);
   const votedLabel = votedChoice ? (votedChoice === "yes" ? "Abgestimmt: Ja" : "Abgestimmt: Nein") : null;
   const voteLocked = voted;
+  const isClosingSoon = question.status === "closingSoon";
 
   return (
     <article
       className={`group relative flex h-full flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-emerald-500/10 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 ${
         voted ? "border-emerald-300/50 shadow-emerald-400/30" : ""
+      } ${
+        isClosingSoon ? "border-amber-300/60 shadow-amber-400/30" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -119,7 +125,13 @@ function EventCard({
       <div className="space-y-3">
         <h3 className="text-xl font-bold leading-tight text-white">{question.title}</h3>
         <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200">
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-100">
+          <span
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${
+              isClosingSoon
+                ? "bg-amber-500/20 text-amber-100 border border-amber-300/60"
+                : "bg-emerald-500/15 text-emerald-100"
+            }`}
+          >
             <span className="text-base">⏳</span>
             <span>{formatDeadline(question.closesAt)}</span>
           </span>
@@ -240,6 +252,7 @@ function DraftCard({
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
@@ -257,6 +270,18 @@ export default function Home() {
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
+  const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
+  const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
+  const questionsEndRef = useRef<HTMLDivElement | null>(null);
+  const draftsEndRef = useRef<HTMLDivElement | null>(null);
+  const tabs = useMemo(
+    () => [
+      ...feedTabs.slice(0, 2),
+      { id: "closingSoon", label: "Endet bald", icon: "⏳" },
+      ...feedTabs.slice(2),
+    ],
+    []
+  );
 
   const categoryOptions = useMemo(() => {
     const map = new Map<string, { label: string; icon: string; color: string }>();
@@ -269,6 +294,8 @@ export default function Home() {
       }
     }
     for (const d of drafts) {
+      const status = d.status ?? "open";
+      if (status === "rejected") continue;
       if (!map.has(d.category)) {
         map.set(d.category, { label: d.category, icon: "?", color: "#64748b" });
       }
@@ -316,6 +343,14 @@ export default function Home() {
   }, [fetchLatest]);
 
   useEffect(() => {
+    const submitted = searchParams.get("draft");
+    if (submitted === "submitted") {
+      showToast("Deine Frage wurde eingereicht und erscheint im Review-Bereich.", "success");
+      router.replace("/");
+    }
+  }, [router, searchParams, showToast]);
+
+  useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key === "F1") {
         event.preventDefault();
@@ -344,6 +379,12 @@ export default function Home() {
         const bTime = b.createdAt ? Date.parse(b.createdAt) : 0;
         return bTime - aTime;
       });
+    } else if (activeTab === "closingSoon") {
+      sorted.sort((a, b) => {
+        const aTime = Date.parse(a.closesAt);
+        const bTime = Date.parse(b.closesAt);
+        return aTime - bTime;
+      });
     } else {
       sorted.sort((a, b) => {
         const aScore = typeof a.rankingScore === "number" ? a.rankingScore : 0;
@@ -354,6 +395,11 @@ export default function Home() {
 
     return sorted;
   }, [activeTab, activeCategory, questions]);
+
+  const visibleQuestions = useMemo(
+    () => filteredQuestions.slice(0, visibleQuestionCount),
+    [filteredQuestions, visibleQuestionCount]
+  );
 
   const filteredDrafts = useMemo(() => {
     let result = drafts;
@@ -368,6 +414,51 @@ export default function Home() {
       return a.timeLeftHours - b.timeLeftHours;
     });
   }, [activeCategory, drafts, draftStatusFilter]);
+
+  const visibleDrafts = useMemo(
+    () => filteredDrafts.slice(0, visibleDraftCount),
+    [filteredDrafts, visibleDraftCount]
+  );
+
+  useEffect(() => {
+    setVisibleQuestionCount(Math.min(QUESTIONS_PAGE_SIZE, filteredQuestions.length));
+  }, [filteredQuestions.length]);
+
+  useEffect(() => {
+    setVisibleDraftCount(Math.min(DRAFTS_PAGE_SIZE, filteredDrafts.length));
+  }, [filteredDrafts.length]);
+
+  useEffect(() => {
+    if (!questionsEndRef.current || filteredQuestions.length <= QUESTIONS_PAGE_SIZE) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const target = questionsEndRef.current;
+    const observer = new IntersectionObserver((entries) => {
+      const [entry] = entries;
+      if (entry.isIntersecting) {
+        setVisibleQuestionCount((prev) =>
+          Math.min(prev + QUESTIONS_PAGE_SIZE, filteredQuestions.length)
+        );
+      }
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [filteredQuestions.length]);
+
+  useEffect(() => {
+    if (!draftsEndRef.current || filteredDrafts.length <= DRAFTS_PAGE_SIZE) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const target = draftsEndRef.current;
+    const observer = new IntersectionObserver((entries) => {
+      const [entry] = entries;
+      if (entry.isIntersecting) {
+        setVisibleDraftCount((prev) =>
+          Math.min(prev + DRAFTS_PAGE_SIZE, filteredDrafts.length)
+        );
+      }
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [filteredDrafts.length]);
 
   const handleVote = useCallback(
     async (questionId: string, choice: "yes" | "no") => {
@@ -451,7 +542,7 @@ export default function Home() {
     [debugMultiReview, fetchLatest, reviewedDrafts, showToast]
   );
 
-  const tabLabel = feedTabs.find((t) => t.id === activeTab)?.label ?? "Feed";
+  const tabLabel = tabs.find((t) => t.id === activeTab)?.label ?? "Feed";
 
   const handleTabTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     tabTouchStart.current = e.touches[0]?.clientX ?? null;
@@ -461,9 +552,9 @@ export default function Home() {
     const delta = e.changedTouches[0]?.clientX - tabTouchStart.current;
     tabTouchStart.current = null;
     if (!delta || Math.abs(delta) < 40) return;
-    const currentIndex = feedTabs.findIndex((t) => t.id === activeTab);
-    const nextIndex = delta < 0 ? Math.min(feedTabs.length - 1, currentIndex + 1) : Math.max(0, currentIndex - 1);
-    setActiveTab(feedTabs[nextIndex].id);
+    const currentIndex = tabs.findIndex((t) => t.id === activeTab);
+    const nextIndex = delta < 0 ? Math.min(tabs.length - 1, currentIndex + 1) : Math.max(0, currentIndex - 1);
+    setActiveTab(tabs[nextIndex].id);
   };
 
   const handleCategoryTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -505,10 +596,10 @@ export default function Home() {
                 FV
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">futuravote</p>
+                <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">FUTURE-VOTE</p>
                 <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">Prognosen, schnell abgestimmt.</h1>
                 <p className="mt-1 max-w-3xl text-sm text-slate-200">
-                  Ja/Nein-Kacheln, Community-Review fuer neue Fragen, Ranking nach Engagement und Freshness.
+                  Ja/Nein-Kacheln, Community-Review für neue Fragen, Ranking nach Engagement und Freshness.
                 </p>
               </div>
             </div>
@@ -538,12 +629,12 @@ export default function Home() {
               onTouchStart={handleTabTouchStart}
               onTouchEnd={handleTabTouchEnd}
             >
-              {feedTabs.map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex min-w-[132px] items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
+                  className={`flex min-w-fit items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
                     activeTab === tab.id
                       ? "bg-white/20 border border-white/30 text-white hover:border-emerald-300/60 hover:-translate-y-0.5"
                       : "bg-white/10 border border-white/15 text-slate-200 hover:border-emerald-300/40 hover:-translate-y-0.5"
@@ -610,7 +701,7 @@ export default function Home() {
         <section className="mt-8 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
-              <span>{feedTabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
+              <span>{tabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
               <span>{tabLabel}</span>
             </h2>
             <span className="text-sm text-slate-300">Engagement + Freshness + Trust</span>
@@ -621,7 +712,7 @@ export default function Home() {
             key={`${activeTab}-${activeCategory ?? "all"}`}
             className="list-enter grid gap-5 md:grid-cols-2"
           >
-            {filteredQuestions.map((q) => (
+            {visibleQuestions.map((q) => (
               <EventCard
                 key={q.id}
                 question={q}
@@ -631,6 +722,7 @@ export default function Home() {
               />
             ))}
           </div>
+          <div ref={questionsEndRef} className="h-1" />
         </section>
 
           {toast && (
@@ -704,7 +796,7 @@ export default function Home() {
             key={`drafts-${activeCategory ?? "all"}`}
             className="list-enter grid gap-5 md:grid-cols-2"
           >
-            {filteredDrafts.map((draft) => (
+            {visibleDrafts.map((draft) => (
               <DraftCard
                 key={draft.id}
                 draft={draft}
@@ -714,6 +806,7 @@ export default function Home() {
               />
             ))}
           </div>
+          <div ref={draftsEndRef} className="h-1" />
         </section>
       </div>
       {showExtraCategories && extraCategories.length > 0 && (
