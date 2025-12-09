@@ -14,7 +14,9 @@ export default function NewDraftPage() {
   const [customCategory, setCustomCategory] = useState("");
   const [regionSelect, setRegionSelect] = useState<string>("Global");
   const [customRegion, setCustomRegion] = useState("");
+  const [reviewMode, setReviewMode] = useState<"duration" | "endDate">("duration");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
+  const [endDateTime, setEndDateTime] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -59,6 +61,7 @@ export default function NewDraftPage() {
       setError("Die Beschreibung ist sehr kurz. Bitte gib mindestens 20 Zeichen ein oder lass das Feld leer.");
       return;
     }
+
     // Region bestimmen
     let finalRegion: string | undefined;
     if (regionSelect === "__custom_region") {
@@ -72,6 +75,41 @@ export default function NewDraftPage() {
       finalRegion = regionSelect === "Global" ? "Global" : regionSelect;
     }
 
+    // Review-Dauer bestimmen
+    let finalTimeLeftHours: number;
+    if (reviewMode === "endDate") {
+      const raw = endDateTime.trim();
+      if (!raw) {
+        setError("Bitte waehle ein Enddatum fuer den Review-Zeitraum.");
+        return;
+      }
+      const end = new Date(raw);
+      if (Number.isNaN(end.getTime())) {
+        setError("Das gewaehlte Enddatum ist ungueltig.");
+        return;
+      }
+      const now = new Date();
+      const diffMs = end.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours < 1) {
+        setError("Das Review-Ende muss mindestens eine Stunde in der Zukunft liegen.");
+        return;
+      }
+      // Sicherheitsdeckel: maximal 365 Tage Review
+      if (diffHours > 24 * 365) {
+        setError("Der Review-Zeitraum darf maximal ein Jahr betragen.");
+        return;
+      }
+      finalTimeLeftHours = Math.round(diffHours);
+    } else {
+      const safeHours = Number.isFinite(timeLeftHours) ? timeLeftHours : 72;
+      if (safeHours < 1) {
+        setError("Der Review-Zeitraum in Stunden muss mindestens 1 Stunde betragen.");
+        return;
+      }
+      finalTimeLeftHours = safeHours;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -83,7 +121,7 @@ export default function NewDraftPage() {
           description: trimmedDescription || undefined,
           category: finalCategory,
           region: finalRegion,
-          timeLeftHours: Number.isFinite(timeLeftHours) ? timeLeftHours : 72,
+          timeLeftHours: finalTimeLeftHours,
         }),
       });
       const data = await res.json();
@@ -223,21 +261,64 @@ export default function NewDraftPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="timeLeft" className="text-sm font-medium text-slate-100">
-                Review-Zeitraum (Stunden)
+              <label className="text-sm font-medium text-slate-100">
+                Review-Zeitraum
               </label>
-              <input
-                id="timeLeft"
-                type="number"
-                min={1}
-                max={240}
-                value={timeLeftHours}
-                onChange={(e) => setTimeLeftHours(Number(e.target.value) || 72)}
-                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-              />
-              <p className="text-xs text-slate-400">
-                Wie lange die Community Zeit hat, die Qualitaet deiner Frage zu bewerten (Standard: 72 Stunden).
-              </p>
+              <div className="inline-flex rounded-full bg-white/5 p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setReviewMode("duration")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    reviewMode === "duration"
+                      ? "bg-emerald-500/40 text-white"
+                      : "text-slate-200 hover:bg-white/10"
+                  }`}
+                >
+                  Dauer (Stunden)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewMode("endDate")}
+                  className={`rounded-full px-3 py-1 transition ${
+                    reviewMode === "endDate"
+                      ? "bg-emerald-500/40 text-white"
+                      : "text-slate-200 hover:bg-white/10"
+                  }`}
+                >
+                  Endet am Datum
+                </button>
+              </div>
+
+              {reviewMode === "duration" ? (
+                <>
+                  <input
+                    id="timeLeft"
+                    type="number"
+                    min={1}
+                    max={24 * 365}
+                    value={timeLeftHours}
+                    onChange={(e) => setTimeLeftHours(Number(e.target.value) || 72)}
+                    className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Wie lange die Community Zeit hat, die Qualitaet deiner Frage zu bewerten (Standard: 72 Stunden).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <input
+                    id="endDateTime"
+                    type="datetime-local"
+                    value={endDateTime}
+                    onChange={(e) => setEndDateTime(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Waehle genau, bis wann die Community deine Frage reviewen kann. Intern wird daraus eine Dauer in
+                    Stunden berechnet.
+                  </p>
+                </>
+              )}
             </div>
 
             {error && <p className="text-sm text-rose-300">{error}</p>}
