@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS questions (
   summary TEXT NOT NULL,
   description TEXT,
   region TEXT,
+  imageUrl TEXT,
   category TEXT NOT NULL,
   categoryIcon TEXT NOT NULL,
   categoryColor TEXT NOT NULL,
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   title TEXT NOT NULL,
   description TEXT,
   region TEXT,
+  imageUrl TEXT,
   category TEXT NOT NULL,
   votesFor INTEGER NOT NULL DEFAULT 0,
   votesAgainst INTEGER NOT NULL DEFAULT 0,
@@ -78,6 +80,14 @@ if (!hasRegion) {
     // Falls die Spalte in einer bestehenden lokalen DB bereits existiert, Fehler ignorieren.
   }
 }
+const hasImageUrl = columns.some((c) => c.name === "imageUrl");
+if (!hasImageUrl) {
+  try {
+    db.exec("ALTER TABLE questions ADD COLUMN imageUrl TEXT");
+  } catch {
+    // Spalte existiert bereits.
+  }
+}
 
 // Backfill description / status column for drafts if missing.
 const draftColumns = db.prepare("PRAGMA table_info(drafts)").all() as { name: string }[];
@@ -94,7 +104,15 @@ if (!draftsHaveRegion) {
   try {
     db.exec("ALTER TABLE drafts ADD COLUMN region TEXT");
   } catch {
-    // Spalte existiert bereits – lokal entstandene Duplikate ignorieren.
+    // Spalte existiert bereits - lokal entstandene Duplikate ignorieren.
+  }
+}
+const draftsHaveImageUrl = draftColumns.some((c) => c.name === "imageUrl");
+if (!draftsHaveImageUrl) {
+  try {
+    db.exec("ALTER TABLE drafts ADD COLUMN imageUrl TEXT");
+  } catch {
+    // Spalte existiert bereits.
   }
 }
 
@@ -127,6 +145,7 @@ type QuestionRow = {
   summary: string;
   description?: string | null;
   region?: string | null;
+  imageUrl?: string | null;
   category: string;
   categoryIcon: string;
   categoryColor: string;
@@ -144,6 +163,7 @@ type DraftRow = {
   title: string;
   description?: string | null;
   region?: string | null;
+  imageUrl?: string | null;
   category: string;
   votesFor: number;
   votesAgainst: number;
@@ -208,6 +228,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     summary: row.summary,
     description: row.description ?? undefined,
     region: row.region ?? undefined,
+    imageUrl: row.imageUrl ?? undefined,
     category: row.category,
     categoryIcon: row.categoryIcon,
     categoryColor: row.categoryColor,
@@ -229,8 +250,8 @@ const draftCountStmt = db.prepare("SELECT COUNT(*) as cnt FROM drafts");
 const hasDrafts = ((draftCountStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasDrafts) {
   const insertDraft = db.prepare(
-    `INSERT INTO drafts (id, title, description, region, category, votesFor, votesAgainst, timeLeftHours, status)
-     VALUES (@id, @title, @description, @region, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
+    `INSERT INTO drafts (id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status)
+     VALUES (@id, @title, @description, @region, @imageUrl, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
   );
   for (const d of draftQueue) {
     insertDraft.run(d);
@@ -240,7 +261,7 @@ if (!hasDrafts) {
 export function getDrafts(): Draft[] {
   const rows = db
     .prepare(
-      "SELECT id, title, description, region, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts"
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts"
     )
     .all() as DraftRow[];
   return rows.map((row) => ({
@@ -248,6 +269,7 @@ export function getDrafts(): Draft[] {
     title: row.title,
     description: row.description ?? undefined,
     region: row.region ?? undefined,
+    imageUrl: row.imageUrl ?? undefined,
     category: row.category,
     votesFor: row.votesFor,
     votesAgainst: row.votesAgainst,
@@ -261,8 +283,9 @@ export function createDraft(input: {
   category: string;
   description?: string;
   region?: string;
+  imageUrl?: string;
   timeLeftHours?: number;
-}): Draft {
+  }): Draft {
   const id = randomUUID();
   const timeLeft =
     typeof input.timeLeftHours === "number" && Number.isFinite(input.timeLeftHours) && input.timeLeftHours > 0
@@ -273,6 +296,7 @@ export function createDraft(input: {
     title: input.title,
     description: input.description,
     region: input.region,
+    imageUrl: input.imageUrl,
     category: input.category,
     votesFor: 0,
     votesAgainst: 0,
@@ -280,12 +304,13 @@ export function createDraft(input: {
     status: "open",
   };
   db.prepare(
-    "INSERT INTO drafts (id, title, description, region, category, votesFor, votesAgainst, timeLeftHours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO drafts (id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     draft.id,
     draft.title,
     draft.description ?? null,
     draft.region ?? null,
+    draft.imageUrl ?? null,
     draft.category,
     draft.votesFor,
     draft.votesAgainst,
