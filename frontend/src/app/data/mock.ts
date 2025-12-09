@@ -7,6 +7,10 @@ export type Question = {
    * Optionale Region, z. B. "Global", "Deutschland", "Europa", "Stadt/Region".
    */
   region?: string;
+  /**
+   * Optionale Bild-URL fuer ein kleines Vorschaubild.
+   */
+  imageUrl?: string;
   category: string;
   categoryIcon: string;
   categoryColor: string;
@@ -30,6 +34,10 @@ export type Draft = {
    * Optionale Region, z. B. "Global", "Deutschland", "Stadt/Region".
    */
   region?: string;
+  /**
+   * Optionale Bild-URL fuer das Draft-Vorschaubild.
+   */
+  imageUrl?: string;
   category: string;
   votesFor: number;
   votesAgainst: number;
