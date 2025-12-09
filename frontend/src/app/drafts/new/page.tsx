@@ -5,6 +5,19 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { categories } from "@/app/data/mock";
 
+function getMinEndDateTimeString(): string {
+  const now = new Date();
+  // Kleiner Puffer, damit "jetzt" nicht knapp in der Vergangenheit liegt
+  now.setMinutes(now.getMinutes() + 5);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = now.getFullYear();
+  const month = pad(now.getMonth() + 1);
+  const day = pad(now.getDate());
+  const hour = pad(now.getHours());
+  const minute = pad(now.getMinutes());
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
 export default function NewDraftPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -311,6 +324,7 @@ export default function NewDraftPage() {
                     type="datetime-local"
                     value={endDateTime}
                     onChange={(e) => setEndDateTime(e.target.value)}
+                    min={getMinEndDateTimeString()}
                     className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                   />
                   <p className="text-xs text-slate-400">
