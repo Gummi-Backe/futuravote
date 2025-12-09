@@ -133,7 +133,7 @@ function EventCard({
             }`}
           >
             <span className="text-base">⏳</span>
-            <span>{formatDeadline(question.closesAt)}</span>
+            <span suppressHydrationWarning>{formatDeadline(question.closesAt)}</span>
           </span>
           <span className="text-slate-200">
             Ja {question.yesPct}% · Nein {question.noPct}%
