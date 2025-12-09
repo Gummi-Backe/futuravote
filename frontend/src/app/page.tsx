@@ -326,7 +326,23 @@ export default function Home() {
     if (activeCategory) {
       result = result.filter((q) => q.category === activeCategory);
     }
-    return result;
+    const sorted = [...result];
+
+    if (activeTab === "new") {
+      sorted.sort((a, b) => {
+        const aTime = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const bTime = b.createdAt ? Date.parse(b.createdAt) : 0;
+        return bTime - aTime;
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const aScore = typeof a.rankingScore === "number" ? a.rankingScore : 0;
+        const bScore = typeof b.rankingScore === "number" ? b.rankingScore : 0;
+        return bScore - aScore;
+      });
+    }
+
+    return sorted;
   }, [activeTab, activeCategory, questions]);
 
   const filteredDrafts = useMemo(() => {
