@@ -9,6 +9,8 @@ export type Question = {
   closesAt: string;
   yesPct: number;
   noPct: number;
+  yesVotes?: number;
+  noVotes?: number;
   status?: "closingSoon" | "new" | "trending" | "top";
   views?: number;
   userChoice?: "yes" | "no";

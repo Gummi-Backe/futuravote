@@ -87,6 +87,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - Admin-Dashboard: Kategorien, Nutzer, Fragen, Drafts, Meldungen.
 - Aktionen: Fragen sperren/reaktivieren, Draft-Status setzen, Systemparameter/Thresholds anpassen.
 - Audit-Log fuer Admin-Aktionen.
+> Hinweis: Einfache Admin-/Debug-Ansichten werden bewusst erst nach Umsetzung von Phase 2 (Auth & Rollen) eingeplant, damit Zugriffe sinnvoll eingeschraenkt werden koennen.
 
 ## Phase 8: QA, Sicherheit, Launch
 - Tests: Unit (Services), Integration (API), E2E (kritische Flows Voting/Draft/Review).
@@ -148,6 +149,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Draft-Review-Interaktion (Gute Frage/Ablehnen) an Backend angebunden; Votes werden in SQLite gespeichert
 - [x] Einfache Auto-Promotion: ab Mindestanzahl/Kanten (>=5 Reviews, deutlich mehr "Gute Frage" als "Ablehnen") wird Draft als neue Frage in `questions` uebernommen
 - [x] Draft-Status/Filter im Review-Bereich (Offen/Angenommen/Abgelehnt) inkl. visueller Badges in den Karten
+- [x] Formular "Frage vorschlagen" mit zusaetzlicher Validierung (Mindestlaenge Titel/Beschreibung, minimale Laenge fuer eigene Kategorien) und Erfolgshinweis im Feed nach erfolgreichem Einreichen (via Toast)
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.
@@ -158,3 +160,19 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Micro-Interactions: Hover-Lift Karten, Button-Pop, animierte Balken, Countdown-Blinken <24h.
 - [x] Mobile Swipe-Navigation: Tabs & Kategorien per Wisch gewechselt (Snap-Scroll + Touch-Handler)
 - [x] Animations-Prinzip: bei neuen Views standardmaessig Seiten-Transitionen, Overlays mit Fade/Scale und Listen/Toasts mit kurzen Einblend-Animationen verwenden
+- [ ] Erweiterte Animationen (Zahlen-Animationen, Status-Wechsel im Review-Bereich, weiche Uebergaenge im Frage-vorschlagen-Flow) fuer spaetere Feintuning-Phase vorm Launch
+### Feed-Verbesserungen (Stand)
+- [x] Visuelle Hervorhebung von Fragen mit Status "Endet bald" (Badge + Rahmen)
+- [x] Neuer Tab "Endet bald" im Feed, sortiert nach naechstem Enddatum, ohne die Standard-"Alle"-Sortierung zu veraendern
+ - [x] Einfache Infinite-Scroll-Logik fuer Feed und Review-Bereich: Zunaechst nur ein Teil der Kacheln wird gerendert, weitere werden beim Scrollen automatisch nachgeladen (Client-seitig, API weiterhin ohne Paging)
+
+### Regionen / Zielgruppen (Idee, geplant)
+- [ ] Fragen und Drafts erhalten ein optionales Feld `region` (z. B. "Global", "Deutschland", "Bundesland", "Stadt/Region").
+- [ ] Im Formular "Frage vorschlagen" kann eine Region gewaehlt werden (Standard: "Alle / Global"); Region wird zusammen mit der Frage gespeichert und in den Kacheln angezeigt.
+- [ ] Im Feed stehen Filter fuer Regionen zur Verfuegung (aehnlich wie die Kategorien), sodass Nutzer sich Fragen fuer eine bestimmte Region anzeigen lassen koennen.
+- [ ] Mit spaeterer Auth-Phase: Nutzer koennen eine Standard-Region im Profil hinterlegen; der Feed priorisiert Fragen aus der eigenen Region, zeigt global relevante Fragen aber weiterhin optional an.
+- [ ] Region wird auch im Ranking beruecksichtigt (z. B. getrennte Scores pro Region oder unterschiedliche Tabs wie "Top global" / "Top in meiner Region").
+### Detailseite (Stand)
+- [x] Detailseite zeigt echte absolute Votes (Ja/Nein) und Gesamtanzahl
+- [x] Views und Ranking-Score werden aus der DB angezeigt
+- [x] Erstellungsdatum der Frage wird im Meta-Bereich ausgegeben

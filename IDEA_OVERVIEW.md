@@ -25,3 +25,8 @@
 - [x] Feed-Sortierung nach RankingScore (Alle/Top/Trending/Neu/Unbeantwortet) basierend auf Views, Votes und Alter der Frage
 - [x] Branding aktualisiert: Seitentitel im Browser auf "Future-Vote" gesetzt
 - [x] Draft-Status im Review-Bereich sichtbar (Offen/Angenommen/Abgelehnt) inkl. Filter-Chips
+- [x] Detailseite zeigt jetzt echte Stats (Views, absolute Votes, Ranking-Score, Erstellungsdatum)
+- [x] "Frage vorschlagen": Validierung (Mindestlaenge Titel/Beschreibung, eigene Kategorie) und Erfolgshinweis im Feed nach Einreichen
+- [x] Client-seitiges Infinite Scroll fuer Fragen-Feed und Draft-Review-Bereich (weitere Kacheln werden beim Scrollen automatisch nachgeladen)
+- [ ] Regionen-Konzept (Fragen nur fuer bestimmte Regionen / Zielgruppen sichtbar) – siehe IMPLEMENTATION_PLAN.md
+- [x] Zusätzlicher Feed-Tab "Endet bald" hebt bald auslaufende Fragen gesammelt hervor (Sortierung nach Enddatum)

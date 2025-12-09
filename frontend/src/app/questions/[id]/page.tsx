@@ -98,6 +98,20 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
   const votedLabel =
     question.userChoice === "yes" ? "Du hast Ja gestimmt" : question.userChoice === "no" ? "Du hast Nein gestimmt" : null;
 
+  const yesVotes = question.yesVotes ?? 0;
+  const noVotes = question.noVotes ?? 0;
+  const totalVotes = yesVotes + noVotes;
+  const views = question.views ?? 0;
+  const rankingScore =
+    typeof question.rankingScore === "number" ? question.rankingScore.toFixed(2) : "–";
+  const createdLabel = question.createdAt
+    ? new Date(question.createdAt).toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "unbekannt";
+
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-10 lg:px-6">
@@ -133,9 +147,13 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
           <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
           <p className="text-base text-slate-200">{question.description}</p>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
-            <span className="rounded-full bg-white/5 px-3 py-1">{question.yesPct}% Ja</span>
-            <span className="rounded-full bg-white/5 px-3 py-1">{question.noPct}% Nein</span>
-            <span className="rounded-full bg-white/5 px-3 py-1">ID: {question.id}</span>
+            <span className="rounded-full bg-white/5 px-3 py-1">
+              {question.yesPct}% Ja ({yesVotes})
+            </span>
+            <span className="rounded-full bg-white/5 px-3 py-1">
+              {question.noPct}% Nein ({noVotes})
+            </span>
+            <span className="rounded-full bg-white/5 px-3 py-1">Insgesamt {totalVotes} Stimmen</span>
           </div>
         </header>
 
@@ -154,9 +172,21 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
           <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15">
             <h3 className="text-sm font-semibold text-white">Meta & Stats</h3>
             <div className="grid grid-cols-2 gap-3">
-              <StatsCard label="Votes (rel.)" value={`${question.yesPct + question.noPct}%`} hint="Absolutwerte folgen" />
-              <StatsCard label="Views" value="-" hint="Platzhalter bis API" />
-              <StatsCard label="Ranking-Score" value="-" hint="Platzhalter bis API" />
+              <StatsCard
+                label="Votes (absolut)"
+                value={totalVotes.toString()}
+                hint={`Ja ${yesVotes} / Nein ${noVotes}`}
+              />
+              <StatsCard
+                label="Views"
+                value={views.toString()}
+                hint="Wie oft die Frage im Feed angezeigt wurde"
+              />
+              <StatsCard
+                label="Ranking-Score"
+                value={rankingScore}
+                hint="Kombiniert Engagement, Qualitaet und Frische"
+              />
               <StatsCard
                 label="Status"
                 value={question.status ?? "aktiv"}
@@ -165,11 +195,18 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
               />
             </div>
             <div className="space-y-2 text-sm text-slate-200">
-              <div className="flex justify-between"><span>Endet</span><span>{formatDeadline(question.closesAt)}</span></div>
-              <div className="flex justify-between"><span>Kategorie</span><span>{question.category}</span></div>
-            </div>
-            <div className="pt-2 text-xs text-slate-400">
-              Weitere Stats (Views, Votes absolut, Ranking-Score) folgen mit echter API.
+              <div className="flex justify-between">
+                <span>Erstellt am</span>
+                <span>{createdLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Endet</span>
+                <span>{formatDeadline(question.closesAt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Kategorie</span>
+                <span>{question.category}</span>
+              </div>
             </div>
           </div>
         </section>

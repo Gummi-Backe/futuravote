@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Future-Vote",
-  description: "Future-Vote – Kachelbasierte Plattform fuer Zukunftsprognosen und Abstimmungen",
+  description: "Future-Vote – Kachelbasierte Plattform für Zukunftsprognosen und Abstimmungen",
   icons: {
     icon: "/favicon.svg",
   },

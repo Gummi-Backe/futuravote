@@ -17,12 +17,19 @@ export default function NewDraftPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
-  const navigateHome = useCallback(() => {
+  const navigateHome = useCallback(
+    (withSuccessFlag: boolean) => {
     setIsLeaving(true);
     setTimeout(() => {
-      router.push("/");
+        if (withSuccessFlag) {
+          router.push("/?draft=submitted");
+        } else {
+          router.push("/");
+        }
     }, 190);
-  }, [router]);
+    },
+    [router]
+  );
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -31,9 +38,23 @@ export default function NewDraftPage() {
       setError("Bitte gib einen Titel fuer deine Frage ein.");
       return;
     }
+    if (trimmedTitle.length < 10) {
+      setError("Der Titel sollte mindestens 10 Zeichen lang sein, damit die Frage verstaendlich ist.");
+      return;
+    }
     const finalCategory = (useCustomCategory ? customCategory : category).trim();
     if (!finalCategory) {
       setError("Bitte waehle eine Kategorie oder gib eine eigene ein.");
+      return;
+    }
+    if (useCustomCategory && finalCategory.length < 3) {
+      setError("Eigene Kategorien sollten mindestens 3 Zeichen lang sein.");
+      return;
+    }
+
+    const trimmedDescription = description.trim();
+    if (trimmedDescription && trimmedDescription.length < 20) {
+      setError("Die Beschreibung ist sehr kurz. Bitte gib mindestens 20 Zeichen ein oder lass das Feld leer.");
       return;
     }
     setSubmitting(true);
@@ -44,7 +65,7 @@ export default function NewDraftPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: trimmedTitle,
-          description: description.trim() || undefined,
+          description: trimmedDescription || undefined,
           category: finalCategory,
           timeLeftHours: Number.isFinite(timeLeftHours) ? timeLeftHours : 72,
         }),
@@ -55,7 +76,7 @@ export default function NewDraftPage() {
         setSubmitting(false);
         return;
       }
-      navigateHome();
+      navigateHome(true);
     } catch {
       setError("Netzwerkfehler. Bitte versuche es erneut.");
     } finally {
@@ -71,7 +92,7 @@ export default function NewDraftPage() {
           className="text-sm text-emerald-100 hover:text-emerald-200"
           onClick={(event) => {
             event.preventDefault();
-            navigateHome();
+            navigateHome(false);
           }}
         >
           &larr; Zurueck zum Feed
@@ -184,7 +205,7 @@ export default function NewDraftPage() {
               </button>
               <button
                 type="button"
-                onClick={navigateHome}
+                onClick={() => navigateHome(false)}
                 className="rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
               >
                 Abbrechen
