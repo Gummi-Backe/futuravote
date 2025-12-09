@@ -12,7 +12,8 @@ export default function NewDraftPage() {
   const [category, setCategory] = useState<string>(categories[0]?.label ?? "");
   const [useCustomCategory, setUseCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
-  const [region, setRegion] = useState<string>("Global");
+  const [regionSelect, setRegionSelect] = useState<string>("Global");
+  const [customRegion, setCustomRegion] = useState("");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -58,6 +59,19 @@ export default function NewDraftPage() {
       setError("Die Beschreibung ist sehr kurz. Bitte gib mindestens 20 Zeichen ein oder lass das Feld leer.");
       return;
     }
+    // Region bestimmen
+    let finalRegion: string | undefined;
+    if (regionSelect === "__custom_region") {
+      const trimmedRegion = customRegion.trim();
+      if (trimmedRegion && trimmedRegion.length < 3) {
+        setError("Die Regionenbezeichnung ist sehr kurz. Bitte gib mindestens 3 Zeichen ein oder lass das Feld leer.");
+        return;
+      }
+      finalRegion = trimmedRegion || undefined;
+    } else {
+      finalRegion = regionSelect === "Global" ? "Global" : regionSelect;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -68,7 +82,7 @@ export default function NewDraftPage() {
           title: trimmedTitle,
           description: trimmedDescription || undefined,
           category: finalCategory,
-          region: region.trim() || "Global",
+          region: finalRegion,
           timeLeftHours: Number.isFinite(timeLeftHours) ? timeLeftHours : 72,
         }),
       });
@@ -183,19 +197,28 @@ export default function NewDraftPage() {
               </label>
               <select
                 id="region"
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
+                value={regionSelect}
+                onChange={(e) => setRegionSelect(e.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
               >
                 <option value="Global">Alle / Global</option>
                 <option value="Deutschland">Deutschland</option>
                 <option value="Europa">Europa</option>
                 <option value="DACH">DACH (Deutschland, Oesterreich, Schweiz)</option>
-                <option value="Stadt/Region">Stadt oder Region (siehe Freitext)</option>
+                <option value="__custom_region">Stadt oder Region frei eingeben</option>
               </select>
+              {regionSelect === "__custom_region" && (
+                <input
+                  type="text"
+                  value={customRegion}
+                  onChange={(e) => setCustomRegion(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  placeholder="z. B. Berlin, NRW, Bodensee-Region"
+                />
+              )}
               <p className="text-xs text-slate-400">
-                Du kannst hier eingeben, fuer welche Region deine Prognose gedacht ist. Wenn du nichts aenderst, gilt die
-                Frage global.
+                Du kannst hier waehlen, fuer welche Region deine Prognose gedacht ist. Wenn du nichts aenderst, gilt die
+                Frage global. Mit der letzten Option kannst du Stadt oder Region frei eingeben.
               </p>
             </div>
 
