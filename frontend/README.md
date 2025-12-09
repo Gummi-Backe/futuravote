@@ -1,4 +1,4 @@
-## FuturaVote Frontend
+## Future-Vote Frontend
 Next.js + Tailwind (App Router) mit Kachel-Feed fuer Ja/Nein-Prognosen, Draft-Review-Board und Mock-Daten.
 
 ### Lokales Setup
