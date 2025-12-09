@@ -24,6 +24,7 @@ export type Draft = {
   votesFor: number;
   votesAgainst: number;
   timeLeftHours: number;
+   status?: "open" | "accepted" | "rejected";
 };
 
 export const categories = [
@@ -142,6 +143,7 @@ export const draftQueue: Draft[] = [
     votesFor: 42,
     votesAgainst: 18,
     timeLeftHours: 26,
+    status: "open",
   },
   {
     id: "d2",
@@ -151,6 +153,7 @@ export const draftQueue: Draft[] = [
     votesFor: 31,
     votesAgainst: 22,
     timeLeftHours: 12,
+    status: "open",
   },
 ];
 
