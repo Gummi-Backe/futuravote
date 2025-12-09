@@ -605,16 +605,13 @@ export default function Home() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link
-                href="/drafts/new"
+              <button
+                type="button"
                 className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
-                onClick={(event) => {
-                  event.preventDefault()
-                  navigateWithTransition("/drafts/new")
-                }}
+                onClick={() => navigateWithTransition("/drafts/new")}
               >
                 Frage stellen
-              </Link>
+              </button>
               <button className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60">
                 Review
               </button>
@@ -635,7 +632,7 @@ export default function Home() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex min-w-fit items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
+                  className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
                     activeTab === tab.id
                       ? "bg-white/20 border border-white/30 text-white hover:border-emerald-300/60 hover:-translate-y-0.5"
                       : "bg-white/10 border border-white/15 text-slate-200 hover:border-emerald-300/40 hover:-translate-y-0.5"
@@ -655,7 +652,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setActiveCategory(null)}
-                className={`inline-flex min-w-fit items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
+                className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
                   activeCategory === null
                     ? "border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
                     : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
@@ -670,7 +667,7 @@ export default function Home() {
                     key={cat.label}
                     type="button"
                     onClick={() => setActiveCategory(isActive ? null : cat.label)}
-                    className={`inline-flex min-w-fit items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
+                    className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
                       isActive
                         ? "border-emerald-300/60 bg-emerald-500/25 text-white hover:-translate-y-0.5"
                         : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
