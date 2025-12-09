@@ -254,6 +254,7 @@ export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [drafts, setDrafts] = useState<Draft[]>(initialDrafts);
   const [loading, setLoading] = useState(true);
@@ -300,6 +301,20 @@ export default function Home() {
       }
     }
     return Array.from(map.values());
+  }, [questions, drafts]);
+
+  const regionOptions = useMemo(() => {
+    const set = new Set<string>();
+    set.add("Global");
+    for (const q of questions) {
+      if (q.region) set.add(q.region);
+    }
+    for (const d of drafts) {
+      if (d.region && (d.status ?? "open") !== "rejected") {
+        set.add(d.region);
+      }
+    }
+    return Array.from(set);
   }, [questions, drafts]);
 
   const extraCategories = useMemo(
@@ -372,6 +387,13 @@ export default function Home() {
     if (activeCategory) {
       result = result.filter((q) => q.category === activeCategory);
     }
+    if (activeRegion) {
+      if (activeRegion === "Global") {
+        result = result.filter((q) => !q.region || q.region === "Global");
+      } else {
+        result = result.filter((q) => q.region === activeRegion);
+      }
+    }
     const sorted = [...result];
 
     if (activeTab === "new") {
@@ -395,7 +417,7 @@ export default function Home() {
     }
 
     return sorted;
-  }, [activeTab, activeCategory, questions]);
+  }, [activeTab, activeCategory, activeRegion, questions]);
 
   const visibleQuestions = useMemo(
     () => filteredQuestions.slice(0, visibleQuestionCount),
@@ -407,6 +429,13 @@ export default function Home() {
     if (activeCategory) {
       result = result.filter((d) => d.category === activeCategory);
     }
+    if (activeRegion) {
+      if (activeRegion === "Global") {
+        result = result.filter((d) => !d.region || d.region === "Global");
+      } else {
+        result = result.filter((d) => d.region === activeRegion);
+      }
+    }
     if (draftStatusFilter !== "all") {
       result = result.filter((d) => (d.status ?? "open") === draftStatusFilter);
     }
@@ -414,7 +443,7 @@ export default function Home() {
       if (b.votesFor !== a.votesFor) return b.votesFor - a.votesFor;
       return a.timeLeftHours - b.timeLeftHours;
     });
-  }, [activeCategory, drafts, draftStatusFilter]);
+  }, [activeCategory, activeRegion, drafts, draftStatusFilter]);
 
   const visibleDrafts = useMemo(
     () => filteredDrafts.slice(0, visibleDraftCount),
@@ -698,6 +727,37 @@ export default function Home() {
             </div>
           </div>
         </header>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-200">
+          <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-300">
+            Region:
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveRegion(null)}
+            className={`rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition ${
+              !activeRegion
+                ? "bg-emerald-500/25 text-white border border-emerald-300/60"
+                : "bg-white/5 text-slate-100 border border-white/15 hover:border-emerald-300/40"
+            }`}
+          >
+            Alle Regionen
+          </button>
+          {regionOptions.map((region) => (
+            <button
+              key={region}
+              type="button"
+              onClick={() => setActiveRegion(region === activeRegion ? null : region)}
+              className={`rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition ${
+                activeRegion === region
+                  ? "bg-emerald-500/25 text-white border border-emerald-300/60"
+                  : "bg-white/5 text-slate-100 border border-white/15 hover:border-emerald-300/40"
+              }`}
+            >
+              {region}
+            </button>
+          ))}
+        </div>
 
         <section className="mt-8 space-y-4">
           <div className="flex items-center justify-between">
