@@ -583,7 +583,10 @@ export default function Home() {
   );
 
   return (
-    <main className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}>
+    <main
+      suppressHydrationWarning
+      className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}
+    >
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
         {debugMultiReview && (
           <div className="mb-2 rounded-full border border-amber-400/60 bg-amber-500/15 px-4 py-1 text-xs text-amber-100 shadow-sm shadow-amber-500/30">
