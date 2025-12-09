@@ -17,4 +17,8 @@
 - [x] Einfaches Rate-Limit pro Session beim Voting (Fehlermeldung bei zu schneller Abgabe)
 - [x] Persistenz via SQLite (better-sqlite3) statt Datei
 - [x] Detail-/API-Routen an Next.js 16 Promise-params angepasst (keine params/cookies Fehler)
+- [x] Drafts in SQLite gespeichert (inkl. Seed aus Mock-Daten)
+- [x] Einfache Seite "Frage vorschlagen" mit Formular + Draft-API (inkl. optionaler Langbeschreibung fuer Review-Karten und Detailansicht)
 - [x] Mobile Swipe-Modus / erweiterte Mobile-Navigation (Tabs & Kategorien per Wisch wechselbar)
+- [x] Draft-Review-Buttons (Gute Frage/Ablehnen) schreiben Votes in SQLite und sind im UI gelockt
+- [x] Temporärer Testmodus (F1) erlaubt mehrfaches Review pro Draft in einer Session (leicht wieder entfernbar)

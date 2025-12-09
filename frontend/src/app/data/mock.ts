@@ -12,11 +12,14 @@ export type Question = {
   status?: "closingSoon" | "new" | "trending" | "top";
   views?: number;
   userChoice?: "yes" | "no";
+  createdAt?: string;
+  rankingScore?: number;
 };
 
 export type Draft = {
   id: string;
   title: string;
+  description?: string;
   category: string;
   votesFor: number;
   votesAgainst: number;
@@ -134,6 +137,7 @@ export const draftQueue: Draft[] = [
   {
     id: "d1",
     title: "Erhoeht die WHO den globalen Pandemiestatus fuer Krankheit X bis 2026?",
+    description: "Beispielhafte Draft-Beschreibung fuer eine Gesundheitsprognose.",
     category: "Gesundheit",
     votesFor: 42,
     votesAgainst: 18,
@@ -142,6 +146,7 @@ export const draftQueue: Draft[] = [
   {
     id: "d2",
     title: "Wird ein E-Auto-Hersteller 2030 Verbrenner >90% ersetzen?",
+    description: "Beispielhafte Draft-Beschreibung fuer eine Tech/Auto-Frage.",
     category: "Tech",
     votesFor: 31,
     votesAgainst: 22,

@@ -139,6 +139,13 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Einfaches Vote-Rate-Limit pro Session (429 + Hinweis)
 - [x] Persistenz auf SQLite (better-sqlite3) umgesetzt
 - [x] Next.js 16: params/cookies nun als Promise awaited (keine params.id/cookies().get Fehler)
+### Draft-Einreichung (Stand)
+- [x] Drafts liegen in SQLite (Tabelle `drafts`, Seed aus Mock-Daten)
+- [x] API-Endpunkt `/api/drafts` fuer neue Drafts (Titel, optionale Beschreibung, Kategorie, Review-Zeitraum)
+- [x] Seite `/drafts/new` ("Frage vorschlagen") mit Formular (inkl. optionaler Langbeschreibung, sichtbar in Review-Karten und spaeter in der Detailansicht); verlinkt aus dem Hero-Button "Frage stellen"
+- [x] Draft-Review-Interaktion (Gute Frage/Ablehnen) an Backend angebunden; Votes werden in SQLite gespeichert
+- [x] Einfache Auto-Promotion: ab Mindestanzahl/Kanten (>=5 Reviews, deutlich mehr "Gute Frage" als "Ablehnen") wird Draft als neue Frage in `questions` uebernommen
+- [ ] Draft-Status/Filter im Review-Bereich (offen/angenommen/abgelehnt)
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.
@@ -148,3 +155,4 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Mobile: groessere Touch-Ziele, horizontale Kategorie-Scroll (Swipe-Modus spaeter optional).
 - [x] Micro-Interactions: Hover-Lift Karten, Button-Pop, animierte Balken, Countdown-Blinken <24h.
 - [x] Mobile Swipe-Navigation: Tabs & Kategorien per Wisch gewechselt (Snap-Scroll + Touch-Handler)
+- [x] Animations-Prinzip: bei neuen Views standardmaessig Seiten-Transitionen, Overlays mit Fade/Scale und Listen/Toasts mit kurzen Einblend-Animationen verwenden
