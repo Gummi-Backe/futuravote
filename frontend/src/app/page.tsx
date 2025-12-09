@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   allQuestions as initialQuestions,
@@ -252,7 +252,6 @@ function DraftCard({
 
 export default function Home() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
@@ -343,12 +342,14 @@ export default function Home() {
   }, [fetchLatest]);
 
   useEffect(() => {
-    const submitted = searchParams.get("draft");
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const submitted = params.get("draft");
     if (submitted === "submitted") {
       showToast("Deine Frage wurde eingereicht und erscheint im Review-Bereich.", "success");
-      router.replace("/");
+      window.history.replaceState(null, "", "/");
     }
-  }, [router, searchParams, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
