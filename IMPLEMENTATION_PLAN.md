@@ -166,10 +166,10 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Neuer Tab "Endet bald" im Feed, sortiert nach naechstem Enddatum, ohne die Standard-"Alle"-Sortierung zu veraendern
  - [x] Einfache Infinite-Scroll-Logik fuer Feed und Review-Bereich: Zunaechst nur ein Teil der Kacheln wird gerendert, weitere werden beim Scrollen automatisch nachgeladen (Client-seitig, API weiterhin ohne Paging)
 
-### Regionen / Zielgruppen (Idee, geplant)
-- [ ] Fragen und Drafts erhalten ein optionales Feld `region` (z. B. "Global", "Deutschland", "Bundesland", "Stadt/Region").
-- [ ] Im Formular "Frage vorschlagen" kann eine Region gewaehlt werden (Standard: "Alle / Global"); Region wird zusammen mit der Frage gespeichert und in den Kacheln angezeigt.
-- [ ] Im Feed stehen Filter fuer Regionen zur Verfuegung (aehnlich wie die Kategorien), sodass Nutzer sich Fragen fuer eine bestimmte Region anzeigen lassen koennen.
+### Regionen / Zielgruppen
+- [x] Fragen und Drafts erhalten ein optionales Feld `region` (z. B. "Global", "Deutschland", "Bundesland", "Stadt/Region").
+- [x] Im Formular "Frage vorschlagen" kann eine Region gewaehlt werden (Standard: "Alle / Global"); Region wird zusammen mit der Frage gespeichert.
+- [x] Im Feed stehen Filter fuer Regionen zur Verfuegung (Chips oberhalb des Feeds), sodass Nutzer sich Fragen fuer eine bestimmte Region anzeigen lassen koennen; der Review-Bereich wird ebenfalls nach Region gefiltert.
 - [ ] Mit spaeterer Auth-Phase: Nutzer koennen eine Standard-Region im Profil hinterlegen; der Feed priorisiert Fragen aus der eigenen Region, zeigt global relevante Fragen aber weiterhin optional an.
 - [ ] Region wird auch im Ranking beruecksichtigt (z. B. getrennte Scores pro Region oder unterschiedliche Tabs wie "Top global" / "Top in meiner Region").
 ### Detailseite (Stand)

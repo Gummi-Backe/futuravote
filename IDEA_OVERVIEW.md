@@ -28,5 +28,5 @@
 - [x] Detailseite zeigt jetzt echte Stats (Views, absolute Votes, Ranking-Score, Erstellungsdatum)
 - [x] "Frage vorschlagen": Validierung (Mindestlaenge Titel/Beschreibung, eigene Kategorie) und Erfolgshinweis im Feed nach Einreichen
 - [x] Client-seitiges Infinite Scroll fuer Fragen-Feed und Draft-Review-Bereich (weitere Kacheln werden beim Scrollen automatisch nachgeladen)
-- [ ] Regionen-Konzept (Fragen nur fuer bestimmte Regionen / Zielgruppen sichtbar) – siehe IMPLEMENTATION_PLAN.md
+- [x] Regionen-Konzept (Grundversion): Fragen und Drafts besitzen ein optionales Regionsfeld und koennen im Feed nach Region gefiltert werden
 - [x] Zusätzlicher Feed-Tab "Endet bald" hebt bald auslaufende Fragen gesammelt hervor (Sortierung nach Enddatum)
