@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createUser, createUserSession, getUserByEmail } from "@/app/data/db";
+import { createUser, createUserSession, getUserByEmail, hasAdminUser } from "@/app/data/db";
 import crypto from "crypto";
 
 export const revalidate = 0;
@@ -46,7 +46,18 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = hashPassword(password);
-  const user = createUser({ email: trimmedEmail, passwordHash, displayName: trimmedName });
+
+  const adminEmailEnv = process.env.FV_ADMIN_EMAIL?.trim().toLowerCase();
+  let role: "user" | "admin" = "user";
+  if (adminEmailEnv && adminEmailEnv === trimmedEmail) {
+    role = "admin";
+  } else if (!adminEmailEnv && !hasAdminUser()) {
+    // Wenn noch kein Admin existiert und keine spezielle Admin-E-Mail konfiguriert ist,
+    // wird der erste angelegte Account Admin.
+    role = "admin";
+  }
+
+  const user = createUser({ email: trimmedEmail, passwordHash, displayName: trimmedName, role });
   const sessionId = createUserSession(user.id);
 
   const response = NextResponse.json({
@@ -63,4 +74,3 @@ export async function POST(request: Request) {
 
   return response;
 }
-

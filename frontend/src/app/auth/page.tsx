@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 type Mode = "login" | "register";
 
-type AuthUser = { id: string; email: string; displayName: string } | null;
+type AuthUser = { id: string; email: string; displayName: string; role?: "user" | "admin" } | null;
 
 export default function AuthPage() {
   const router = useRouter();
@@ -243,4 +243,3 @@ export default function AuthPage() {
     </main>
   );
 }
-
