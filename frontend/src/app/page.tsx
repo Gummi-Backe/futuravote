@@ -663,6 +663,8 @@ export default function Home() {
         }
         const updated = data.draft as Draft;
         setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+        // Nach Admin-Aktion Serverdaten aktualisieren, damit neue Fragen im Hauptfeed erscheinen
+        await fetchLatest();
         showToast(
           action === "accept"
             ? "Draft wurde von dir als Admin direkt angenommen."
@@ -675,7 +677,7 @@ export default function Home() {
         setDraftSubmittingId(null);
       }
     },
-    [currentUser, showToast]
+    [currentUser, fetchLatest, showToast]
   );
 
   const tabLabel = tabs.find((t) => t.id === activeTab)?.label ?? "Feed";
