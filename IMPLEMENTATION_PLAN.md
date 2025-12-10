@@ -22,9 +22,9 @@
   - Pflichtfelder: `email`, `password`, `passwordConfirm`, `displayName` (Anzeige-Name/Nickname).
   - Beide Passwortfelder erhalten eine "Passwort anzeigen/verbergen"-Funktion (Augen-Icon).
   - Checkbox "Ich akzeptiere die Nutzungsbedingungen" ist Pflicht, bevor ein Account angelegt werden darf.
-  - Link zu einer Seite/Modal mit den Nutzungsbedingungen direkt auf der Registrierungsansicht sichtbar.
-- [ ] Implementierung der schlanken Registrierung/Anmeldung mit diesen Feldern im Frontend (Formulare, Validierung, Fehlertexte).
-- [ ] Backend-Endpoints fuer Registrierung/Login inkl. sicherem Passwort-Hashing.
+  - Link zu einer Seite mit den Nutzungsbedingungen (`/terms`) direkt auf der Registrierungsansicht sichtbar.
+- [x] Implementierung der schlanken Registrierung/Anmeldung mit diesen Feldern im Frontend (Formulare, Validierung, Fehlertexte) inkl. einfacher Login-Status-Anzeige und Logout-Button im Header.
+- [x] Backend-Endpoints fuer Registrierung/Login inkl. sicherem Passwort-Hashing und Session-Cookies (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`).
 - [ ] E-Mail-Verifizierung ergaenzen: nach Registrierung Bestaetigungslink verschicken; Draft-Einreichung/Review nur nach verifizierter E-Mail erlauben.
 - [ ] Passwort-Reset-Flow (Passwort vergessen) mit E-Mail-Link planen und spaeter umsetzen.
 
