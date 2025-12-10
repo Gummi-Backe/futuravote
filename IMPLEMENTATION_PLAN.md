@@ -161,6 +161,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Einfache Auto-Promotion: ab Mindestanzahl/Kanten (>=5 Reviews, deutlich mehr "Gute Frage" als "Ablehnen") wird Draft als neue Frage in `questions` uebernommen
 - [x] Draft-Status/Filter im Review-Bereich (Offen/Angenommen/Abgelehnt) inkl. visueller Badges in den Karten
 - [x] Formular "Frage vorschlagen" mit zusaetzlicher Validierung (Mindestlaenge Titel/Beschreibung, minimale Laenge fuer eigene Kategorien) und Erfolgshinweis im Feed nach erfolgreichem Einreichen (via Toast)
+- [x] Einfache Admin-Light-Unterstuetzung: Admin-Rolle pro User in SQLite, erster (oder via FV_ADMIN_EMAIL definierter) Account wird Admin; Admins sehen ein Badge im Header und koennen Drafts im Review-Bereich direkt annehmen/ablehnen (Server-seitig abgesichert ueber /api/admin/drafts)
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.
@@ -186,6 +187,11 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Im Feed stehen Filter fuer Regionen zur Verfuegung (Chips oberhalb des Feeds), sodass Nutzer sich Fragen fuer eine bestimmte Region anzeigen lassen koennen; der Review-Bereich wird ebenfalls nach Region gefiltert.
 - [ ] Mit spaeterer Auth-Phase: Nutzer koennen eine Standard-Region im Profil hinterlegen; der Feed priorisiert Fragen aus der eigenen Region, zeigt global relevante Fragen aber weiterhin optional an.
 - [ ] Region wird auch im Ranking beruecksichtigt (z. B. getrennte Scores pro Region oder unterschiedliche Tabs wie "Top global" / "Top in meiner Region").
+
+### Persistente Datenbank / Migration von SQLite
+- [x] Aktuell: SQLite-Datei pro Umgebung (`dev.db` lokal; ephemere Datei auf Vercel unter `/tmp/futuravote`), geeignet fuer MVP und interne Tests, aber nicht fuer laengerfristige Accounts in Produktion.
+- [ ] Spaetestens vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Umstellung auf eine persistente DB (z. B. Postgres bei Supabase/Neon/Vercel Postgres), inkl. Migration der Tabellen `questions`, `drafts`, `users`, `user_sessions`, `votes`.
+- [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die DB-Migration vor dem naechsten Schritt sinnvoll/notwendig ist.
 ### Detailseite (Stand)
 - [x] Detailseite zeigt echte absolute Votes (Ja/Nein) und Gesamtanzahl
 - [x] Views und Ranking-Score werden aus der DB angezeigt

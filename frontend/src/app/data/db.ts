@@ -432,12 +432,94 @@ export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null
     id: effective.id,
     title: effective.title,
     description: effective.description ?? undefined,
+    region: effective.region ?? undefined,
+    imageUrl: effective.imageUrl ?? undefined,
     category: effective.category,
     votesFor: effective.votesFor,
     votesAgainst: effective.votesAgainst,
     timeLeftHours: effective.timeLeftHours,
     status: (effective.status ?? "open") as Draft["status"],
   };
+}
+
+function mapDraftRow(row: DraftRow): Draft {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? undefined,
+    region: row.region ?? undefined,
+    imageUrl: row.imageUrl ?? undefined,
+    category: row.category,
+    votesFor: row.votesFor,
+    votesAgainst: row.votesAgainst,
+    timeLeftHours: row.timeLeftHours,
+    status: (row.status ?? "open") as Draft["status"],
+  };
+}
+
+export function adminAcceptDraft(id: string): Draft | null {
+  const row = db
+    .prepare(
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
+    .get(id) as DraftRow | undefined;
+  if (!row) return null;
+
+  if ((row.status ?? "open") !== "accepted") {
+    const cat = categories.find((c) => c.label === row.category) ?? categories[0];
+    const closesAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().split("T")[0];
+    const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
+    const summary = row.region ? `${row.category} · ${row.region}` : row.category;
+
+    db.prepare(
+      `INSERT OR IGNORE INTO questions (id, title, summary, description, region, imageUrl, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      questionId,
+      row.title,
+      summary,
+      row.description ?? null,
+      row.region ?? null,
+      row.imageUrl ?? null,
+      row.category,
+      cat?.icon ?? "?",
+      cat?.color ?? "#22c55e",
+      closesAt,
+      0,
+      0,
+      0,
+      "new"
+    );
+
+    db.prepare("UPDATE drafts SET status = 'accepted' WHERE id = ?").run(id);
+  }
+
+  const updated = db
+    .prepare(
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
+    .get(id) as DraftRow | undefined;
+  return updated ? mapDraftRow(updated) : mapDraftRow(row);
+}
+
+export function adminRejectDraft(id: string): Draft | null {
+  const row = db
+    .prepare(
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
+    .get(id) as DraftRow | undefined;
+  if (!row) return null;
+
+  if ((row.status ?? "open") !== "rejected") {
+    db.prepare("UPDATE drafts SET status = 'rejected' WHERE id = ?").run(id);
+  }
+
+  const updated = db
+    .prepare(
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
+    .get(id) as DraftRow | undefined;
+  return updated ? mapDraftRow(updated) : mapDraftRow(row);
 }
 
 export function getQuestions(sessionId?: string): QuestionWithVotes[] {

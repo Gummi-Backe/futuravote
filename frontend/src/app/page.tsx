@@ -197,11 +197,13 @@ type DraftReviewChoice = "good" | "bad";
 function DraftCard({
   draft,
   onVote,
+  onAdminAction,
   isSubmitting,
   hasVoted,
 }: {
   draft: Draft;
   onVote?: (choice: DraftReviewChoice) => void;
+  onAdminAction?: (action: "accept" | "reject") => void;
   isSubmitting?: boolean;
   hasVoted?: boolean;
 }) {
@@ -274,6 +276,26 @@ function DraftCard({
           Ablehnen
         </button>
       </div>
+      {onAdminAction && (
+        <div className="mt-2 flex gap-2 text-[11px] text-slate-300">
+          <button
+            type="button"
+            disabled={isSubmitting}
+            className="flex-1 rounded-full border border-emerald-400/60 bg-emerald-500/15 px-3 py-1 font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-60"
+            onClick={() => onAdminAction("accept")}
+          >
+            Admin: Direkt übernehmen
+          </button>
+          <button
+            type="button"
+            disabled={isSubmitting}
+            className="flex-1 rounded-full border border-rose-400/60 bg-rose-500/15 px-3 py-1 font-semibold text-rose-100 hover:bg-rose-500/25 disabled:opacity-60"
+            onClick={() => onAdminAction("reject")}
+          >
+            Admin: Sperren
+          </button>
+        </div>
+      )}
     </article>
   );
 }
@@ -621,6 +643,41 @@ export default function Home() {
     [debugMultiReview, fetchLatest, reviewedDrafts, showToast]
   );
 
+  const handleAdminDraftAction = useCallback(
+    async (draftId: string, action: "accept" | "reject") => {
+      if (!currentUser || currentUser.role !== "admin") {
+        showToast("Nur Admins koennen diese Aktion ausfuehren.", "error");
+        return;
+      }
+      setDraftSubmittingId(draftId);
+      try {
+        const res = await fetch("/api/admin/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draftId, action }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data?.error ?? "Admin-Aktion fehlgeschlagen.", "error");
+          return;
+        }
+        const updated = data.draft as Draft;
+        setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+        showToast(
+          action === "accept"
+            ? "Draft wurde von dir als Admin direkt angenommen."
+            : "Draft wurde von dir als Admin gesperrt.",
+          "success"
+        );
+      } catch {
+        showToast("Admin-Aktion fehlgeschlagen (Netzwerkfehler).", "error");
+      } finally {
+        setDraftSubmittingId(null);
+      }
+    },
+    [currentUser, showToast]
+  );
+
   const tabLabel = tabs.find((t) => t.id === activeTab)?.label ?? "Feed";
 
   const handleTabTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -954,6 +1011,7 @@ export default function Home() {
                 key={draft.id}
                 draft={draft}
                 onVote={(choice) => handleDraftVote(draft.id, choice)}
+                onAdminAction={currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined}
                 isSubmitting={draftSubmittingId === draft.id}
                 hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
               />
