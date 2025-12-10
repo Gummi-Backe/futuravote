@@ -691,6 +691,11 @@ export default function Home() {
                   <span>
                     Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span>
                   </span>
+                  {currentUser.role === "admin" && (
+                    <span className="rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                      Admin
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={handleLogout}
