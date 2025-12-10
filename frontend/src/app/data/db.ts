@@ -278,7 +278,11 @@ if (!hasDrafts) {
      VALUES (@id, @title, @description, @region, @imageUrl, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
   );
   for (const d of draftQueue) {
-    insertDraft.run(d);
+    insertDraft.run({
+      ...d,
+      region: d.region ?? null,
+      imageUrl: d.imageUrl ?? null,
+    });
   }
 }
 
