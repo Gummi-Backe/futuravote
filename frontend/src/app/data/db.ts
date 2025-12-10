@@ -501,9 +501,10 @@ export function createUser(input: {
   email: string;
   passwordHash: string;
   displayName: string;
+  role?: "user" | "admin";
 }): User {
   const id = randomUUID();
-  const role = (input as { role?: "user" | "admin" }).role ?? "user";
+  const role = input.role ?? "user";
   db.prepare("INSERT INTO users (id, email, passwordHash, displayName, role) VALUES (?, ?, ?, ?, ?)").run(
     id,
     input.email,
