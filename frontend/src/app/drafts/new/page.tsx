@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { categories } from "@/app/data/mock";
 
 function getMinEndDateTimeString(): string {
@@ -18,39 +18,71 @@ function getMinEndDateTimeString(): string {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
+function getPreviewCategoryLetter(category: string, customCategory: string, useCustomCategory: boolean): string {
+  const value = (useCustomCategory ? customCategory : category).trim();
+  return value.charAt(0).toUpperCase() || "?";
+}
+
 export default function NewDraftPage() {
   const router = useRouter();
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>(categories[0]?.label ?? "");
   const [useCustomCategory, setUseCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
+
   const [regionSelect, setRegionSelect] = useState<string>("Global");
   const [customRegion, setCustomRegion] = useState("");
+
   const [reviewMode, setReviewMode] = useState<"duration" | "endDate">("duration");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
   const [endDateTime, setEndDateTime] = useState<string>("");
+
   const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  const previewImageUrl = imagePreviewUrl || imageUrl || "";
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
+
   const navigateHome = useCallback(
     (withSuccessFlag: boolean) => {
-    setIsLeaving(true);
-    setTimeout(() => {
-        if (withSuccessFlag) {
-          router.push("/?draft=submitted");
-        } else {
-          router.push("/");
-        }
-    }, 190);
+      setIsLeaving(true);
+      setTimeout(() => {
+        router.push(withSuccessFlag ? "/?draft=submitted" : "/");
+      }, 190);
     },
     [router]
   );
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleFormKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== "Enter") return;
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    // Enter soll nur im Beschreibungstext neue Zeilen erzeugen,
+    // aber nicht versehentlich das Formular absenden.
+    if (target.tagName !== "TEXTAREA") {
+      event.preventDefault();
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setError("Bitte gib einen Titel für deine Frage ein.");
@@ -60,9 +92,10 @@ export default function NewDraftPage() {
       setError("Der Titel sollte mindestens 10 Zeichen lang sein, damit die Frage verständlich ist.");
       return;
     }
+
     const finalCategory = (useCustomCategory ? customCategory : category).trim();
     if (!finalCategory) {
-      setError("Bitte waehle eine Kategorie oder gib eine eigene ein.");
+      setError("Bitte wähle eine Kategorie oder gib eine eigene ein.");
       return;
     }
     if (useCustomCategory && finalCategory.length < 3) {
@@ -81,7 +114,7 @@ export default function NewDraftPage() {
     if (regionSelect === "__custom_region") {
       const trimmedRegion = customRegion.trim();
       if (trimmedRegion && trimmedRegion.length < 3) {
-        setError("Die Regionenbezeichnung ist sehr kurz. Bitte gib mindestens 3 Zeichen ein oder lass das Feld leer.");
+        setError("Die Bezeichnung der Region ist sehr kurz. Bitte gib mindestens 3 Zeichen ein oder lass das Feld leer.");
         return;
       }
       finalRegion = trimmedRegion || undefined;
@@ -94,7 +127,7 @@ export default function NewDraftPage() {
     if (reviewMode === "endDate") {
       const raw = endDateTime.trim();
       if (!raw) {
-        setError("Bitte waehle ein Enddatum fuer den Review-Zeitraum.");
+        setError("Bitte wähle ein Enddatum für den Review-Zeitraum.");
         return;
       }
       const end = new Date(raw);
@@ -126,7 +159,28 @@ export default function NewDraftPage() {
 
     setSubmitting(true);
     setError(null);
+
     try {
+      let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
+
+      if (imageFile) {
+        const uploadData = new FormData();
+        uploadData.append("file", imageFile);
+
+        const uploadRes = await fetch("/api/upload-image", {
+          method: "POST",
+          body: uploadData,
+        });
+
+        const uploadJson = await uploadRes.json().catch(() => null);
+        if (!uploadRes.ok || !uploadJson || !uploadJson.imageUrl) {
+          setError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
+          return;
+        }
+
+        finalImageUrl = uploadJson.imageUrl;
+      }
+
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,16 +189,16 @@ export default function NewDraftPage() {
           description: trimmedDescription || undefined,
           category: finalCategory,
           region: finalRegion,
-          imageUrl: imageUrl.trim() || undefined,
+          imageUrl: finalImageUrl,
           timeLeftHours: finalTimeLeftHours,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Konnte deine Frage nicht speichern.");
-        setSubmitting(false);
         return;
       }
+
       navigateHome(true);
     } catch {
       setError("Netzwerkfehler. Bitte versuche es erneut.");
@@ -152,6 +206,8 @@ export default function NewDraftPage() {
       setSubmitting(false);
     }
   };
+
+  const currentCategoryLabel = (useCustomCategory ? customCategory : category) || "Kategorie";
 
   return (
     <main className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}>
@@ -164,17 +220,17 @@ export default function NewDraftPage() {
             navigateHome(false);
           }}
         >
-          &larr; Zurueck zum Feed
+          &larr; Zurück zum Feed
         </Link>
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Frage vorschlagen</h1>
           <p className="mt-1 text-sm text-slate-300">
-            Reiche eine neue Prognosefrage ein. Sie erscheint im Draft-Review-Bereich, wo die Community die Qualitaet
-            einschaetzen kann.
+            Reiche eine neue Prognosefrage ein. Sie erscheint im Draft-Review-Bereich, wo die Community die Qualität
+            einschätzen kann.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
             <div className="space-y-2">
               <label htmlFor="title" className="text-sm font-medium text-slate-100">
                 Titel der Frage
@@ -199,17 +255,17 @@ export default function NewDraftPage() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={5}
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                placeholder="Erklaere kurz, worum es bei der Prognose geht. Dieser Text erscheint spaeter nur in der Detailansicht."
+                placeholder="Erkläre kurz, worum es bei der Prognose geht. Dieser Text erscheint später nur in der Detailansicht."
               />
               <p className="text-xs text-slate-400">
-                Dieser Text dient dazu, das Thema genauer zu erklaeren. Er wird nicht in der Kachel im Feed angezeigt,
+                Dieser Text dient dazu, das Thema genauer zu erklären. Er wird nicht in der Kachel im Feed angezeigt,
                 sondern in der Detailansicht der Frage.
               </p>
             </div>
 
             <div className="space-y-2">
               <label htmlFor="imageUrl" className="text-sm font-medium text-slate-100">
-                Bild-URL (optional)
+                Bild (optional)
               </label>
               <input
                 id="imageUrl"
@@ -217,11 +273,45 @@ export default function NewDraftPage() {
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                placeholder="https://… (kleines Vorschaubild fuer die Kachel)"
+                placeholder="https://… (kleines Vorschaubild für die Kachel)"
               />
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <input
+                  id="imageFile"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (imagePreviewUrl) {
+                      URL.revokeObjectURL(imagePreviewUrl);
+                    }
+                    setImageFile(file);
+                    if (file) {
+                      const url = URL.createObjectURL(file);
+                      setImagePreviewUrl(url);
+                    } else {
+                      setImagePreviewUrl(null);
+                    }
+                  }}
+                  className="block w-full text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-100 hover:file:bg-slate-700"
+                />
+                {imageFile && previewImageUrl && (
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <div className="flex h-10 w-16 items-center justify-center overflow-hidden rounded-md bg-black/40">
+                      <img
+                        src={previewImageUrl}
+                        alt="Ausgewähltes Bild (verkleinerte Vorschau)"
+                        className="max-h-10 max-w-[4rem] object-contain"
+                      />
+                    </div>
+                    <span>Wird auf maximal ca. 250×150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-slate-400">
-                Optionales Vorschaubild für deine Frage. Am besten ein querformatiges Bild; es wird automatisch in einer
-                kleinen Box in der Kachel zugeschnitten (ohne das Original zu ändern).
+                Bitte lade nur Bilder hoch, an denen du die erforderlichen Nutzungsrechte besitzt (z.&nbsp;B. eigene Fotos
+                oder lizenzierte Grafiken). Mit dem Upload bestätigst du, dass keine Urheberrechte verletzt werden und
+                dass du für eventuelle Verstöße selbst verantwortlich bist.
               </p>
             </div>
 
@@ -275,7 +365,7 @@ export default function NewDraftPage() {
                 <option value="Global">Alle / Global</option>
                 <option value="Deutschland">Deutschland</option>
                 <option value="Europa">Europa</option>
-                <option value="DACH">DACH (Deutschland, Oesterreich, Schweiz)</option>
+                <option value="DACH">DACH (Deutschland, Österreich, Schweiz)</option>
                 <option value="__custom_region">Stadt oder Region frei eingeben</option>
               </select>
               {regionSelect === "__custom_region" && (
@@ -288,7 +378,7 @@ export default function NewDraftPage() {
                 />
               )}
               <p className="text-xs text-slate-400">
-                Du kannst hier waehlen, fuer welche Region deine Prognose gedacht ist. Wenn du nichts aenderst, gilt die
+                Du kannst hier wählen, für welche Region deine Prognose gedacht ist. Wenn du nichts änderst, gilt die
                 Frage global. Mit der letzten Option kannst du Stadt oder Region frei eingeben.
               </p>
             </div>
@@ -334,7 +424,7 @@ export default function NewDraftPage() {
                     className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                   />
                   <p className="text-xs text-slate-400">
-                    Wie lange die Community Zeit hat, die Qualitaet deiner Frage zu bewerten (Standard: 72 Stunden).
+                    Wie lange die Community Zeit hat, die Qualität deiner Frage zu bewerten (Standard: 72 Stunden).
                   </p>
                 </>
               ) : (
@@ -348,7 +438,7 @@ export default function NewDraftPage() {
                     className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                   />
                   <p className="text-xs text-slate-400">
-                    Waehle genau, bis wann die Community deine Frage reviewen kann. Intern wird daraus eine Dauer in
+                    Wähle genau, bis wann die Community deine Frage reviewen kann. Intern wird daraus eine Dauer in
                     Stunden berechnet.
                   </p>
                 </>
@@ -361,17 +451,17 @@ export default function NewDraftPage() {
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-white">Kachel-Vorschau</h2>
                 <span className="text-[11px] text-slate-400">
-                  So ungef&auml;hr wird deine Frage im Feed aussehen.
+                  So ungefähr wird deine Frage im Feed aussehen.
                 </span>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-md shadow-emerald-500/10">
                 <div className="flex items-start gap-3 text-xs font-semibold text-slate-100">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full text-base bg-emerald-500/20 text-emerald-100">
-                    {category.charAt(0).toUpperCase() || "?"}
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-base text-emerald-100">
+                    {getPreviewCategoryLetter(category, customCategory, useCustomCategory)}
                   </span>
                   <div className="flex flex-col leading-tight">
                     <span className="text-[10px] uppercase tracking-[0.18rem] text-slate-300">
-                      {category || "Kategorie"}
+                      {currentCategoryLabel}
                     </span>
                     <span className="text-xs text-slate-200">
                       {regionSelect === "__custom_region"
@@ -380,24 +470,26 @@ export default function NewDraftPage() {
                     </span>
                   </div>
                 </div>
-                <div className="mt-3 space-y-2">
-                  {imageUrl && (
-                    <div className="h-24 w-full overflow-hidden rounded-xl bg-black/30">
+                <div className="mt-3 flex gap-3">
+                  {previewImageUrl && (
+                    <div className="flex w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/30">
                       <img
-                        src={imageUrl}
+                        src={previewImageUrl}
                         alt={title || "Vorschau-Bild"}
-                        className="h-full w-full object-cover"
+                        className="max-h-20 max-w-[6rem] object-contain"
                       />
                     </div>
                   )}
-                  <h3 className="text-base font-bold leading-snug text-white">
-                    {title || "Dein Fragetitel erscheint hier."}
-                  </h3>
-                  {description && (
-                    <p className="text-xs text-slate-200 line-clamp-2">
-                      {description}
-                    </p>
-                  )}
+                  <div className="flex-1 space-y-1">
+                    <h3 className="text-base font-bold leading-snug text-white">
+                      {title || "Dein Fragetitel erscheint hier."}
+                    </h3>
+                    {description && (
+                      <p className="text-xs text-slate-200 line-clamp-2">
+                        {description}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

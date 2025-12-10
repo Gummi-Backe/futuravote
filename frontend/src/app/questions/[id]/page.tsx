@@ -144,17 +144,21 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
               )}
             </div>
           </div>
-          {question.imageUrl && (
-            <div className="mt-4 h-56 w-full overflow-hidden rounded-2xl bg-black/30">
-              <img
-                src={question.imageUrl}
-                alt={question.title}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
+          <div className="mt-4 flex gap-4">
+            {question.imageUrl && (
+              <div className="flex w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+                <img
+                  src={question.imageUrl}
+                  alt={question.title}
+                  className="max-h-24 max-w-[7rem] object-contain"
+                  loading="lazy"
+                />
+              </div>
+            )}
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
             </div>
-          )}
-          <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
+          </div>
           <p className="text-base text-slate-200">{question.description}</p>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
             <span className="rounded-full bg-white/5 px-3 py-1">

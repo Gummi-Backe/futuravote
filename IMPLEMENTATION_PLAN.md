@@ -17,6 +17,17 @@
 - RBAC-Middleware: Gast, User, Moderator, Admin; Guards pro Route.
 - Basis-Profileendpunkte: eigenes Profil lesen, einfache Reputation anzeigen.
 
+**Auth-Felder & Registrierung (spezifisch fuer Future-Vote)**
+- [x] Felddefinition festgelegt:
+  - Pflichtfelder: `email`, `password`, `passwordConfirm`, `displayName` (Anzeige-Name/Nickname).
+  - Beide Passwortfelder erhalten eine "Passwort anzeigen/verbergen"-Funktion (Augen-Icon).
+  - Checkbox "Ich akzeptiere die Nutzungsbedingungen" ist Pflicht, bevor ein Account angelegt werden darf.
+  - Link zu einer Seite/Modal mit den Nutzungsbedingungen direkt auf der Registrierungsansicht sichtbar.
+- [ ] Implementierung der schlanken Registrierung/Anmeldung mit diesen Feldern im Frontend (Formulare, Validierung, Fehlertexte).
+- [ ] Backend-Endpoints fuer Registrierung/Login inkl. sicherem Passwort-Hashing.
+- [ ] E-Mail-Verifizierung ergaenzen: nach Registrierung Bestaetigungslink verschicken; Draft-Einreichung/Review nur nach verifizierter E-Mail erlauben.
+- [ ] Passwort-Reset-Flow (Passwort vergessen) mit E-Mail-Link planen und spaeter umsetzen.
+
 ## Phase 3: Datenmodell & API
 - DB-Schema fuer Category, Question, Vote, QuestionDraft, QuestionDraftReview, RankingMeta.
 - CRUD-Endpunkte: Kategorien (Admin), Questions (listen, detail), Votes (create), Drafts (create/list), DraftReviews (create).
@@ -161,9 +172,9 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Mobile Swipe-Navigation: Tabs & Kategorien per Wisch gewechselt (Snap-Scroll + Touch-Handler)
 - [x] Animations-Prinzip: bei neuen Views standardmaessig Seiten-Transitionen, Overlays mit Fade/Scale und Listen/Toasts mit kurzen Einblend-Animationen verwenden
 - [ ] Erweiterte Animationen (Zahlen-Animationen, Status-Wechsel im Review-Bereich, weiche Uebergaenge im Frage-vorschlagen-Flow) fuer spaetere Feintuning-Phase vorm Launch
-- [ ] Optionaler Bild-Upload fuer Fragen/Drafts:
-  - Zunaechst einfache Bild-URL-Variante (kleines Vorschaubild in Kachel/Detail, via CSS skaliert).
-  - Spaeter: echter Upload mit serverseitigem Resize (z. B. auf feste Kachel-Groesse), Speicherung der verkleinerten Variante und Entfernen des Original-Uploads nach erfolgreicher Verarbeitung.
+- [x] Optionaler Bild-Upload fuer Fragen/Drafts:
+  - Einfache Variante umgesetzt: Bild-URL oder Datei-Upload (vom Geraet), serverseitiges Resize auf kleines Kachelformat (max. ca. 250x150, Seitenverhaeltnis bleibt erhalten) und Nutzung der verkleinerten Version als Vorschaubild in Draft-Review, Fragen-Feed und Detailansicht; Bilder wandern beim Auto-Promoten vom Draft in die Frage mit.
+  - Offene Ausbaustufe: bessere UX fuer Upload-Fehler, harte Limits fuer Dateigroesse/Seitenverhaeltnis und optionales Cropping; Original-Upload nach erfolgreicher Verarbeitung konsequent entfernen.
 ### Feed-Verbesserungen (Stand)
 - [x] Visuelle Hervorhebung von Fragen mit Status "Endet bald" (Badge + Rahmen)
 - [x] Neuer Tab "Endet bald" im Feed, sortiert nach naechstem Enddatum, ohne die Standard-"Alle"-Sortierung zu veraendern
@@ -179,3 +190,13 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Detailseite zeigt echte absolute Votes (Ja/Nein) und Gesamtanzahl
 - [x] Views und Ranking-Score werden aus der DB angezeigt
 - [x] Erstellungsdatum der Frage wird im Meta-Bereich ausgegeben
+- [x] Bilder aus Drafts/Fragen werden in Feed-Kacheln und Detailansicht als kleine Vorschaubilder links neben dem Titel angezeigt (Seitenverhaeltnis bleibt erhalten)
+- [ ] Detail-Layout weiter verfeinern (Responsiveness der Bild/Titel-Zeile pruefen, Abstaende/Typografie auf Mobile optimieren)
+
+### Noch offene Punkte aus den letzten Sessions
+- [ ] Login-/Auth-Phase umsetzen: Frage vorschlagen und Draft-Review nur fuer eingeloggte Nutzer freischalten (siehe Phase 2/5)
+- [ ] Standard-Region im Profil und regionale Priorisierung im Feed (siehe Regionen-Abschnitt)
+- [ ] Erweiterter Datums-Picker fuer Review-Zeitraum: echtes Kalender-Widget, keine Auswahl in der Vergangenheit, gute Mobile-Bedienbarkeit
+- [ ] Bessere Fehler-UX beim Bild-Upload (Progress/Spinner, klare Hinweistexte bei zu grosser Datei oder ungueltigem Format)
+- [ ] Erweiterte Animationen: weichere Uebergaenge beim Wechsel zwischen Feed/Detail/Frage-vorschlagen, animierte Zahlen bei Vote- und View-Stats, visuelle Uebergaenge beim Statuswechsel von Drafts
+- [ ] Optional: Regionenauswahl spaeter ueber Karte oder interaktive Liste verfeinern (z. B. Land -> Bundesland -> Stadt)

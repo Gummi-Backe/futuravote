@@ -123,17 +123,21 @@ function EventCard({
       </div>
 
       <div className="space-y-3">
-        {question.imageUrl && (
-          <div className="h-32 w-full overflow-hidden rounded-2xl bg-black/30">
-            <img
-              src={question.imageUrl}
-              alt={question.title}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
-            />
+        <div className="flex gap-4">
+          {question.imageUrl && (
+            <div className="flex w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+              <img
+                src={question.imageUrl}
+                alt={question.title}
+                className="max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+              />
+            </div>
+          )}
+          <div className="flex-1">
+            <h3 className="text-xl font-bold leading-tight text-white">{question.title}</h3>
           </div>
-        )}
-        <h3 className="text-xl font-bold leading-tight text-white">{question.title}</h3>
+        </div>
         <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200">
           <span
             className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${
@@ -221,17 +225,21 @@ function DraftCard({
         <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">{draft.timeLeftHours}h</span>
       </div>
-      {draft.imageUrl && (
-        <div className="h-24 w-full overflow-hidden rounded-2xl bg-black/30">
-          <img
-            src={draft.imageUrl}
-            alt={draft.title}
-            className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-            loading="lazy"
-          />
+      <div className="flex gap-3">
+        {draft.imageUrl && (
+          <div className="flex w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+            <img
+              src={draft.imageUrl}
+              alt={draft.title}
+              className="max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
+              loading="lazy"
+            />
+          </div>
+        )}
+        <div className="flex-1">
+          <h4 className="text-lg font-semibold leading-snug text-white">{draft.title}</h4>
         </div>
-      )}
-      <h4 className="text-lg font-semibold text-white leading-snug">{draft.title}</h4>
+      </div>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
       {draft.description && (
         <p className="text-xs text-slate-200">
@@ -272,6 +280,7 @@ function DraftCard({
 
 export default function Home() {
   const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; displayName: string } | null>(null);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
@@ -395,6 +404,14 @@ export default function Home() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  useEffect(() => {
+    // Aktuellen User fuer UI (Login-Status) abrufen
+    void fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => setCurrentUser(data.user ?? null))
+      .catch(() => setCurrentUser(null));
   }, []);
 
   const filteredQuestions = useMemo(() => {
@@ -660,14 +677,38 @@ export default function Home() {
               <button
                 type="button"
                 className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
-                onClick={() => navigateWithTransition("/drafts/new")}
+                onClick={() => {
+                  if (!currentUser) {
+                    navigateWithTransition("/auth");
+                  } else {
+                    navigateWithTransition("/drafts/new");
+                  }
+                }}
               >
                 Frage stellen
               </button>
-              <button className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60">
+              <button
+                type="button"
+                className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                onClick={() => {
+                  if (!currentUser) {
+                    navigateWithTransition("/auth");
+                  } else {
+                    // Review-Bereich ist Teil der Startseite, hier koennte spaeter ein Anker/Scroll hin
+                    const reviewSection = document.getElementById("review-section");
+                    if (reviewSection) {
+                      reviewSection.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }
+                }}
+              >
                 Review
               </button>
-              <button className="rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500">
+              <button
+                type="button"
+                onClick={() => navigateWithTransition("/auth")}
+                className="rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+              >
                 Login / Register
               </button>
             </div>
@@ -818,7 +859,7 @@ export default function Home() {
           </div>
         )}
 
-        <section className="mt-10 space-y-4">
+        <section id="review-section" className="mt-10 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
               <span>🗳️</span> <span>Review-Bereich (Drafts)</span>
