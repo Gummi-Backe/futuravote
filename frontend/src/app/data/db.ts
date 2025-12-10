@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   passwordHash TEXT NOT NULL,
   displayName TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -126,6 +127,17 @@ const draftsHaveImageUrl = draftColumns.some((c) => c.name === "imageUrl");
 if (!draftsHaveImageUrl) {
   try {
     db.exec("ALTER TABLE drafts ADD COLUMN imageUrl TEXT");
+  } catch {
+    // Spalte existiert bereits.
+  }
+}
+
+// Backfill role column for users if missing.
+const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+const usersHaveRole = userColumns.some((c) => c.name === "role");
+if (!usersHaveRole) {
+  try {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
   } catch {
     // Spalte existiert bereits.
   }
@@ -202,6 +214,7 @@ export type User = {
   email: string;
   passwordHash: string;
   displayName: string;
+  role: "user" | "admin";
   createdAt: string;
 };
 
@@ -490,21 +503,23 @@ export function createUser(input: {
   displayName: string;
 }): User {
   const id = randomUUID();
-  db.prepare("INSERT INTO users (id, email, passwordHash, displayName) VALUES (?, ?, ?, ?)").run(
+  const role = (input as { role?: "user" | "admin" }).role ?? "user";
+  db.prepare("INSERT INTO users (id, email, passwordHash, displayName, role) VALUES (?, ?, ?, ?, ?)").run(
     id,
     input.email,
     input.passwordHash,
-    input.displayName
+    input.displayName,
+    role
   );
   const row = db
-    .prepare("SELECT id, email, passwordHash, displayName, createdAt FROM users WHERE id = ?")
+    .prepare("SELECT id, email, passwordHash, displayName, role, createdAt FROM users WHERE id = ?")
     .get(id) as User;
   return row;
 }
 
 export function getUserByEmail(email: string): User | null {
   const row = db
-    .prepare("SELECT id, email, passwordHash, displayName, createdAt FROM users WHERE email = ?")
+    .prepare("SELECT id, email, passwordHash, displayName, role, createdAt FROM users WHERE email = ?")
     .get(email) as User | undefined;
   return row ?? null;
 }
@@ -518,12 +533,17 @@ export function createUserSession(userId: string): string {
 export function getUserBySession(sessionId: string): User | null {
   const row = db
     .prepare(
-      `SELECT u.id, u.email, u.passwordHash, u.displayName, u.createdAt
+      `SELECT u.id, u.email, u.passwordHash, u.displayName, u.role, u.createdAt
        FROM user_sessions s
        JOIN users u ON u.id = s.userId
        WHERE s.id = ?`
     )
     .get(sessionId) as User | undefined;
   return row ?? null;
+}
+
+export function hasAdminUser(): boolean {
+  const row = db.prepare("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").get() as { 1: number } | undefined;
+  return !!row;
 }
 

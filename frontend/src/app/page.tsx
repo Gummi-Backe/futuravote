@@ -278,9 +278,11 @@ function DraftCard({
   );
 }
 
+type CurrentUser = { id: string; email: string; displayName: string; role?: "user" | "admin" } | null;
+
 export default function Home() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; displayName: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
