@@ -4,11 +4,16 @@ import fs from "fs";
 import path from "path";
 import { allQuestions, draftQueue, categories, type Question, type Draft } from "./mock";
 
-const DATA_ROOT = process.env.DATA_DIR ?? (process.env.VERCEL ? "/tmp/futuravote" : path.join(process.cwd(), "data"));
+const DATA_ROOT =
+  process.env.DATA_DIR ?? (process.env.VERCEL ? "/tmp/futuravote" : path.join(process.cwd(), "data"));
 const DB_PATH = path.join(DATA_ROOT, "dev.db");
+const IMAGES_DIR = path.join(DATA_ROOT, "images");
 
 if (!fs.existsSync(DATA_ROOT)) {
   fs.mkdirSync(DATA_ROOT, { recursive: true });
+}
+if (!fs.existsSync(IMAGES_DIR)) {
+  fs.mkdirSync(IMAGES_DIR, { recursive: true });
 }
 
 const db = new Database(DB_PATH);
@@ -52,6 +57,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   votesFor INTEGER NOT NULL DEFAULT 0,
   votesAgainst INTEGER NOT NULL DEFAULT 0,
   timeLeftHours INTEGER NOT NULL DEFAULT 72,
+  targetClosesAt TEXT,
   status TEXT NOT NULL DEFAULT 'open',
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -131,6 +137,14 @@ if (!draftsHaveImageUrl) {
     // Spalte existiert bereits.
   }
 }
+const draftsHaveTargetClosesAt = draftColumns.some((c) => c.name === "targetClosesAt");
+if (!draftsHaveTargetClosesAt) {
+  try {
+    db.exec("ALTER TABLE drafts ADD COLUMN targetClosesAt TEXT");
+  } catch {
+    // Spalte existiert bereits.
+  }
+}
 
 // Backfill role column for users if missing.
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
@@ -196,6 +210,7 @@ type DraftRow = {
   votesFor: number;
   votesAgainst: number;
   timeLeftHours: number;
+  targetClosesAt?: string | null;
   status?: string | null;
 };
 
@@ -217,6 +232,21 @@ export type User = {
   role: "user" | "admin";
   createdAt: string;
 };
+
+function deleteImageFileIfPresent(imageUrl?: string | null) {
+  if (!imageUrl) return;
+  const lastSlash = imageUrl.lastIndexOf("/");
+  const fileName = lastSlash >= 0 ? imageUrl.slice(lastSlash + 1) : imageUrl;
+  if (!fileName) return;
+  const filePath = path.join(IMAGES_DIR, fileName);
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error("Failed to delete image file", filePath, error);
+  }
+}
 
 function computeRankingScore(row: QuestionRow): number {
   const votes = Math.max(0, row.yesVotes + row.noVotes);
@@ -248,15 +278,19 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
   const createdAt = row.createdAt ?? new Date().toISOString();
   const rankingScore = computeRankingScore({ ...row, createdAt });
   let status: Question["status"] | undefined;
-  const closesMs = Date.parse(row.closesAt);
-  if (Number.isFinite(closesMs)) {
-    const daysLeft = (closesMs - Date.now()) / (1000 * 60 * 60 * 24);
-    if (daysLeft <= 14) {
-      status = "closingSoon";
+  if (row.status === "archived") {
+    status = "archived";
+  } else {
+    const closesMs = Date.parse(row.closesAt);
+    if (Number.isFinite(closesMs)) {
+      const daysLeft = (closesMs - Date.now()) / (1000 * 60 * 60 * 24);
+      if (daysLeft <= 14) {
+        status = "closingSoon";
+      }
     }
-  }
-  if (!status && row.status && row.status !== "closingSoon") {
-    status = row.status as Question["status"];
+    if (!status && row.status && row.status !== "closingSoon") {
+      status = row.status as Question["status"];
+    }
   }
 
   return {
@@ -302,7 +336,7 @@ if (!hasDrafts) {
 export function getDrafts(): Draft[] {
   const rows = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts"
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, targetClosesAt, status FROM drafts"
     )
     .all() as DraftRow[];
   return rows.map((row) => ({
@@ -326,6 +360,7 @@ export function createDraft(input: {
   region?: string;
   imageUrl?: string;
   timeLeftHours?: number;
+  targetClosesAt?: string;
   }): Draft {
   const id = randomUUID();
   const timeLeft =
@@ -345,7 +380,7 @@ export function createDraft(input: {
     status: "open",
   };
   db.prepare(
-    "INSERT INTO drafts (id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO drafts (id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, targetClosesAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     draft.id,
     draft.title,
@@ -356,6 +391,7 @@ export function createDraft(input: {
     draft.votesFor,
     draft.votesAgainst,
     draft.timeLeftHours,
+    input.targetClosesAt ?? null,
     "open"
   );
   return draft;
@@ -371,7 +407,14 @@ function maybePromoteDraft(row: DraftRow) {
   if (total < 5) return;
   if (row.votesFor >= row.votesAgainst + 2) {
     const cat = categories.find((c) => c.label === row.category) ?? categories[0];
-    const closesAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().split("T")[0];
+    let closesDate: Date;
+    if (row.targetClosesAt) {
+      const parsed = Date.parse(row.targetClosesAt);
+      closesDate = Number.isFinite(parsed) ? new Date(parsed) : new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+    } else {
+      closesDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+    }
+    const closesAt = closesDate.toISOString().split("T")[0];
     const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
     const summary = row.region ? `${row.category} · ${row.region}` : row.category;
 
@@ -467,7 +510,14 @@ export function adminAcceptDraft(id: string): Draft | null {
 
   if ((row.status ?? "open") !== "accepted") {
     const cat = categories.find((c) => c.label === row.category) ?? categories[0];
-    const closesAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().split("T")[0];
+    let closesDate: Date;
+    if (row.targetClosesAt) {
+      const parsed = Date.parse(row.targetClosesAt);
+      closesDate = Number.isFinite(parsed) ? new Date(parsed) : new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+    } else {
+      closesDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+    }
+    const closesAt = closesDate.toISOString().split("T")[0];
     const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
     const summary = row.region ? `${row.category} · ${row.region}` : row.category;
 
@@ -522,8 +572,44 @@ export function adminRejectDraft(id: string): Draft | null {
   return updated ? mapDraftRow(updated) : mapDraftRow(row);
 }
 
+export function adminDeleteDraft(id: string): Draft | null {
+  const row = db
+    .prepare(
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+    )
+    .get(id) as DraftRow | undefined;
+  if (!row) return null;
+
+  deleteImageFileIfPresent(row.imageUrl);
+  db.prepare("DELETE FROM drafts WHERE id = ?").run(id);
+
+  return mapDraftRow(row);
+}
+
+export function adminArchiveQuestion(id: string): QuestionWithVotes | null {
+  const existing = db.prepare("SELECT * FROM questions WHERE id = ?").get(id) as QuestionRow | undefined;
+  if (!existing) return null;
+
+  db.prepare("UPDATE questions SET status = 'archived' WHERE id = ?").run(id);
+  const updated = db.prepare("SELECT * FROM questions WHERE id = ?").get(id) as QuestionRow | undefined;
+  if (!updated) return null;
+  return mapQuestion(updated);
+}
+
+export function adminDeleteQuestion(id: string): QuestionWithVotes | null {
+  const row = db.prepare("SELECT * FROM questions WHERE id = ?").get(id) as QuestionRow | undefined;
+  if (!row) return null;
+
+  deleteImageFileIfPresent(row.imageUrl);
+  db.prepare("DELETE FROM questions WHERE id = ?").run(id);
+
+  return mapQuestion(row);
+}
+
 export function getQuestions(sessionId?: string): QuestionWithVotes[] {
-  const rows = db.prepare("SELECT * FROM questions").all() as QuestionRow[];
+  const rows = db
+    .prepare("SELECT * FROM questions WHERE status IS NULL OR status != 'archived'")
+    .all() as QuestionRow[];
   const sessionVotes =
     sessionId !== undefined
       ? (db.prepare("SELECT questionId, choice FROM votes WHERE sessionId = ?").all(sessionId) as {

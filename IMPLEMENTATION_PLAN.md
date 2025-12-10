@@ -5,7 +5,7 @@
 - Tech-Stack festlegen (Empfehlung: Frontend React/Next.js, Backend NestJS oder ASP.NET Core, DB Postgres, ORM Prisma/TypeORM/EF).
 - UX-Richtlinien definieren: Kachel-Layout, Farben pro Kategorie, responsives Grid.
 - MVP-Scope festhalten: MUSS (Auth, Kategorien, Fragen-Feed, Ja/Nein-Vote, Draft-Einreichung/-Review mit Auto-Entscheidung, Admin-Basis); NICHT (Profil-Stats, Gamification, Personalisierung, B2B-Exports).
-- Login-Regel festlegen: Ja/Nein-Voting ohne Login; Draft einreichen/bewerten nur mit Login; kein Kommentar-System.
+- Login-Regel festlegen: Ja/Nein-Voting und Draft-Reviews sind **ohne Login** moeglich (jeder darf abstimmen und Reviews abgeben); nur das Einreichen neuer Fragen/Drafts erfordert einen registrierten Account. Kein Kommentar-System im MVP.
 
 ## Phase 1: Projekt-Setup
 - Repos anlegen: frontend, backend; CI mit Lint/Test/Build.
@@ -46,6 +46,7 @@
 - Review-Board fuer Drafts: Karten mit "Gute/Schlechte Frage" und optionalen Scores.
 - Backend-Logik: QualityScore-Berechnung (konfigurierbare Thresholds), Status-Transitions, Moderator-Override.
 - Notifications/Toasts fuer Ergebnisse; History/Status am Draft anzeigen.
+- Drafts werden nach der Entscheidung nicht automatisch geloescht, sondern mit Status (`open`/`accepted`/`rejected`) als Historie behalten, damit spaeter Statistiken und Trust-Scores moeglich sind (z. B. wie viele Vorschlaege eines Nutzers akzeptiert wurden). Fuer rechtlich problematische Inhalte existiert zusaetzlich ein expliziter Admin-Hard-Delete, der Draft und Bild physisch entfernt.
 
 ## Phase 6: Ranking & Scores
 
@@ -162,6 +163,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Draft-Status/Filter im Review-Bereich (Offen/Angenommen/Abgelehnt) inkl. visueller Badges in den Karten
 - [x] Formular "Frage vorschlagen" mit zusaetzlicher Validierung (Mindestlaenge Titel/Beschreibung, minimale Laenge fuer eigene Kategorien) und Erfolgshinweis im Feed nach erfolgreichem Einreichen (via Toast)
 - [x] Einfache Admin-Light-Unterstuetzung: Admin-Rolle pro User in SQLite, erster (oder via FV_ADMIN_EMAIL definierter) Account wird Admin; Admins sehen ein Badge im Header und koennen Drafts im Review-Bereich direkt annehmen/ablehnen (Server-seitig abgesichert ueber /api/admin/drafts)
+- [x] Admin-Hard-Delete & Stoppen: Admins koennen Drafts im Review-Bereich endgueltig loeschen (inkl. zugehoeriger Vorschaubilder auf dem Server) sowie fertige Fragen ueber eine eigene Admin-Sektion der Detailseite stoppen (Status "archived", verschwindet aus dem Feed) oder in Ausnahmefaellen komplett entfernen (Frage + Bild werden aus der SQLite-DB und dem Images-Verzeichnis geloescht); technisch umgesetzt ueber erweiterte Draft-Route (`/api/admin/drafts` mit Action `delete`) und neue Questions-Route (`/api/admin/questions` mit Actions `archive`/`delete`), jeweils nur fuer Admin-User zugaenglich.
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.
@@ -178,8 +180,18 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
   - Offene Ausbaustufe: bessere UX fuer Upload-Fehler, harte Limits fuer Dateigroesse/Seitenverhaeltnis und optionales Cropping; Original-Upload nach erfolgreicher Verarbeitung konsequent entfernen.
 ### Feed-Verbesserungen (Stand)
 - [x] Visuelle Hervorhebung von Fragen mit Status "Endet bald" (Badge + Rahmen)
-- [x] Neuer Tab "Endet bald" im Feed, sortiert nach naechstem Enddatum, ohne die Standard-"Alle"-Sortierung zu veraendern
+ - [x] Neuer Tab "Endet bald" im Feed, der nur Fragen mit Restlaufzeit ≤ 14 Tage anzeigt und nach naechstem Enddatum sortiert ist
+ - [x] Tab "Neu & wenig bewertet": zeigt nur Fragen, die juenger als 14 Tage sind und insgesamt nur wenige Stimmen haben (aktuell < 10 Ja+Nein-Stimmen); Sortierung nach `createdAt` absteigend
+ - [x] Tab "Noch nicht abgestimmt" (frueher "Unbeantwortet"): zeigt Fragen, bei denen der aktuelle Nutzer in dieser Session noch keine Stimme abgegeben hat (unabhaengig davon, wie viele andere schon abgestimmt haben)
+ - [ ] Schwelle fuer "wenig Stimmen" dynamisch machen: Statt eines festen Werts (z. B. < 10) spaeter anhand von Statistik aus der Datenbank berechnen (z. B. Median/Perzentile der Stimmenanzahl pro Altersgruppe der Fragen) und daraus eine adaptive Grenze ableiten, ab wann eine Frage als "wenig bewertet" gilt. Diese Logik wird sinnvollerweise mit der spaeteren Postgres‑/Produktionsdatenbank umgesetzt.
  - [x] Einfache Infinite-Scroll-Logik fuer Feed und Review-Bereich: Zunaechst nur ein Teil der Kacheln wird gerendert, weitere werden beim Scrollen automatisch nachgeladen (Client-seitig, API weiterhin ohne Paging)
+
+### Private / Link-basierte Umfragen (neu vorgeschlagen)
+- [ ] Fragen koennen beim Einreichen als "nur per Link teilbar" markiert werden (zusaetzliches Feld `visibility = "public" | "linkOnly"` im Fragenmodell).
+- [ ] Fuer `visibility = "linkOnly"` wird zusaetzlich eine zufaellige `shareId` erzeugt; diese wird in einer eigenen Route (z. B. `/poll/[shareId]`) verwendet, die die Frage laedt, ohne sie im oeffentlichen Feed anzuzeigen.
+- [ ] Im Formular "Frage vorschlagen" erhaelt der Ersteller eine gut erklaerte Option "Private Umfrage (nur per Link fuer Mitglieder/Mitarbeiter sichtbar)" inkl. kurzer Erklaerung, dass jeder mit Link teilnehmen kann.
+- [ ] Kachel-/Detailansicht bekommt einen kleinen Teilen-Button: auf Desktop Copy-to-Clipboard, auf Mobilgeraeten moeglichst Web Share API; bei `linkOnly`-Fragen erscheint der Button vor allem in der Detailansicht.
+- [ ] Review- / Admin-Logik bleibt identisch, Admin kann auch private/link-only-Fragen stoppen oder endgueltig loeschen; spaeter kann optional eine "echte" geschlossene Gruppe (Login-Pflicht + Organisationskonzept) auf Basis dieses Mechanismus aufgebaut werden.
 
 ### Regionen / Zielgruppen
 - [x] Fragen und Drafts erhalten ein optionales Feld `region` (z. B. "Global", "Deutschland", "Bundesland", "Stadt/Region").

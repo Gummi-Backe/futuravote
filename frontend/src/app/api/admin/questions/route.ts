@@ -1,12 +1,16 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { adminAcceptDraft, adminDeleteDraft, adminRejectDraft, getUserBySession } from "@/app/data/db";
+import {
+  adminArchiveQuestion,
+  adminDeleteQuestion,
+  getUserBySession,
+} from "@/app/data/db";
 
 export const revalidate = 0;
 
-type AdminDraftBody = {
-  draftId?: string;
-  action?: "accept" | "reject" | "delete";
+type AdminQuestionBody = {
+  questionId?: string;
+  action?: "archive" | "delete";
 };
 
 export async function POST(request: Request) {
@@ -21,32 +25,35 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: AdminDraftBody;
+  let body: AdminQuestionBody;
   try {
-    body = (await request.json()) as AdminDraftBody;
+    body = (await request.json()) as AdminQuestionBody;
   } catch {
     return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
   }
 
-  const draftId = body.draftId?.trim();
+  const questionId = body.questionId?.trim();
   const action = body.action;
-  if (!draftId || !action) {
-    return NextResponse.json({ error: "Draft-ID oder Aktion fehlt/ungueltig." }, { status: 400 });
+  if (!questionId || !action) {
+    return NextResponse.json(
+      { error: "Fragen-ID oder Aktion fehlt/ungueltig." },
+      { status: 400 }
+    );
   }
 
-  let draft;
-  if (action === "accept") {
-    draft = adminAcceptDraft(draftId);
-  } else if (action === "reject") {
-    draft = adminRejectDraft(draftId);
+  let question;
+  if (action === "archive") {
+    question = adminArchiveQuestion(questionId);
   } else if (action === "delete") {
-    draft = adminDeleteDraft(draftId);
+    question = adminDeleteQuestion(questionId);
   } else {
     return NextResponse.json({ error: "Unbekannte Admin-Aktion." }, { status: 400 });
   }
-  if (!draft) {
-    return NextResponse.json({ error: "Draft nicht gefunden." }, { status: 404 });
+
+  if (!question) {
+    return NextResponse.json({ error: "Frage nicht gefunden." }, { status: 404 });
   }
 
-  return NextResponse.json({ draft });
+  return NextResponse.json({ question });
 }
+

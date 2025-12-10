@@ -46,6 +46,9 @@ function statusBadge(status?: Question["status"]) {
   if (status === "top") {
     return { label: "Top", className: "bg-indigo-500/15 text-indigo-100" };
   }
+   if (status === "archived") {
+     return { label: "Gestoppt", className: "bg-slate-500/20 text-slate-100" };
+   }
   return null;
 }
 
@@ -203,7 +206,7 @@ function DraftCard({
 }: {
   draft: Draft;
   onVote?: (choice: DraftReviewChoice) => void;
-  onAdminAction?: (action: "accept" | "reject") => void;
+  onAdminAction?: (action: "accept" | "reject" | "delete") => void;
   isSubmitting?: boolean;
   hasVoted?: boolean;
 }) {
@@ -277,7 +280,7 @@ function DraftCard({
         </button>
       </div>
       {onAdminAction && (
-        <div className="mt-2 flex gap-2 text-[11px] text-slate-300">
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-300">
           <button
             type="button"
             disabled={isSubmitting}
@@ -293,6 +296,14 @@ function DraftCard({
             onClick={() => onAdminAction("reject")}
           >
             Admin: Sperren
+          </button>
+          <button
+            type="button"
+            disabled={isSubmitting}
+            className="flex-1 rounded-full border border-slate-500/60 bg-slate-600/20 px-3 py-1 font-semibold text-slate-100 hover:bg-slate-600/30 disabled:opacity-60"
+            onClick={() => onAdminAction("delete")}
+          >
+            Admin: Endgueltig loeschen
           </button>
         </div>
       )}
@@ -321,10 +332,12 @@ export default function Home() {
   const [reviewedDrafts, setReviewedDrafts] = useState<Record<string, boolean>>({});
   const [debugMultiReview, setDebugMultiReview] = useState(false);
   const [showExtraCategories, setShowExtraCategories] = useState(false);
+  const [showExtraRegions, setShowExtraRegions] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
+  const [showReviewOnly, setShowReviewOnly] = useState(false);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const draftsEndRef = useRef<HTMLDivElement | null>(null);
   const tabs = useMemo(
@@ -359,16 +372,27 @@ export default function Home() {
   const regionOptions = useMemo(() => {
     const set = new Set<string>();
     set.add("Global");
+    const now = Date.now();
     for (const q of questions) {
-      if (q.region) set.add(q.region);
+      if (!q.region) continue;
+      const closesMs = Date.parse(q.closesAt);
+      const isActive = !Number.isNaN(closesMs) ? closesMs >= now : true;
+      if (isActive) {
+        set.add(q.region);
+      }
     }
     for (const d of drafts) {
-      if (d.region && (d.status ?? "open") !== "rejected") {
+      const status = d.status ?? "open";
+      const isActiveDraft = status === "open" && d.timeLeftHours > 0;
+      if (isActiveDraft && d.region) {
         set.add(d.region);
       }
     }
     return Array.from(set);
   }, [questions, drafts]);
+
+  const mainRegions = useMemo(() => regionOptions.slice(0, 10), [regionOptions]);
+  const extraRegions = useMemo(() => regionOptions.slice(10), [regionOptions]);
 
   const extraCategories = useMemo(
     () => categoryOptions.filter((c) => !categories.some((base) => base.label === c.label)),
@@ -450,10 +474,26 @@ export default function Home() {
 
   const filteredQuestions = useMemo(() => {
     let result = questions;
-    if (activeTab === "trending") result = result.filter((q) => q.status === "trending");
-    else if (activeTab === "new") result = result.filter((q) => q.status === "new");
-    else if (activeTab === "unanswered") result = result.filter((q) => !q.userChoice);
-    else if (activeTab === "top") result = result.filter((q) => q.status === "top" || q.status === "closingSoon");
+    if (activeTab === "trending") {
+      result = result.filter((q) => q.status === "trending");
+    } else if (activeTab === "new") {
+      const now = Date.now();
+      const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
+      result = result.filter((q) => {
+        const created = q.createdAt ? Date.parse(q.createdAt) : NaN;
+        const ageOk = Number.isFinite(created) ? now - created <= maxAgeMs : true;
+        const yes = q.yesVotes ?? 0;
+        const no = q.noVotes ?? 0;
+        const totalVotes = yes + no;
+        return ageOk && totalVotes < 10;
+      });
+    } else if (activeTab === "unanswered") {
+      result = result.filter((q) => !q.userChoice);
+    } else if (activeTab === "top") {
+      result = result.filter((q) => q.status === "top" || q.status === "closingSoon");
+    } else if (activeTab === "closingSoon") {
+      result = result.filter((q) => q.status === "closingSoon");
+    }
 
     if (activeCategory) {
       result = result.filter((q) => q.category === activeCategory);
@@ -644,7 +684,7 @@ export default function Home() {
   );
 
   const handleAdminDraftAction = useCallback(
-    async (draftId: string, action: "accept" | "reject") => {
+    async (draftId: string, action: "accept" | "reject" | "delete") => {
       if (!currentUser || currentUser.role !== "admin") {
         showToast("Nur Admins koennen diese Aktion ausfuehren.", "error");
         return;
@@ -662,15 +702,26 @@ export default function Home() {
           return;
         }
         const updated = data.draft as Draft;
-        setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+        if (action === "delete") {
+          setDrafts((prev) => prev.filter((d) => d.id !== updated.id));
+        } else {
+          setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+        }
         // Nach Admin-Aktion Serverdaten aktualisieren, damit neue Fragen im Hauptfeed erscheinen
         await fetchLatest();
-        showToast(
-          action === "accept"
-            ? "Draft wurde von dir als Admin direkt angenommen."
-            : "Draft wurde von dir als Admin gesperrt.",
-          "success"
-        );
+        if (action === "accept") {
+          showToast(
+            "Draft wurde von dir als Admin direkt angenommen.",
+            "success"
+          );
+        } else if (action === "reject") {
+          showToast("Draft wurde von dir als Admin gesperrt.", "success");
+        } else {
+          showToast(
+            "Draft wurde von dir als Admin endgueltig geloescht (inkl. Bild).",
+            "success"
+          );
+        }
       } catch {
         showToast("Admin-Aktion fehlgeschlagen (Netzwerkfehler).", "error");
       } finally {
@@ -781,18 +832,13 @@ export default function Home() {
                 type="button"
                 className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
                 onClick={() => {
-                  if (!currentUser) {
-                    navigateWithTransition("/auth");
-                  } else {
-                    // Review-Bereich ist Teil der Startseite, hier koennte spaeter ein Anker/Scroll hin
-                    const reviewSection = document.getElementById("review-section");
-                    if (reviewSection) {
-                      reviewSection.scrollIntoView({ behavior: "smooth" });
-                    }
+                  setShowReviewOnly((prev) => !prev);
+                  if (typeof window !== "undefined") {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
                   }
                 }}
               >
-                Review
+                {showReviewOnly ? "Zurueck zum Feed" : "Review"}
               </button>
               <button
                 type="button"
@@ -810,21 +856,29 @@ export default function Home() {
               onTouchStart={handleTabTouchStart}
               onTouchEnd={handleTabTouchEnd}
             >
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
-                    activeTab === tab.id
-                      ? "bg-white/20 border border-white/30 text-white hover:border-emerald-300/60 hover:-translate-y-0.5"
-                      : "bg-white/10 border border-white/15 text-slate-200 hover:border-emerald-300/40 hover:-translate-y-0.5"
-                  }`}
-                >
-                  <span>{tab.icon}</span>
-                  <span className="font-semibold whitespace-nowrap">{tab.label}</span>
-                </button>
-              ))}
+              {tabs.map((tab) => {
+                const label =
+                  tab.id === "new"
+                    ? "Neu & wenig bewertet"
+                    : tab.id === "unanswered"
+                    ? "Noch nicht abgestimmt"
+                    : tab.label;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
+                      activeTab === tab.id
+                        ? "bg-white/20 border border-white/30 text-white hover:border-emerald-300/60 hover:-translate-y-0.5"
+                        : "bg-white/10 border border-white/15 text-slate-200 hover:border-emerald-300/40 hover:-translate-y-0.5"
+                    }`}
+                  >
+                    <span>{tab.icon}</span>
+                    <span className="font-semibold whitespace-nowrap">{label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div
@@ -894,7 +948,7 @@ export default function Home() {
           >
             Alle Regionen
           </button>
-          {regionOptions.map((region) => (
+          {mainRegions.map((region) => (
             <button
               key={region}
               type="button"
@@ -908,34 +962,46 @@ export default function Home() {
               {region}
             </button>
           ))}
+          {extraRegions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowExtraRegions(true)}
+              className="rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 border border-white/20 bg-white/5 text-slate-100 hover:border-emerald-300/40 transition"
+              aria-label="Weitere Regionen"
+            >
+              ...
+            </button>
+          )}
         </div>
 
-        <section className="mt-8 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
-              <span>{tabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
-              <span>{tabLabel}</span>
-            </h2>
-            <span className="text-sm text-slate-300">Engagement + Freshness + Trust</span>
-          </div>
-          {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
-          {error && <div className="text-sm text-rose-200">{error}</div>}
-          <div
-            key={`${activeTab}-${activeCategory ?? "all"}`}
-            className="list-enter grid gap-5 md:grid-cols-2"
-          >
-            {visibleQuestions.map((q) => (
-              <EventCard
-                key={q.id}
-                question={q}
-                isSubmitting={submittingId === q.id}
-                onVote={(choice) => handleVote(q.id, choice)}
-                onOpenDetails={(href) => navigateWithTransition(href)}
-              />
-            ))}
-          </div>
-          <div ref={questionsEndRef} className="h-1" />
-        </section>
+        {!showReviewOnly && (
+          <section className="mt-8 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+                <span>{tabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
+                <span>{tabLabel}</span>
+              </h2>
+              <span className="text-sm text-slate-300">Engagement + Freshness + Trust</span>
+            </div>
+            {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
+            {error && <div className="text-sm text-rose-200">{error}</div>}
+            <div
+              key={`${activeTab}-${activeCategory ?? "all"}`}
+              className="list-enter grid gap-5 md:grid-cols-2"
+            >
+              {visibleQuestions.map((q) => (
+                <EventCard
+                  key={q.id}
+                  question={q}
+                  isSubmitting={submittingId === q.id}
+                  onVote={(choice) => handleVote(q.id, choice)}
+                  onOpenDetails={(href) => navigateWithTransition(href)}
+                />
+              ))}
+            </div>
+            <div ref={questionsEndRef} className="h-1" />
+          </section>
+        )}
 
           {toast && (
           <div className="toast-enter fixed bottom-4 right-4 z-50 rounded-2xl border border-white/15 bg-slate-900/90 px-4 py-3 shadow-lg shadow-black/40">
@@ -1060,6 +1126,50 @@ export default function Home() {
                   >
                     <span>{cat.icon}</span>
                     <span className="truncate">{cat.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      {showExtraRegions && extraRegions.length > 0 && (
+        <div
+          className="overlay-enter fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowExtraRegions(false)}
+        >
+          <div
+            className="absolute left-1/2 top-32 w-full max-w-sm -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-900/95 p-4 shadow-2xl shadow-black/40"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-white">Weitere Regionen</h3>
+              <button
+                type="button"
+                className="rounded-full border border-white/20 px-2 py-1 text-xs text-slate-100 hover:border-emerald-300/60"
+                onClick={() => setShowExtraRegions(false)}
+              >
+                Schliessen
+              </button>
+            </div>
+            <div className="max-h-64 space-y-1 overflow-y-auto pr-1 text-xs">
+              {extraRegions.map((region) => {
+                const isActive = activeRegion === region;
+                return (
+                  <button
+                    key={region}
+                    type="button"
+                    onClick={() => {
+                      setActiveRegion(isActive ? null : region);
+                      setShowExtraRegions(false);
+                    }}
+                    className={`flex w-full items-center justify-start gap-2 rounded-xl px-3 py-2 text-left ${
+                      isActive
+                        ? "bg-emerald-500/25 text-white"
+                        : "bg-white/5 text-slate-100 hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="truncate">{region}</span>
                   </button>
                 );
               })}
