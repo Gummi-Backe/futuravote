@@ -55,6 +55,21 @@ CREATE TABLE IF NOT EXISTS drafts (
   status TEXT NOT NULL DEFAULT 'open',
   createdAt TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  passwordHash TEXT NOT NULL,
+  displayName TEXT NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+);
 `);
 
 // Backfill views column if missing (ältere lokale DBs).
@@ -121,8 +136,8 @@ const countStmt = db.prepare("SELECT COUNT(*) as cnt FROM questions");
 const hasQuestions = ((countStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasQuestions) {
   const insert = db.prepare(
-    `INSERT INTO questions (id, title, summary, description, region, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-     VALUES (@id, @title, @summary, @description, @region, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
+    `INSERT INTO questions (id, title, summary, description, region, imageUrl, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+     VALUES (@id, @title, @summary, @description, @region, @imageUrl, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
   );
   const baseline = 120;
   for (const q of allQuestions) {
@@ -131,6 +146,7 @@ if (!hasQuestions) {
     insert.run({
       ...q,
       region: q.region ?? null,
+      imageUrl: q.imageUrl ?? null,
       yesVotes,
       noVotes,
       views: q.views ?? 0,
@@ -180,6 +196,14 @@ export type QuestionWithVotes = Question & {
 };
 export type VoteChoice = "yes" | "no";
 export type DraftReviewChoice = "good" | "bad";
+
+export type User = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  displayName: string;
+  createdAt: string;
+};
 
 function computeRankingScore(row: QuestionRow): number {
   const votes = Math.max(0, row.yesVotes + row.noVotes);
@@ -332,16 +356,18 @@ function maybePromoteDraft(row: DraftRow) {
     const cat = categories.find((c) => c.label === row.category) ?? categories[0];
     const closesAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString().split("T")[0];
     const questionId = row.id.startsWith("q_") ? row.id : `q_${row.id}`;
+    const summary = row.region ? `${row.category} · ${row.region}` : row.category;
 
     db.prepare(
-      `INSERT OR IGNORE INTO questions (id, title, summary, description, region, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR IGNORE INTO questions (id, title, summary, description, region, imageUrl, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       questionId,
       row.title,
-      row.title,
+      summary,
       row.description ?? null,
       row.region ?? null,
+      row.imageUrl ?? null,
       row.category,
       cat?.icon ?? "?",
       cat?.color ?? "#22c55e",
@@ -371,7 +397,7 @@ export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null
 
   const row = db
     .prepare(
-      "SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   if (!row) return null;
@@ -380,7 +406,7 @@ export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null
 
   const updatedRow = db
     .prepare(
-      "SELECT id, title, description, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   const effective = updatedRow ?? row;
@@ -450,5 +476,50 @@ export function voteOnQuestion(id: string, choice: VoteChoice, sessionId: string
 
 export function incrementViewsForAll() {
   db.prepare("UPDATE questions SET views = views + 1").run();
+}
+
+// --- User / Auth helpers ----------------------------------------------------
+
+export function createUser(input: {
+  email: string;
+  passwordHash: string;
+  displayName: string;
+}): User {
+  const id = randomUUID();
+  db.prepare("INSERT INTO users (id, email, passwordHash, displayName) VALUES (?, ?, ?, ?)").run(
+    id,
+    input.email,
+    input.passwordHash,
+    input.displayName
+  );
+  const row = db
+    .prepare("SELECT id, email, passwordHash, displayName, createdAt FROM users WHERE id = ?")
+    .get(id) as User;
+  return row;
+}
+
+export function getUserByEmail(email: string): User | null {
+  const row = db
+    .prepare("SELECT id, email, passwordHash, displayName, createdAt FROM users WHERE email = ?")
+    .get(email) as User | undefined;
+  return row ?? null;
+}
+
+export function createUserSession(userId: string): string {
+  const id = randomUUID();
+  db.prepare("INSERT INTO user_sessions (id, userId) VALUES (?, ?)").run(id, userId);
+  return id;
+}
+
+export function getUserBySession(sessionId: string): User | null {
+  const row = db
+    .prepare(
+      `SELECT u.id, u.email, u.passwordHash, u.displayName, u.createdAt
+       FROM user_sessions s
+       JOIN users u ON u.id = s.userId
+       WHERE s.id = ?`
+    )
+    .get(sessionId) as User | undefined;
+  return row ?? null;
 }
 
