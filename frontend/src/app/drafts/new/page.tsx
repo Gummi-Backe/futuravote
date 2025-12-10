@@ -124,6 +124,7 @@ export default function NewDraftPage() {
 
     // Review-Dauer bestimmen
     let finalTimeLeftHours: number;
+    let finalClosesAt: string;
     if (reviewMode === "endDate") {
       const raw = endDateTime.trim();
       if (!raw) {
@@ -148,6 +149,7 @@ export default function NewDraftPage() {
         return;
       }
       finalTimeLeftHours = Math.round(diffHours);
+      finalClosesAt = end.toISOString().split("T")[0];
     } else {
       const safeHours = Number.isFinite(timeLeftHours) ? timeLeftHours : 72;
       if (safeHours < 1) {
@@ -155,6 +157,18 @@ export default function NewDraftPage() {
         return;
       }
       finalTimeLeftHours = safeHours;
+      const defaultEnd = new Date();
+      defaultEnd.setDate(defaultEnd.getDate() + 14);
+      finalClosesAt = defaultEnd.toISOString().split("T")[0];
+      if (typeof window !== "undefined") {
+        const ok = window.confirm(
+          "Du hast kein genaues Enddatum für die Umfrage angegeben. Standardmäßig läuft sie 14 Tage ab jetzt. Möchtest du fortfahren?"
+        );
+        if (!ok) {
+          setSubmitting(false);
+          return;
+        }
+      }
     }
 
     setSubmitting(true);
@@ -191,6 +205,7 @@ export default function NewDraftPage() {
           region: finalRegion,
           imageUrl: finalImageUrl,
           timeLeftHours: finalTimeLeftHours,
+          closesAt: finalClosesAt,
         }),
       });
       const data = await res.json();

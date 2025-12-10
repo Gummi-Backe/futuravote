@@ -19,7 +19,7 @@ export type Question = {
   noPct: number;
   yesVotes?: number;
   noVotes?: number;
-  status?: "closingSoon" | "new" | "trending" | "top";
+  status?: "closingSoon" | "new" | "trending" | "top" | "archived";
   views?: number;
   userChoice?: "yes" | "no";
   createdAt?: string;

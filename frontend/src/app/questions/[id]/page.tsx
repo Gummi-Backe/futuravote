@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import type { Question } from "@/app/data/mock";
+import { getUserBySession } from "@/app/data/db";
+import AdminControls from "./AdminControls";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +97,10 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
   if (!question) {
     notFound();
   }
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("fv_user")?.value;
+  const currentUser = sessionId ? getUserBySession(sessionId) : null;
+  const isAdmin = currentUser?.role === "admin";
   const votedLabel =
     question.userChoice === "yes" ? "Du hast Ja gestimmt" : question.userChoice === "no" ? "Du hast Nein gestimmt" : null;
 
@@ -103,7 +109,7 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
   const totalVotes = yesVotes + noVotes;
   const views = question.views ?? 0;
   const rankingScore =
-    typeof question.rankingScore === "number" ? question.rankingScore.toFixed(2) : "–";
+    typeof question.rankingScore === "number" ? question.rankingScore.toFixed(2) : "-";
   const createdLabel = question.createdAt
     ? new Date(question.createdAt).toLocaleDateString("de-DE", {
         day: "2-digit",
@@ -111,6 +117,10 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
         year: "numeric",
       })
     : "unbekannt";
+  const statusLabel =
+    question.status === "archived"
+      ? "gestoppt"
+      : question.status ?? "aktiv";
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
@@ -169,6 +179,11 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
             </span>
             <span className="rounded-full bg-white/5 px-3 py-1">Insgesamt {totalVotes} Stimmen</span>
           </div>
+          {isAdmin && (
+            <div className="mt-4">
+              <AdminControls questionId={id} isArchived={question.status === "archived"} />
+            </div>
+          )}
         </header>
 
         <section className="mt-8 grid gap-6 md:grid-cols-3">
@@ -203,7 +218,7 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
               />
               <StatsCard
                 label="Status"
-                value={question.status ?? "aktiv"}
+                value={statusLabel}
                 hint={formatDeadline(question.closesAt)}
                 valueClassName="text-base"
               />

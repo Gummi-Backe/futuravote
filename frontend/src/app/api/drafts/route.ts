@@ -11,6 +11,7 @@ type DraftInput = {
   region?: string;
   imageUrl?: string;
   timeLeftHours?: number;
+  closesAt?: string;
 };
 
 export async function POST(request: Request) {
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
   const imageUrlRaw = (body.imageUrl ?? "").trim();
   const imageUrl =
     imageUrlRaw && imageUrlRaw.length > 4 && imageUrlRaw.length < 500 ? imageUrlRaw : undefined;
+  const closesAtRaw = (body.closesAt ?? "").trim();
+  const targetClosesAt =
+    closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
 
   if (!title) {
     return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
@@ -50,6 +54,6 @@ export async function POST(request: Request) {
       ? body.timeLeftHours
       : 72;
 
-  const draft = createDraft({ title, category, description, region, imageUrl, timeLeftHours });
+  const draft = createDraft({ title, category, description, region, imageUrl, timeLeftHours, targetClosesAt });
   return NextResponse.json({ draft }, { status: 201 });
 }
