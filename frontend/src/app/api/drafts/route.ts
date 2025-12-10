@@ -1,5 +1,6 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createDraft } from "@/app/data/db";
+import { createDraft, getUserBySession } from "@/app/data/db";
 
 export const revalidate = 0;
 
@@ -13,6 +14,15 @@ type DraftInput = {
 };
 
 export async function POST(request: Request) {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("fv_user")?.value;
+  if (!sessionId || !getUserBySession(sessionId)) {
+    return NextResponse.json(
+      { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
+      { status: 401 }
+    );
+  }
+
   let body: DraftInput;
   try {
     body = (await request.json()) as DraftInput;

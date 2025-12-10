@@ -414,6 +414,16 @@ export default function Home() {
       .catch(() => setCurrentUser(null));
   }, []);
 
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignorieren, UI wird trotzdem auf ausgeloggten Zustand gesetzt
+    } finally {
+      setCurrentUser(null);
+    }
+  }, []);
+
   const filteredQuestions = useMemo(() => {
     let result = questions;
     if (activeTab === "trending") result = result.filter((q) => q.status === "trending");
@@ -673,7 +683,21 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {currentUser && (
+                <div className="flex items-center gap-2 rounded-xl bg-black/30 px-3 py-2 text-xs text-slate-200">
+                  <span>
+                    Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="rounded-full border border-white/25 px-2 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-300/60 hover:text-emerald-100"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
