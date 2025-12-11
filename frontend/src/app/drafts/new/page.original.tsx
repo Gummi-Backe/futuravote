@@ -7,6 +7,7 @@ import { categories } from "@/app/data/mock";
 
 function getMinEndDateTimeString(): string {
   const now = new Date();
+  // Kleiner Puffer, damit "jetzt" nicht knapp in der Vergangenheit liegt
   now.setMinutes(now.getMinutes() + 5);
   const pad = (n: number) => String(n).padStart(2, "0");
   const year = now.getFullYear();
@@ -23,6 +24,7 @@ function getPreviewCategoryLetter(category: string, customCategory: string, useC
 }
 
 async function resizeImageClientSide(file: File, maxWidth: number, maxHeight: number): Promise<Blob> {
+  // Datei als Data-URL einlesen
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -30,6 +32,7 @@ async function resizeImageClientSide(file: File, maxWidth: number, maxHeight: nu
     reader.readAsDataURL(file);
   });
 
+  // Bild-Objekt laden
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -42,6 +45,7 @@ async function resizeImageClientSide(file: File, maxWidth: number, maxHeight: nu
     throw new Error("Bild hat keine gültigen Abmessungen.");
   }
 
+  // Skalierungsfaktor bestimmen (nicht vergrößern)
   const scale = Math.min(maxWidth / width, maxHeight / height, 1);
   const targetWidth = Math.round(width * scale);
   const targetHeight = Math.round(height * scale);
@@ -117,8 +121,12 @@ export default function NewDraftPage() {
 
   const handleFormKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
     if (event.key !== "Enter") return;
+
     const target = event.target as HTMLElement | null;
     if (!target) return;
+
+    // Enter soll nur im Beschreibungstext neue Zeilen erzeugen,
+    // aber nicht versehentlich das Formular absenden.
     if (target.tagName !== "TEXTAREA") {
       event.preventDefault();
     }
@@ -128,8 +136,6 @@ export default function NewDraftPage() {
     event.preventDefault();
 
     const trimmedTitle = title.trim();
-    const trimmedDescription = description.trim();
-
     if (!trimmedTitle) {
       setError("Bitte gib einen Titel für deine Frage ein.");
       return;
@@ -139,72 +145,110 @@ export default function NewDraftPage() {
       return;
     }
 
-    let finalCategory = useCustomCategory ? customCategory.trim() : category.trim();
+    const finalCategory = (useCustomCategory ? customCategory : category).trim();
     if (!finalCategory) {
       setError("Bitte wähle eine Kategorie oder gib eine eigene ein.");
       return;
     }
     if (useCustomCategory && finalCategory.length < 3) {
-      setError("Die eigene Kategorie sollte mindestens 3 Zeichen haben.");
+      setError("Eigene Kategorien sollten mindestens 3 Zeichen lang sein.");
       return;
     }
 
-    let finalRegion = "";
+    const trimmedDescription = description.trim();
+    if (trimmedDescription && trimmedDescription.length < 20) {
+      setError("Die Beschreibung ist sehr kurz. Bitte gib mindestens 20 Zeichen ein oder lass das Feld leer.");
+      return;
+    }
+
+    // Region bestimmen
+    let finalRegion: string | undefined;
     if (regionSelect === "__custom_region") {
-      finalRegion = customRegion.trim();
-    } else if (regionSelect !== "Global") {
-      finalRegion = regionSelect;
-    }
-
-    let finalTimeLeftHours = timeLeftHours;
-    let finalClosesAt: string | undefined;
-
-    if (reviewMode === "duration") {
-      if (!Number.isFinite(timeLeftHours) || timeLeftHours <= 0) {
-        setError("Bitte gib eine gültige Dauer in Stunden an.");
+      const trimmedRegion = customRegion.trim();
+      if (trimmedRegion && trimmedRegion.length < 3) {
+        setError("Die Bezeichnung der Region ist sehr kurz. Bitte gib mindestens 3 Zeichen ein oder lass das Feld leer.");
         return;
       }
-      finalTimeLeftHours = timeLeftHours;
+      finalRegion = trimmedRegion || undefined;
     } else {
-      if (!endDateTime) {
-        setError("Bitte wähle ein Datum und eine Uhrzeit für das Ende des Reviews.");
-        return;
-      }
-      const closesAt = new Date(endDateTime);
-      const now = new Date();
-      if (Number.isNaN(closesAt.getTime()) || closesAt <= now) {
-        setError("Das gewählte Datum liegt in der Vergangenheit. Bitte wähle einen Zeitpunkt in der Zukunft.");
-        return;
-      }
-      finalClosesAt = closesAt.toISOString();
-      const diffMs = closesAt.getTime() - now.getTime();
-      finalTimeLeftHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+      finalRegion = regionSelect === "Global" ? "Global" : regionSelect;
     }
 
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
-
-      if (imageFile) {
-        const resizedBlob = await resizeImageClientSide(imageFile, 250, 150);
-        const uploadData = new FormData();
-        uploadData.append("file", resizedBlob, imageFile.name || "image.jpg");
-
-        const uploadRes = await fetch("/api/upload-image", {
-          method: "POST",
-          body: uploadData,
-        });
-
-        const uploadJson = await uploadRes.json().catch(() => null);
-        if (!uploadRes.ok || !uploadJson || !uploadJson.imageUrl) {
-          setError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
+    // Review-Dauer bestimmen
+    let finalTimeLeftHours: number;
+    let finalClosesAt: string;
+    if (reviewMode === "endDate") {
+      const raw = endDateTime.trim();
+      if (!raw) {
+        setError("Bitte wähle ein Enddatum für den Review-Zeitraum.");
+        return;
+      }
+      const end = new Date(raw);
+      if (Number.isNaN(end.getTime())) {
+        setError("Das gewählte Enddatum ist ungültig.");
+        return;
+      }
+      const now = new Date();
+      const diffMs = end.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours < 1) {
+        setError("Das Review-Ende muss mindestens eine Stunde in der Zukunft liegen.");
+        return;
+      }
+      // Sicherheitsdeckel: maximal 365 Tage Review
+      if (diffHours > 24 * 365) {
+        setError("Der Review-Zeitraum darf maximal ein Jahr betragen.");
+        return;
+      }
+      finalTimeLeftHours = Math.round(diffHours);
+      finalClosesAt = end.toISOString().split("T")[0];
+    } else {
+      const safeHours = Number.isFinite(timeLeftHours) ? timeLeftHours : 72;
+      if (safeHours < 1) {
+        setError("Der Review-Zeitraum in Stunden muss mindestens 1 Stunde betragen.");
+        return;
+      }
+      finalTimeLeftHours = safeHours;
+      const defaultEnd = new Date();
+      defaultEnd.setDate(defaultEnd.getDate() + 14);
+      finalClosesAt = defaultEnd.toISOString().split("T")[0];
+      if (typeof window !== "undefined") {
+        const ok = window.confirm(
+          "Du hast kein genaues Enddatum für die Umfrage angegeben. Standardmäßig läuft sie 14 Tage ab jetzt. Möchtest du fortfahren?"
+        );
+        if (!ok) {
+          setSubmitting(false);
           return;
         }
-
-        finalImageUrl = uploadJson.imageUrl;
       }
+    }
+
+      setSubmitting(true);
+      setError(null);
+
+      try {
+        let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
+
+        if (imageFile) {
+          // Bild bereits im Browser auf die Zielgröße (ca. 250x150, Seitenverhältnis bleibt erhalten) verkleinern
+          const resizedBlob = await resizeImageClientSide(imageFile, 250, 150);
+
+          const uploadData = new FormData();
+          uploadData.append("file", resizedBlob, imageFile.name || "image.jpg");
+
+          const uploadRes = await fetch("/api/upload-image", {
+            method: "POST",
+            body: uploadData,
+          });
+
+          const uploadJson = await uploadRes.json().catch(() => null);
+          if (!uploadRes.ok || !uploadJson || !uploadJson.imageUrl) {
+            setError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
+            return;
+          }
+
+          finalImageUrl = uploadJson.imageUrl;
+        }
 
       const trimmedImageCredit = imageCredit.trim();
 
@@ -215,23 +259,21 @@ export default function NewDraftPage() {
           title: trimmedTitle,
           description: trimmedDescription || undefined,
           category: finalCategory,
-          region: finalRegion || undefined,
+          region: finalRegion,
           imageUrl: finalImageUrl,
           imageCredit: trimmedImageCredit || undefined,
           timeLeftHours: finalTimeLeftHours,
           closesAt: finalClosesAt,
         }),
       });
-
-      const data = await res.json().catch(() => null);
+      const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Konnte deine Frage nicht speichern.");
         return;
       }
 
       navigateHome(true);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setError("Netzwerkfehler. Bitte versuche es erneut.");
     } finally {
       setSubmitting(false);
@@ -241,19 +283,24 @@ export default function NewDraftPage() {
   const currentCategoryLabel = (useCustomCategory ? customCategory : category) || "Kategorie";
 
   return (
-    <main
-      className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-slate-950 text-slate-50`}
-    >
-      <div className="mx-auto max-w-3xl px-4 pb-16 pt-8">
-        <Link href="/" className="inline-flex items-center text-sm text-emerald-100 hover:text-emerald-200">
+    <main className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}>
+      <div className="mx-auto max-w-2xl px-4 pb-12 pt-10 lg:px-6">
+        <Link
+          href="/"
+          className="text-sm text-emerald-100 hover:text-emerald-200"
+          onClick={(event) => {
+            event.preventDefault();
+            navigateHome(false);
+          }}
+        >
           &larr; Zurück zum Feed
         </Link>
 
-        <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
+        <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Frage vorschlagen</h1>
           <p className="mt-1 text-sm text-slate-300">
-            Formuliere eine neue Prognosefrage. Die Community entscheidet im Review-Bereich, ob sie es in die
-            Hauptabstimmung schafft.
+            Reiche eine neue Prognosefrage ein. Sie erscheint zuerst im Review-Bereich: Dort bewertet die Community die
+            Qualität und entscheidet gemeinsam, ob deine Frage in die öffentliche Ja/Nein-Abstimmung übernommen wird.
           </p>
 
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
@@ -269,6 +316,25 @@ export default function NewDraftPage() {
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                 placeholder="Wird X bis Ende 2026 passieren?"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="imageCredit" className="text-sm font-medium text-slate-100">
+                Bildquelle / Urheberangabe (optional)
+              </label>
+              <input
+                id="imageCredit"
+                type="text"
+                value={imageCredit}
+                onChange={(e) => setImageCredit(e.target.value)}
+                maxLength={140}
+                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                placeholder='z. B. "Foto: Name / Agentur"'
+              />
+              <p className="text-xs text-slate-400">
+                Diese Angabe erscheint klein unter der Frage (z.&nbsp;B. in der Kachel und in der Detailansicht), damit
+                die Bildquelle klar erkennbar ist.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -289,77 +355,56 @@ export default function NewDraftPage() {
               </p>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
-              <div className="space-y-2">
-                <label htmlFor="imageUrl" className="text-sm font-medium text-slate-100">
-                  Bild (optional)
-                </label>
+            <div className="space-y-2">
+              <label htmlFor="imageUrl" className="text-sm font-medium text-slate-100">
+                Bild (optional)
+              </label>
+              <input
+                id="imageUrl"
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                placeholder="https://… (kleines Vorschaubild für die Kachel)"
+              />
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <input
-                  id="imageUrl"
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="https://… (kleines Vorschaubild für die Kachel)"
+                  id="imageFile"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (imagePreviewUrl) {
+                      URL.revokeObjectURL(imagePreviewUrl);
+                    }
+                    setImageFile(file);
+                    if (file) {
+                      const url = URL.createObjectURL(file);
+                      setImagePreviewUrl(url);
+                    } else {
+                      setImagePreviewUrl(null);
+                    }
+                  }}
+                  className="block w-full text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-100 hover:file:bg-slate-700"
                 />
-                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <input
-                    id="imageFile"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      if (imagePreviewUrl) {
-                        URL.revokeObjectURL(imagePreviewUrl);
-                      }
-                      setImageFile(file);
-                      if (file) {
-                        const url = URL.createObjectURL(file);
-                        setImagePreviewUrl(url);
-                      } else {
-                        setImagePreviewUrl(null);
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-100 hover:file:bg-slate-700"
-                  />
-                  {imageFile && previewImageUrl && (
-                    <div className="flex items-center gap-2 text-xs text-slate-300">
-                      <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded-md bg-black/40">
-                        <img
-                          src={previewImageUrl}
-                          alt="Ausgewähltes Bild (verkleinerte Vorschau)"
-                          className="max-h-16 max-w-[6rem] object-contain"
-                        />
-                      </div>
-                      <span>Wird auf maximal ca. 250×150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
+                {imageFile && previewImageUrl && (
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <div className="flex h-10 w-16 items-center justify-center overflow-hidden rounded-md bg-black/40">
+                      <img
+                        src={previewImageUrl}
+                        alt="Ausgewähltes Bild (verkleinerte Vorschau)"
+                        className="max-h-10 max-w-[4rem] object-contain"
+                      />
                     </div>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400">
-                  Bitte lade nur Bilder hoch, an denen du die erforderlichen Nutzungsrechte besitzt (z.&nbsp;B. eigene
-                  Fotos oder lizenzierte Grafiken). Mit dem Upload bestätigst du, dass keine Urheberrechte verletzt
-                  werden und dass du für eventuelle Verstöße selbst verantwortlich bist.
-                </p>
+                    <span>Wird auf maximal ca. 250×150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
+                  </div>
+                )}
               </div>
-
-              <div className="space-y-2">
-                <label htmlFor="imageCredit" className="text-sm font-medium text-slate-100">
-                  Bildquelle / Urheberangabe (optional)
-                </label>
-                <input
-                  id="imageCredit"
-                  type="text"
-                  value={imageCredit}
-                  onChange={(e) => setImageCredit(e.target.value)}
-                  maxLength={140}
-                  className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder='z. B. "Foto: Name / Agentur"'
-                />
-                <p className="text-xs text-slate-400">
-                  Diese Angabe erscheint klein unter der Frage (z.&nbsp;B. in der Kachel und in der Detailansicht),
-                  damit die Bildquelle klar erkennbar ist.
-                </p>
-              </div>
+              <p className="text-xs text-slate-400">
+                Bitte lade nur Bilder hoch, an denen du die erforderlichen Nutzungsrechte besitzt (z.&nbsp;B. eigene Fotos
+                oder lizenzierte Grafiken). Mit dem Upload bestätigst du, dass keine Urheberrechte verletzt werden und
+                dass du für eventuelle Verstöße selbst verantwortlich bist.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -394,7 +439,7 @@ export default function NewDraftPage() {
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="z. B. Gesundheit, Bildung, Energie …"
+                  placeholder="z. B. Gesundheit, Bildung, Energie …"
                 />
               )}
             </div>
@@ -421,17 +466,19 @@ export default function NewDraftPage() {
                   value={customRegion}
                   onChange={(e) => setCustomRegion(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="z. B. Berlin, NRW, Bodensee-Region"
+                  placeholder="z. B. Berlin, NRW, Bodensee-Region"
                 />
               )}
               <p className="text-xs text-slate-400">
                 Du kannst hier wählen, für welche Region deine Prognose gedacht ist. Wenn du nichts änderst, gilt die
-                Frage global.
+                Frage global. Mit der letzten Option kannst du Stadt oder Region frei eingeben.
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-100">Review-Zeitraum</label>
+              <label className="text-sm font-medium text-slate-100">
+                Review-Zeitraum
+              </label>
               <div className="inline-flex rounded-full bg-white/5 p-1 text-xs">
                 <button
                   type="button"
@@ -530,7 +577,9 @@ export default function NewDraftPage() {
                       {title || "Dein Fragetitel erscheint hier."}
                     </h3>
                     {description && (
-                      <p className="text-xs text-slate-200 line-clamp-2">{description}</p>
+                      <p className="text-xs text-slate-200 line-clamp-2">
+                        {description}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -559,4 +608,3 @@ export default function NewDraftPage() {
     </main>
   );
 }
-
