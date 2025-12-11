@@ -13,6 +13,7 @@ type AuthUser =
       email: string;
       displayName: string;
       role?: "user" | "admin";
+      emailVerified?: boolean;
     }
   | null;
 
@@ -122,11 +123,20 @@ export default function AuthPage() {
           </p>
 
           {currentUser && (
-            <p className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-              Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span>{" "}
-              <span className="text-emerald-200">({currentUser.email})</span>. Du kannst die Seite normal nutzen oder
-              dich mit einem anderen Account einloggen.
-            </p>
+            <div className="mt-3 space-y-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+              <p>
+                Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span>{" "}
+                <span className="text-emerald-200">({currentUser.email})</span>. Du kannst die Seite normal nutzen oder
+                dich mit einem anderen Account einloggen.
+              </p>
+              {currentUser.emailVerified === false && (
+                <p className="text-[11px] text-amber-200">
+                  Deine E-Mail-Adresse ist noch <span className="font-semibold">nicht bestätigt</span>. Bitte klicke auf
+                  den Link in der Verifikations-E-Mail, die wir dir gerade geschickt haben. Ohne Bestätigung bleiben
+                  manche Funktionen in Zukunft eventuell eingeschränkt.
+                </p>
+              )}
+            </div>
           )}
 
           <div className="mt-4 inline-flex rounded-full bg-black/20 p-1 text-xs">
@@ -305,4 +315,3 @@ export default function AuthPage() {
     </main>
   );
 }
-
