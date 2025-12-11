@@ -23,6 +23,57 @@ function getPreviewCategoryLetter(category: string, customCategory: string, useC
   return value.charAt(0).toUpperCase() || "?";
 }
 
+async function resizeImageClientSide(file: File, maxWidth: number, maxHeight: number): Promise<Blob> {
+  // Datei als Data-URL einlesen
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
+    reader.readAsDataURL(file);
+  });
+
+  // Bild-Objekt laden
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Bild konnte nicht geladen werden."));
+    img.src = dataUrl;
+  });
+
+  const { width, height } = image;
+  if (!width || !height) {
+    throw new Error("Bild hat keine gültigen Abmessungen.");
+  }
+
+  // Skalierungsfaktor bestimmen (nicht vergrößern)
+  const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+  const targetWidth = Math.round(width * scale);
+  const targetHeight = Math.round(height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas-Kontext konnte nicht initialisiert werden.");
+  }
+
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) resolve(result);
+        else reject(new Error("Bild konnte nicht verkleinert werden."));
+      },
+      "image/jpeg",
+      0.8
+    );
+  });
+
+  return blob;
+}
+
 export default function NewDraftPage() {
   const router = useRouter();
 
@@ -171,29 +222,32 @@ export default function NewDraftPage() {
       }
     }
 
-    setSubmitting(true);
-    setError(null);
+      setSubmitting(true);
+      setError(null);
 
-    try {
-      let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
+      try {
+        let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
 
-      if (imageFile) {
-        const uploadData = new FormData();
-        uploadData.append("file", imageFile);
+        if (imageFile) {
+          // Bild bereits im Browser auf die Zielgröße (ca. 250x150, Seitenverhältnis bleibt erhalten) verkleinern
+          const resizedBlob = await resizeImageClientSide(imageFile, 250, 150);
 
-        const uploadRes = await fetch("/api/upload-image", {
-          method: "POST",
-          body: uploadData,
-        });
+          const uploadData = new FormData();
+          uploadData.append("file", resizedBlob, imageFile.name || "image.jpg");
 
-        const uploadJson = await uploadRes.json().catch(() => null);
-        if (!uploadRes.ok || !uploadJson || !uploadJson.imageUrl) {
-          setError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
-          return;
+          const uploadRes = await fetch("/api/upload-image", {
+            method: "POST",
+            body: uploadData,
+          });
+
+          const uploadJson = await uploadRes.json().catch(() => null);
+          if (!uploadRes.ok || !uploadJson || !uploadJson.imageUrl) {
+            setError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
+            return;
+          }
+
+          finalImageUrl = uploadJson.imageUrl;
         }
-
-        finalImageUrl = uploadJson.imageUrl;
-      }
 
       const res = await fetch("/api/drafts", {
         method: "POST",
