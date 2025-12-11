@@ -86,7 +86,7 @@ function EventCard({
 
   return (
     <article
-      className={`group relative flex h-full flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-emerald-500/10 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 ${
+      className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-emerald-500/10 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 mx-auto ${
         voted ? "border-emerald-300/50 shadow-emerald-400/30" : ""
       } ${
         isClosingSoon ? "border-amber-300/60 shadow-amber-400/30" : ""
@@ -228,7 +228,7 @@ function DraftCard({
       : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
 
   return (
-    <article className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30">
+    <article className="flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30 mx-auto">
       <div className="flex items-center justify-between text-xs text-slate-200">
         <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">{draft.timeLeftHours}h</span>
