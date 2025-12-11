@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createUserSessionSupabase, getUserByEmailSupabase } from "@/app/data/dbSupabaseUsers";
@@ -51,8 +50,7 @@ export async function POST(request: Request) {
       user: { id: user.id, email: user.email, displayName: user.displayName },
     });
 
-    const cookieStore = await cookies();
-    cookieStore.set("fv_user", sessionId, {
+    response.cookies.set("fv_user", sessionId, {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
