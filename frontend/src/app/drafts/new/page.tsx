@@ -257,36 +257,38 @@ export default function NewDraftPage() {
           </p>
 
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="title" className="text-sm font-medium text-slate-100">
-                Titel der Frage
-              </label>
-              <input
-                id="title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                placeholder="Wird X bis Ende 2026 passieren?"
-              />
-            </div>
+            <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
+              <div className="space-y-2">
+                <label htmlFor="title" className="text-sm font-medium text-slate-100">
+                  Titel der Frage
+                </label>
+                <input
+                  id="title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  placeholder="Wird X bis Ende 2026 passieren?"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label htmlFor="description" className="text-sm font-medium text-slate-100">
-                Beschreibung (optional)
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={5}
-                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                placeholder="Erkläre kurz, worum es bei der Prognose geht. Dieser Text erscheint später nur in der Detailansicht."
-              />
-              <p className="text-xs text-slate-400">
-                Dieser Text dient dazu, das Thema genauer zu erklären. Er wird nicht in der Kachel im Feed angezeigt,
-                sondern in der Detailansicht der Frage.
-              </p>
+              <div className="space-y-2">
+                <label htmlFor="description" className="text-sm font-medium text-slate-100">
+                  Beschreibung (optional)
+                </label>
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  placeholder="Erkläre kurz, worum es bei der Prognose geht. Dieser Text erscheint später nur in der Detailansicht."
+                />
+                <p className="text-xs text-slate-400">
+                  Dieser Text dient dazu, das Thema genauer zu erklären. Er wird nicht in der Kachel im Feed angezeigt,
+                  sondern in der Detailansicht der Frage.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
