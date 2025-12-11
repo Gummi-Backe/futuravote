@@ -31,12 +31,31 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser>(null);
   const [showTerms, setShowTerms] = useState(false);
+  const [verifyInfo, setVerifyInfo] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => setCurrentUser(data.user ?? null))
       .catch(() => setCurrentUser(null));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const verify = params.get("verify");
+    if (verify === "success") {
+      setVerifyInfo("Deine E-Mail-Adresse wurde erfolgreich bestätigt.");
+    } else if (verify === "invalid") {
+      setVerifyInfo("Der Verifikationslink ist ungültig oder abgelaufen.");
+    } else if (verify === "error") {
+      setVerifyInfo("Bei der E-Mail-Verifikation ist ein Fehler aufgetreten.");
+    } else if (verify === "missing") {
+      setVerifyInfo("Es wurde kein Verifikations-Token übermittelt.");
+    }
+    if (verify) {
+      window.history.replaceState(null, "", "/auth");
+    }
   }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -93,7 +112,9 @@ export default function AuthPage() {
       }
 
       setCurrentUser(data.user ?? null);
-      router.push("/");
+      if (mode === "login") {
+        router.push("/");
+      }
     } catch (err) {
       console.error(err);
       setError("Netzwerkfehler. Bitte versuche es erneut.");
