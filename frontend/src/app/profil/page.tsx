@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { ProfileRegionForm } from "./ProfileRegionForm";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function ProfilPage() {
           &larr; Zurück zum Feed
         </Link>
 
-        <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
+        <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Dein Profil</h1>
           <p className="mt-1 text-sm text-slate-300">
             Hier siehst du die wichtigsten Daten zu deinem Future-Vote-Account.
@@ -63,10 +64,12 @@ export default async function ProfilPage() {
             </div>
           </div>
 
+          <ProfileRegionForm initialRegion={user.defaultRegion ?? null} />
+
           <div className="mt-5 rounded-2xl bg-black/30 px-3 py-2 text-xs text-slate-300">
             <p className="font-semibold text-slate-100">Ausblick</p>
             <p>
-              In einer späteren Version können hier auch einfache Statistiken angezeigt werden, z. B. wie viele Fragen
+              In einer späteren Version können hier auch einfache Statistiken angezeigt werden, z. B. wie viele Fragen
               du vorgeschlagen hast, wie viele davon angenommen wurden oder wie aktiv du im Review-Bereich bist.
             </p>
           </div>
@@ -75,3 +78,4 @@ export default async function ProfilPage() {
     </main>
   );
 }
+

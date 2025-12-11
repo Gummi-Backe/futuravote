@@ -10,6 +10,7 @@ export type DbUser = {
   display_name: string;
   role: UserRole;
   created_at: string;
+   default_region: string | null;
 };
 
 export type User = {
@@ -18,6 +19,7 @@ export type User = {
   displayName: string;
   role: UserRole;
   createdAt: string;
+   defaultRegion: string | null;
 };
 
 export function mapUser(row: DbUser): User {
@@ -27,6 +29,7 @@ export function mapUser(row: DbUser): User {
     displayName: row.display_name,
     role: (row.role as UserRole) ?? "user",
     createdAt: row.created_at,
+    defaultRegion: row.default_region ?? null,
   };
 }
 
@@ -35,10 +38,12 @@ export async function createUserSupabase(input: {
   passwordHash: string;
   displayName: string;
   role?: UserRole;
+  defaultRegion?: string | null;
 }): Promise<User> {
   const supabase = getSupabaseClient();
   const id = randomUUID();
   const role: UserRole = input.role ?? "user";
+  const defaultRegion = input.defaultRegion ?? null;
 
   const { data, error } = await supabase
     .from("users")
@@ -48,6 +53,7 @@ export async function createUserSupabase(input: {
       password_hash: input.passwordHash,
       display_name: input.displayName,
       role,
+      default_region: defaultRegion,
     })
     .select("*")
     .maybeSingle();
@@ -125,7 +131,8 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
           password_hash,
           display_name,
           role,
-          created_at
+          created_at,
+          default_region
         )
       `
     )
@@ -139,4 +146,27 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
 
   const userRow = (data as any).users as DbUser;
   return mapUser(userRow);
+}
+
+export async function updateUserDefaultRegionSupabase(
+  userId: string,
+  region: string | null
+): Promise<User> {
+  const supabase = getSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("users")
+    .update({ default_region: region })
+    .eq("id", userId)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase updateUserDefaultRegion fehlgeschlagen: ${error.message}`);
+  }
+  if (!data) {
+    throw new Error("Supabase updateUserDefaultRegion lieferte keine Daten zurueck.");
+  }
+
+  return mapUser(data as DbUser);
 }
