@@ -95,9 +95,31 @@ export default function NewDraftPage() {
   const [submitting, setSubmitting] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  type CurrentUser =
+    | {
+        id: string;
+        email: string;
+        displayName: string;
+        emailVerified?: boolean;
+      }
+    | null;
+
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+
   const previewImageUrl = imagePreviewUrl || imageUrl || "";
 
   useEffect(() => {
+    // aktuellen User laden
+    setLoadingUser(true);
+    void fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => setCurrentUser(data.user ?? null))
+      .catch(() => setCurrentUser(null))
+      .finally(() => setLoadingUser(false));
+
     return () => {
       if (imagePreviewUrl) {
         URL.revokeObjectURL(imagePreviewUrl);
@@ -121,6 +143,30 @@ export default function NewDraftPage() {
     if (!target) return;
     if (target.tagName !== "TEXTAREA") {
       event.preventDefault();
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendStatus("sending");
+    setResendMessage(null);
+    try {
+      const res = await fetch("/api/auth/resend-verification", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Fehler beim Senden");
+      }
+      if (data.alreadyVerified) {
+        setResendMessage("Deine E-Mail-Adresse ist bereits bestätigt.");
+      } else {
+        setResendMessage(
+          "Ein neuer Verifikationslink wurde versendet. Bitte prüfe deine E-Mails (oder das Server-Log im Testmodus)."
+        );
+      }
+      setResendStatus("sent");
+    } catch (err) {
+      console.error(err);
+      setResendStatus("error");
+      setResendMessage("Verifikationslink konnte nicht gesendet werden. Bitte versuche es später noch einmal.");
     }
   };
 
@@ -285,6 +331,65 @@ export default function NewDraftPage() {
         </Link>
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
+          {loadingUser && (
+            <p className="mb-4 text-sm text-slate-300">Prüfe Login-Status...</p>
+          )}
+
+          {!loadingUser && !currentUser && (
+            <div className="mb-4 space-y-3 rounded-2xl border border-white/15 bg-black/40 p-4 text-sm text-slate-100">
+              <p>
+                Um eine Frage vorzuschlagen, musst du eingeloggt sein. Bitte melde dich an oder lege einen Account an.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push("/auth")}
+                  className="rounded-xl bg-emerald-500/80 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-emerald-500/40 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                >
+                  Zum Login / Register
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigateHome(false)}
+                  className="rounded-xl border border-white/30 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                >
+                  Zurück zum Feed
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!loadingUser && currentUser && currentUser.emailVerified === false && (
+            <div className="mb-4 space-y-3 rounded-2xl border border-amber-300/60 bg-amber-500/15 p-4 text-sm text-amber-50">
+              <p>
+                Deine E-Mail-Adresse ist noch <span className="font-semibold">nicht bestätigt</span>. Bitte klicke auf
+                den Link in der Verifikations-E-Mail. Erst nach der Bestätigung kannst du neue Fragen für den
+                Review-Bereich einreichen.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={resendStatus === "sending"}
+                  onClick={handleResendVerification}
+                  className="rounded-xl bg-amber-500/80 px-4 py-2 text-xs font-semibold text-slate-900 shadow-md shadow-amber-500/40 transition hover:-translate-y-0.5 hover:bg-amber-400 disabled:cursor-wait disabled:opacity-80"
+                >
+                  {resendStatus === "sending" ? "Sende Link..." : "Verifikationslink erneut senden"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push("/auth")}
+                  className="rounded-xl border border-amber-200/70 px-4 py-2 text-xs font-semibold text-amber-50 transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                >
+                  Zurück zur Anmeldung
+                </button>
+              </div>
+              {resendMessage && (
+                <p className="text-[11px] text-amber-100/90">
+                  {resendMessage}
+                </p>
+              )}
+            </div>
+          )}
           <div className="sticky top-4 z-20 mb-4">
             <div className="space-y-3 rounded-2xl border border-white/20 bg-slate-950/95 p-4 shadow-xl shadow-emerald-500/25">
               <div className="flex items-center justify-between gap-2">
@@ -303,6 +408,7 @@ export default function NewDraftPage() {
             Hauptabstimmung schafft.
           </p>
 
+          {currentUser && currentUser.emailVerified !== false && (
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
             <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
               <div className="space-y-2">
@@ -558,6 +664,7 @@ export default function NewDraftPage() {
               </button>
             </div>
           </form>
+          )}
         </section>
       </div>
     </main>
