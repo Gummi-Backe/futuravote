@@ -91,6 +91,7 @@ export default function NewDraftPage() {
   const [endDateTime, setEndDateTime] = useState<string>("");
 
   const [imageUrl, setImageUrl] = useState("");
+  const [imageCredit, setImageCredit] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
@@ -249,6 +250,8 @@ export default function NewDraftPage() {
           finalImageUrl = uploadJson.imageUrl;
         }
 
+      const trimmedImageCredit = imageCredit.trim();
+
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -258,6 +261,7 @@ export default function NewDraftPage() {
           category: finalCategory,
           region: finalRegion,
           imageUrl: finalImageUrl,
+          imageCredit: trimmedImageCredit || undefined,
           timeLeftHours: finalTimeLeftHours,
           closesAt: finalClosesAt,
         }),
@@ -312,6 +316,25 @@ export default function NewDraftPage() {
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                 placeholder="Wird X bis Ende 2026 passieren?"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="imageCredit" className="text-sm font-medium text-slate-100">
+                Bildquelle / Urheberangabe (optional)
+              </label>
+              <input
+                id="imageCredit"
+                type="text"
+                value={imageCredit}
+                onChange={(e) => setImageCredit(e.target.value)}
+                maxLength={140}
+                className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                placeholder='z. B. "Foto: Name / Agentur"'
+              />
+              <p className="text-xs text-slate-400">
+                Diese Angabe erscheint klein unter der Frage (z.&nbsp;B. in der Kachel und in der Detailansicht), damit
+                die Bildquelle klar erkennbar ist.
+              </p>
             </div>
 
             <div className="space-y-2">

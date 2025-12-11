@@ -56,12 +56,26 @@ create table if not exists public.users (
   password_hash text not null,
   display_name  text not null,
   role          text not null default 'user',
+  email_verified boolean not null default false,
   created_at    timestamptz not null default now()
 );
 
 -- Falls die Spalte fuer die Standard-Region noch fehlt, nachtraeglich anlegen
 alter table if exists public.users
   add column if not exists default_region text;
+
+-- Falls die Spalte fuer den Bestaetigungsstatus noch fehlt, nachtraeglich anlegen
+alter table if exists public.users
+  add column if not exists email_verified boolean not null default false;
+
+-- Token-Tabelle fuer spaetere E-Mail-Verifikation (noch nicht produktiv genutzt)
+create table if not exists public.email_verifications (
+  id          text primary key,
+  user_id     text not null references public.users(id) on delete cascade,
+  token       text not null unique,
+  expires_at  timestamptz not null,
+  created_at  timestamptz not null default now()
+);
 
 -- Login-Sessions fuer Nutzer
 create table if not exists public.user_sessions (
