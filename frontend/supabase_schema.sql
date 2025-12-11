@@ -59,10 +59,13 @@ create table if not exists public.users (
   created_at    timestamptz not null default now()
 );
 
+-- Falls die Spalte fuer die Standard-Region noch fehlt, nachtraeglich anlegen
+alter table if exists public.users
+  add column if not exists default_region text;
+
 -- Login-Sessions fuer Nutzer
 create table if not exists public.user_sessions (
   id         text primary key,
   user_id    text not null references public.users(id) on delete cascade,
   created_at timestamptz not null default now()
 );
-

@@ -200,7 +200,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Fragen und Drafts erhalten ein optionales Feld `region` (z. B. "Global", "Deutschland", "Bundesland", "Stadt/Region").
 - [x] Im Formular "Frage vorschlagen" kann eine Region gewaehlt werden (Standard: "Alle / Global"); Region wird zusammen mit der Frage gespeichert.
 - [x] Im Feed stehen Filter fuer Regionen zur Verfuegung (Chips oberhalb des Feeds), sodass Nutzer sich Fragen fuer eine bestimmte Region anzeigen lassen koennen; der Review-Bereich wird ebenfalls nach Region gefiltert.
-- [ ] Mit spaeterer Auth-Phase: Nutzer koennen eine Standard-Region im Profil hinterlegen; der Feed priorisiert Fragen aus der eigenen Region, zeigt global relevante Fragen aber weiterhin optional an.
+- [x] Mit spaeterer Auth-Phase: Nutzer koennen eine Standard-Region im Profil hinterlegen; der Feed priorisiert Fragen aus der eigenen Region, zeigt global relevante Fragen aber weiterhin optional an.
 - [ ] Region wird auch im Ranking beruecksichtigt (z. B. getrennte Scores pro Region oder unterschiedliche Tabs wie "Top global" / "Top in meiner Region").
 
 ### Persistente Datenbank / Migration von SQLite
@@ -209,10 +209,10 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Basis-Supabase-Client im Frontend angelegt (`src/app/lib/supabaseClient.ts`), der die Umgebungsvariablen `NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY` nutzt.
 - [x] Einmalige Synchronisation von SQLite nach Supabase fuer `questions` und `drafts` implementiert (`scripts/sync-sqlite-to-supabase.cjs`, npm-Skript `npm run sync:sqlite-to-supabase`).
 - [x] Eigenen Supabase-Datenpfad fuer Fragen/Votes implementiert (`src/app/data/dbSupabase.ts`) und API-Routen umgestellt: `/api/questions`, `/api/questions/[id]`, `/api/votes`, `/api/health`.
-- [ ] Umgebungsvariablen in Vercel setzen (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) und sicherstellen, dass sie **nicht** ins Git-Repo geraten.
-- [ ] Draft-/Admin-Operationen (Promote/Archivieren/Loeschen von Fragen) ebenfalls auf Supabase umstellen, so dass `questions` nicht mehr aus SQLite geschrieben wird.
-- [ ] User/Auth-Daten (users, user_sessions) auf Supabase verschieben und SQLite fuer neue Deployments komplett entfernen (nur noch als lokales Backup/Snapshot verwenden).
-- [ ] Vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Pruefen, ob alle produktiven Writes nur noch gegen Supabase laufen und SQLite abgeschaltet werden kann.
+- [x] Umgebungsvariablen in Vercel setzen (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) und sicherstellen, dass sie **nicht** ins Git-Repo geraten.
+- [x] Draft-/Admin-Operationen (Promote/Archivieren/Loeschen von Fragen) ebenfalls auf Supabase umstellen, so dass `questions` nicht mehr aus SQLite geschrieben wird.
+- [x] User/Auth-Daten (users, user_sessions) auf Supabase verschieben; die alte SQLite-Datei bleibt nur noch als lokales Backup/Snapshot erhalten und wird fuer neue Deployments nicht mehr verwendet.
+- [x] Vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Pruefen, ob alle produktiven Writes nur noch gegen Supabase laufen und SQLite abgeschaltet werden kann.
 - [ ] Supabase RLS & Policies einrichten: Row Level Security fuer `questions`, `votes`, `drafts`, `users`, `user_sessions` aktivieren und saubere Policies definieren (z. B. jeder darf Fragen lesen, Votes nur eigene sehen/schreiben, Userdaten nur serverseitig mit Service-Key), damit der anon-Key keine ungeschuetzten Zugriffe ermoeglicht.
 - [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die DB-Migration und RLS-Konfiguration vor dem naechsten Schritt sinnvoll/notwendig ist.
 - [x] Aktuell: SQLite-Datei pro Umgebung (`dev.db` lokal; ephemere Datei auf Vercel unter `/tmp/futuravote`), geeignet fuer MVP und interne Tests, aber nicht fuer laengerfristige Accounts in Produktion.
@@ -227,9 +227,8 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 
 ### Noch offene Punkte aus den letzten Sessions
 - [ ] Login-/Auth-Phase umsetzen: Frage vorschlagen und Draft-Review nur fuer eingeloggte Nutzer freischalten (siehe Phase 2/5)
-- [ ] Standard-Region im Profil und regionale Priorisierung im Feed (siehe Regionen-Abschnitt)
+- [x] Standard-Region im Profil und regionale Priorisierung im Feed (siehe Regionen-Abschnitt)
 - [ ] Erweiterter Datums-Picker fuer Review-Zeitraum: echtes Kalender-Widget, keine Auswahl in der Vergangenheit, gute Mobile-Bedienbarkeit
 - [ ] Bessere Fehler-UX beim Bild-Upload (Progress/Spinner, klare Hinweistexte bei zu grosser Datei oder ungueltigem Format)
 - [ ] Erweiterte Animationen: weichere Uebergaenge beim Wechsel zwischen Feed/Detail/Frage-vorschlagen, animierte Zahlen bei Vote- und View-Stats, visuelle Uebergaenge beim Statuswechsel von Drafts
 - [ ] Optional: Regionenauswahl spaeter ueber Karte oder interaktive Liste verfeinern (z. B. Land -> Bundesland -> Stadt)
-

@@ -317,7 +317,9 @@ function DraftCard({
   );
 }
 
-type CurrentUser = { id: string; email: string; displayName: string; role?: "user" | "admin" } | null;
+type CurrentUser =
+  | { id: string; email: string; displayName: string; role?: "user" | "admin"; defaultRegion?: string | null }
+  | null;
 
 export default function Home() {
   const router = useRouter();
@@ -344,6 +346,7 @@ export default function Home() {
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
   const [showReviewOnly, setShowReviewOnly] = useState(false);
+  const [hasAppliedDefaultRegion, setHasAppliedDefaultRegion] = useState(false);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const draftsEndRef = useRef<HTMLDivElement | null>(null);
   const tabs = useMemo(
@@ -480,6 +483,15 @@ export default function Home() {
       .then((data) => setCurrentUser(data.user ?? null))
       .catch(() => setCurrentUser(null));
   }, []);
+
+  useEffect(() => {
+    if (hasAppliedDefaultRegion) return;
+    if (!currentUser || !currentUser.defaultRegion) return;
+    if (!regionOptions.includes(currentUser.defaultRegion)) return;
+
+    setActiveRegion(currentUser.defaultRegion);
+    setHasAppliedDefaultRegion(true);
+  }, [currentUser, hasAppliedDefaultRegion, regionOptions]);
 
   const handleLogout = useCallback(async () => {
     try {
