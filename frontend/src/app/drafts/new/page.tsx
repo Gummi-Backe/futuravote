@@ -240,16 +240,63 @@ export default function NewDraftPage() {
 
   const currentCategoryLabel = (useCustomCategory ? customCategory : category) || "Kategorie";
 
+  const previewCard = (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-md shadow-emerald-500/10">
+      <div className="flex items-start gap-3 text-xs font-semibold text-slate-100">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-base text-emerald-100">
+          {getPreviewCategoryLetter(category, customCategory, useCustomCategory)}
+        </span>
+        <div className="flex flex-col leading-tight">
+          <span className="text-[10px] uppercase tracking-[0.18rem] text-slate-300">
+            {currentCategoryLabel}
+          </span>
+          <span className="text-xs text-slate-200">
+            {regionSelect === "__custom_region" ? customRegion || "Region" : regionSelect || "Global"}
+          </span>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-3">
+        {previewImageUrl && (
+          <div className="flex w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/30">
+            <img
+              src={previewImageUrl}
+              alt={title || "Vorschau-Bild"}
+              className="max-h-20 max-w-[6rem] object-contain"
+            />
+          </div>
+        )}
+        <div className="flex-1 space-y-1">
+          <h3 className="text-base font-bold leading-snug text-white">
+            {title || "Dein Fragetitel erscheint hier."}
+          </h3>
+          {description && <p className="text-xs text-slate-200 line-clamp-2">{description}</p>}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <main
       className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-slate-950 text-slate-50`}
     >
-      <div className="mx-auto max-w-3xl px-4 pb-16 pt-8">
+      <div className="mx-auto max-w-3xl px-4 pb-16 pt-8 lg:max-w-5xl">
         <Link href="/" className="inline-flex items-center text-sm text-emerald-100 hover:text-emerald-200">
           &larr; Zurück zum Feed
         </Link>
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
+          <div className="sticky top-4 z-20 mb-4">
+            <div className="space-y-3 rounded-2xl border border-white/20 bg-slate-950/95 p-4 shadow-xl shadow-emerald-500/25">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-white">Kachel-Vorschau</h2>
+                <span className="text-[11px] text-slate-400">
+                  So ungefähr wird deine Frage im Feed aussehen.
+                </span>
+              </div>
+              {previewCard}
+            </div>
+          </div>
+
           <h1 className="text-2xl font-bold text-white">Frage vorschlagen</h1>
           <p className="mt-1 text-sm text-slate-300">
             Formuliere eine neue Prognosefrage. Die Community entscheidet im Review-Bereich, ob sie es in die
@@ -329,7 +376,7 @@ export default function NewDraftPage() {
                       <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded-md bg-black/40">
                         <img
                           src={previewImageUrl}
-                          alt="Ausgewähltes Bild (verkleinerte Vorschau)"
+                          alt={title || "Vorschau-Bild"}
                           className="max-h-16 max-w-[6rem] object-contain"
                         />
                       </div>
@@ -494,51 +541,6 @@ export default function NewDraftPage() {
 
             {error && <p className="text-sm text-rose-300">{error}</p>}
 
-            <div className="mt-6 space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-white">Kachel-Vorschau</h2>
-                <span className="text-[11px] text-slate-400">
-                  So ungefähr wird deine Frage im Feed aussehen.
-                </span>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-md shadow-emerald-500/10">
-                <div className="flex items-start gap-3 text-xs font-semibold text-slate-100">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-base text-emerald-100">
-                    {getPreviewCategoryLetter(category, customCategory, useCustomCategory)}
-                  </span>
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-[10px] uppercase tracking-[0.18rem] text-slate-300">
-                      {currentCategoryLabel}
-                    </span>
-                    <span className="text-xs text-slate-200">
-                      {regionSelect === "__custom_region"
-                        ? customRegion || "Region"
-                        : regionSelect || "Global"}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-3 flex gap-3">
-                  {previewImageUrl && (
-                    <div className="flex w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/30">
-                      <img
-                        src={previewImageUrl}
-                        alt={title || "Vorschau-Bild"}
-                        className="max-h-20 max-w-[6rem] object-contain"
-                      />
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-1">
-                    <h3 className="text-base font-bold leading-snug text-white">
-                      {title || "Dein Fragetitel erscheint hier."}
-                    </h3>
-                    {description && (
-                      <p className="text-xs text-slate-200 line-clamp-2">{description}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="mt-6 flex items-center gap-3">
               <button
                 type="submit"
@@ -561,4 +563,3 @@ export default function NewDraftPage() {
     </main>
   );
 }
-
