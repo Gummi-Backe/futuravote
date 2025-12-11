@@ -1,7 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createUser, createUserSession, getUserByEmail, hasAdminUser } from "@/app/data/db";
 import crypto from "crypto";
+import {
+  createUserSessionSupabase,
+  createUserSupabase,
+  getUserByEmailSupabase,
+  hasAdminUserSupabase,
+  type UserRole,
+} from "@/app/data/dbSupabaseUsers";
 
 export const revalidate = 0;
 
@@ -22,7 +28,7 @@ export async function POST(request: Request) {
   const trimmedName = (displayName ?? "").trim();
 
   if (!trimmedEmail || !trimmedEmail.includes("@")) {
-    return NextResponse.json({ error: "Bitte gib eine gueltige E-Mail-Adresse ein." }, { status: 400 });
+    return NextResponse.json({ error: "Bitte gib eine gültige E-Mail-Adresse ein." }, { status: 400 });
   }
   if (!trimmedName || trimmedName.length < 3) {
     return NextResponse.json(
@@ -37,40 +43,53 @@ export async function POST(request: Request) {
     );
   }
 
-  const existing = getUserByEmail(trimmedEmail);
-  if (existing) {
+  try {
+    const existing = await getUserByEmailSupabase(trimmedEmail);
+    if (existing) {
+      return NextResponse.json(
+        { error: "Es existiert bereits ein Account mit dieser E-Mail-Adresse." },
+        { status: 400 }
+      );
+    }
+
+    const passwordHash = hashPassword(password);
+
+    const adminEmailEnv = process.env.FV_ADMIN_EMAIL?.trim().toLowerCase();
+    let role: UserRole = "user";
+    if (adminEmailEnv && adminEmailEnv === trimmedEmail) {
+      role = "admin";
+    } else if (!adminEmailEnv && !(await hasAdminUserSupabase())) {
+      // Wenn noch kein Admin existiert und keine spezielle Admin-E-Mail konfiguriert ist,
+      // wird der erste angelegte Account Admin.
+      role = "admin";
+    }
+
+    const user = await createUserSupabase({
+      email: trimmedEmail,
+      passwordHash,
+      displayName: trimmedName,
+      role,
+    });
+    const sessionId = await createUserSessionSupabase(user.id);
+
+    const response = NextResponse.json({
+      user: { id: user.id, email: user.email, displayName: user.displayName },
+    });
+
+    const cookieStore = await cookies();
+    cookieStore.set("fv_user", sessionId, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Register (Supabase) failed", error);
     return NextResponse.json(
-      { error: "Es existiert bereits ein Account mit dieser E-Mail-Adresse." },
-      { status: 400 }
+      { error: "Registrierung ist fehlgeschlagen. Bitte versuche es erneut." },
+      { status: 500 }
     );
   }
-
-  const passwordHash = hashPassword(password);
-
-  const adminEmailEnv = process.env.FV_ADMIN_EMAIL?.trim().toLowerCase();
-  let role: "user" | "admin" = "user";
-  if (adminEmailEnv && adminEmailEnv === trimmedEmail) {
-    role = "admin";
-  } else if (!adminEmailEnv && !hasAdminUser()) {
-    // Wenn noch kein Admin existiert und keine spezielle Admin-E-Mail konfiguriert ist,
-    // wird der erste angelegte Account Admin.
-    role = "admin";
-  }
-
-  const user = createUser({ email: trimmedEmail, passwordHash, displayName: trimmedName, role });
-  const sessionId = createUserSession(user.id);
-
-  const response = NextResponse.json({
-    user: { id: user.id, email: user.email, displayName: user.displayName },
-  });
-
-  const cookieStore = await cookies();
-  cookieStore.set("fv_user", sessionId, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-
-  return response;
 }
