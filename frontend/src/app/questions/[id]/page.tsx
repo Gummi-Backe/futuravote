@@ -245,10 +245,10 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
 
         <section className="mt-8 grid gap-4 sm:grid-cols-2">
           <button className="card-button yes opacity-70 cursor-not-allowed" disabled>
-            Ja (bald verfuegbar)
+            Ja (bald verfügbar)
           </button>
           <button className="card-button no opacity-70 cursor-not-allowed" disabled>
-            Nein (bald verfuegbar)
+            Nein (bald verfügbar)
           </button>
         </section>
       </div>
