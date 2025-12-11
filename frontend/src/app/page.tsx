@@ -1022,6 +1022,11 @@ export default function Home() {
             </button>
           )}
         </div>
+        {currentUser?.defaultRegion && activeRegion === currentUser.defaultRegion && (
+          <p className="mt-1 text-[11px] text-emerald-200">
+            Gefiltert nach deiner Standard-Region <span className="font-semibold">{currentUser.defaultRegion}</span>.
+          </p>
+        )}
 
         {!showReviewOnly && (
           <section className="mt-8 space-y-4">

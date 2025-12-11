@@ -9,6 +9,7 @@ export type DbUser = {
   password_hash: string;
   display_name: string;
   role: UserRole;
+  email_verified: boolean;
   created_at: string;
    default_region: string | null;
 };
@@ -19,6 +20,7 @@ export type User = {
   displayName: string;
   role: UserRole;
   createdAt: string;
+  emailVerified: boolean;
    defaultRegion: string | null;
 };
 
@@ -28,6 +30,7 @@ export function mapUser(row: DbUser): User {
     email: row.email,
     displayName: row.display_name,
     role: (row.role as UserRole) ?? "user",
+    emailVerified: Boolean(row.email_verified),
     createdAt: row.created_at,
     defaultRegion: row.default_region ?? null,
   };
@@ -131,6 +134,7 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
           password_hash,
           display_name,
           role,
+          email_verified,
           created_at,
           default_region
         )

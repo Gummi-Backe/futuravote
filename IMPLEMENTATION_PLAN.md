@@ -27,7 +27,7 @@
 - [x] Backend-Endpoints fuer Registrierung/Login inkl. sicherem Passwort-Hashing und Session-Cookies (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`).
 - [x] Einfache Profilseite (`/profil`) fuer eingeloggte Nutzer: Anzeige von E-Mail, Anzeige-Name, Rolle und Registrierungsdatum; Link ueber den Namen/Avatar im Header und von der Auth-Seite aus erreichbar.
 - [ ] Profil-Statistiken ergaenzen: spaeter im Profil einfache Uebersicht anzeigen (z. B. Anzahl vorgeschlagener Fragen, wie viele davon angenommen wurden, Anzahl abgegebener Reviews/Votes und ggf. ein einfacher Vertrauens-Score). Diese Werte werden aus der echten Produktionsdatenbank berechnet, sobald die Plattform ernsthaft genutzt wird.
-- [ ] E-Mail-Verifizierung ergaenzen: nach Registrierung Bestaetigungslink verschicken; Draft-Einreichung/Review nur nach verifizierter E-Mail erlauben.
+- [ ] E-Mail-Verifizierung ergaenzen: nach Registrierung Bestaetigungslink verschicken (zusaetzliche Tabelle `email_verifications` + Feld `email_verified` in `users`); Draft-Einreichung/Review und spaeter auch Login nur nach verifizierter E-Mail erlauben.
 - [ ] Passwort-Reset-Flow (Passwort vergessen) mit E-Mail-Link planen und spaeter umsetzen.
 
 ## Phase 3: Datenmodell & API
