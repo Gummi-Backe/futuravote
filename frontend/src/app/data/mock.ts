@@ -11,6 +11,10 @@ export type Question = {
    * Optionale Bild-URL fuer ein kleines Vorschaubild.
    */
   imageUrl?: string;
+  /**
+   * Optionale Quellenangabe / Urheberhinweis fuer das Bild.
+   */
+  imageCredit?: string;
   category: string;
   categoryIcon: string;
   categoryColor: string;
@@ -38,6 +42,10 @@ export type Draft = {
    * Optionale Bild-URL fuer das Draft-Vorschaubild.
    */
   imageUrl?: string;
+  /**
+   * Optionale Quellenangabe / Urheberhinweis fuer das Bild.
+   */
+  imageCredit?: string;
   category: string;
   votesFor: number;
   votesAgainst: number;

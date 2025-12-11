@@ -25,6 +25,8 @@
   - Link zu einer Seite mit den Nutzungsbedingungen (`/terms`) direkt auf der Registrierungsansicht sichtbar.
 - [x] Implementierung der schlanken Registrierung/Anmeldung mit diesen Feldern im Frontend (Formulare, Validierung, Fehlertexte) inkl. einfacher Login-Status-Anzeige und Logout-Button im Header.
 - [x] Backend-Endpoints fuer Registrierung/Login inkl. sicherem Passwort-Hashing und Session-Cookies (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`).
+- [x] Einfache Profilseite (`/profil`) fuer eingeloggte Nutzer: Anzeige von E-Mail, Anzeige-Name, Rolle und Registrierungsdatum; Link ueber den Namen/Avatar im Header und von der Auth-Seite aus erreichbar.
+- [ ] Profil-Statistiken ergaenzen: spaeter im Profil einfache Uebersicht anzeigen (z. B. Anzahl vorgeschlagener Fragen, wie viele davon angenommen wurden, Anzahl abgegebener Reviews/Votes und ggf. ein einfacher Vertrauens-Score). Diese Werte werden aus der echten Produktionsdatenbank berechnet, sobald die Plattform ernsthaft genutzt wird.
 - [ ] E-Mail-Verifizierung ergaenzen: nach Registrierung Bestaetigungslink verschicken; Draft-Einreichung/Review nur nach verifizierter E-Mail erlauben.
 - [ ] Passwort-Reset-Flow (Passwort vergessen) mit E-Mail-Link planen und spaeter umsetzen.
 
@@ -161,9 +163,10 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Draft-Review-Interaktion (Gute Frage/Ablehnen) an Backend angebunden; Votes werden in SQLite gespeichert
 - [x] Einfache Auto-Promotion: ab Mindestanzahl/Kanten (>=5 Reviews, deutlich mehr "Gute Frage" als "Ablehnen") wird Draft als neue Frage in `questions` uebernommen
 - [x] Draft-Status/Filter im Review-Bereich (Offen/Angenommen/Abgelehnt) inkl. visueller Badges in den Karten
-- [x] Formular "Frage vorschlagen" mit zusaetzlicher Validierung (Mindestlaenge Titel/Beschreibung, minimale Laenge fuer eigene Kategorien) und Erfolgshinweis im Feed nach erfolgreichem Einreichen (via Toast)
-- [x] Einfache Admin-Light-Unterstuetzung: Admin-Rolle pro User in SQLite, erster (oder via FV_ADMIN_EMAIL definierter) Account wird Admin; Admins sehen ein Badge im Header und koennen Drafts im Review-Bereich direkt annehmen/ablehnen (Server-seitig abgesichert ueber /api/admin/drafts)
-- [x] Admin-Hard-Delete & Stoppen: Admins koennen Drafts im Review-Bereich endgueltig loeschen (inkl. zugehoeriger Vorschaubilder auf dem Server) sowie fertige Fragen ueber eine eigene Admin-Sektion der Detailseite stoppen (Status "archived", verschwindet aus dem Feed) oder in Ausnahmefaellen komplett entfernen (Frage + Bild werden aus der SQLite-DB und dem Images-Verzeichnis geloescht); technisch umgesetzt ueber erweiterte Draft-Route (`/api/admin/drafts` mit Action `delete`) und neue Questions-Route (`/api/admin/questions` mit Actions `archive`/`delete`), jeweils nur fuer Admin-User zugaenglich.
+ - [x] Formular "Frage vorschlagen" mit zusaetzlicher Validierung (Mindestlaenge Titel/Beschreibung, minimale Laenge fuer eigene Kategorien) und Erfolgshinweis im Feed nach erfolgreichem Einreichen (via Toast)
+ - [x] Einfache Admin-Light-Unterstuetzung: Admin-Rolle pro User in SQLite, erster (oder via FV_ADMIN_EMAIL definierter) Account wird Admin; Admins sehen ein Badge im Header und koennen Drafts im Review-Bereich direkt annehmen/ablehnen (Server-seitig abgesichert ueber /api/admin/drafts)
+ - [x] Admin-Hard-Delete & Stoppen: Admins koennen Drafts im Review-Bereich endgueltig loeschen (inkl. zugehoeriger Vorschaubilder auf dem Server) sowie fertige Fragen ueber eine eigene Admin-Sektion der Detailseite stoppen (Status "archived", verschwindet aus dem Feed) oder in Ausnahmefaellen komplett entfernen (Frage + Bild werden aus der SQLite-DB und dem Images-Verzeichnis geloescht); technisch umgesetzt ueber erweiterte Draft-Route (`/api/admin/drafts` mit Action `delete`) und neue Questions-Route (`/api/admin/questions` mit Actions `archive`/`delete`), jeweils nur fuer Admin-User zugaenglich.
+ - [ ] Optionales Layout-Upgrade fuer `/drafts/new`: auf groesseren Screens (ab ca. Tablet-Breite) Kachel-Vorschau als sticky Sidebar rechts neben dem Formular anzeigen, waehrend auf kleineren Screens die bisherige Darstellung (Vorschau unter dem Formular) beibehalten wird. Nur umsetzen, wenn genug Zeit fuer sauberes Responsive-Testing vorhanden ist, da Tastatur/Viewport auf Mobilgeraeten sensibel reagieren.
 ### UI/UX Umsetzung (Stand)
 - [x] Kacheln mit mehr Hierarchie: Abstand/Shadow, Titel groesser, Kategorie-Badge + Icon, Countdown-Badge, Trending/Top/Neu markiert.
 - [x] Vote-Buttons app-haft: groesser, Ja/Nein farbig, animiertes Feedback.
@@ -202,6 +205,17 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 
 ### Persistente Datenbank / Migration von SQLite
 - [x] Aktuell: SQLite-Datei pro Umgebung (`dev.db` lokal; ephemere Datei auf Vercel unter `/tmp/futuravote`), geeignet fuer MVP und interne Tests, aber nicht fuer laengerfristige Accounts in Produktion.
+- [x] Supabase-Projekt fuer Future-Vote angelegt (Region: EU/Frankfurt), Zugangsdaten sicher im Passwortmanager hinterlegt.
+- [x] Basis-Supabase-Client im Frontend angelegt (`src/app/lib/supabaseClient.ts`), der die Umgebungsvariablen `NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY` nutzt.
+- [x] Einmalige Synchronisation von SQLite nach Supabase fuer `questions` und `drafts` implementiert (`scripts/sync-sqlite-to-supabase.cjs`, npm-Skript `npm run sync:sqlite-to-supabase`).
+- [x] Eigenen Supabase-Datenpfad fuer Fragen/Votes implementiert (`src/app/data/dbSupabase.ts`) und API-Routen umgestellt: `/api/questions`, `/api/questions/[id]`, `/api/votes`, `/api/health`.
+- [ ] Umgebungsvariablen in Vercel setzen (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) und sicherstellen, dass sie **nicht** ins Git-Repo geraten.
+- [ ] Draft-/Admin-Operationen (Promote/Archivieren/Loeschen von Fragen) ebenfalls auf Supabase umstellen, so dass `questions` nicht mehr aus SQLite geschrieben wird.
+- [ ] User/Auth-Daten (users, user_sessions) auf Supabase verschieben und SQLite fuer neue Deployments komplett entfernen (nur noch als lokales Backup/Snapshot verwenden).
+- [ ] Vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Pruefen, ob alle produktiven Writes nur noch gegen Supabase laufen und SQLite abgeschaltet werden kann.
+- [ ] Supabase RLS & Policies einrichten: Row Level Security fuer `questions`, `votes`, `drafts`, `users`, `user_sessions` aktivieren und saubere Policies definieren (z. B. jeder darf Fragen lesen, Votes nur eigene sehen/schreiben, Userdaten nur serverseitig mit Service-Key), damit der anon-Key keine ungeschuetzten Zugriffe ermoeglicht.
+- [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die DB-Migration und RLS-Konfiguration vor dem naechsten Schritt sinnvoll/notwendig ist.
+- [x] Aktuell: SQLite-Datei pro Umgebung (`dev.db` lokal; ephemere Datei auf Vercel unter `/tmp/futuravote`), geeignet fuer MVP und interne Tests, aber nicht fuer laengerfristige Accounts in Produktion.
 - [ ] Spaetestens vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Umstellung auf eine persistente DB (z. B. Postgres bei Supabase/Neon/Vercel Postgres), inkl. Migration der Tabellen `questions`, `drafts`, `users`, `user_sessions`, `votes`.
 - [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die DB-Migration vor dem naechsten Schritt sinnvoll/notwendig ist.
 ### Detailseite (Stand)
@@ -218,3 +232,4 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [ ] Bessere Fehler-UX beim Bild-Upload (Progress/Spinner, klare Hinweistexte bei zu grosser Datei oder ungueltigem Format)
 - [ ] Erweiterte Animationen: weichere Uebergaenge beim Wechsel zwischen Feed/Detail/Frage-vorschlagen, animierte Zahlen bei Vote- und View-Stats, visuelle Uebergaenge beim Statuswechsel von Drafts
 - [ ] Optional: Regionenauswahl spaeter ueber Karte oder interaktive Liste verfeinern (z. B. Land -> Bundesland -> Stadt)
+

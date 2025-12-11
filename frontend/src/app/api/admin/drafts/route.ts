@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { adminAcceptDraft, adminDeleteDraft, adminRejectDraft, getUserBySession } from "@/app/data/db";
+import { getUserBySession } from "@/app/data/db";
+import {
+  adminAcceptDraftInSupabase,
+  adminDeleteDraftInSupabase,
+  adminRejectDraftInSupabase,
+} from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
 
@@ -36,11 +41,11 @@ export async function POST(request: Request) {
 
   let draft;
   if (action === "accept") {
-    draft = adminAcceptDraft(draftId);
+    draft = await adminAcceptDraftInSupabase(draftId);
   } else if (action === "reject") {
-    draft = adminRejectDraft(draftId);
+    draft = await adminRejectDraftInSupabase(draftId);
   } else if (action === "delete") {
-    draft = adminDeleteDraft(draftId);
+    draft = await adminDeleteDraftInSupabase(draftId);
   } else {
     return NextResponse.json({ error: "Unbekannte Admin-Aktion." }, { status: 400 });
   }

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS questions (
   description TEXT,
   region TEXT,
   imageUrl TEXT,
+  imageCredit TEXT,
   category TEXT NOT NULL,
   categoryIcon TEXT NOT NULL,
   categoryColor TEXT NOT NULL,
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS drafts (
   description TEXT,
   region TEXT,
   imageUrl TEXT,
+  imageCredit TEXT,
   category TEXT NOT NULL,
   votesFor INTEGER NOT NULL DEFAULT 0,
   votesAgainst INTEGER NOT NULL DEFAULT 0,
@@ -110,6 +112,14 @@ if (!hasImageUrl) {
     // Spalte existiert bereits.
   }
 }
+const hasImageCredit = columns.some((c) => c.name === "imageCredit");
+if (!hasImageCredit) {
+  try {
+    db.exec("ALTER TABLE questions ADD COLUMN imageCredit TEXT");
+  } catch {
+    // Spalte existiert bereits.
+  }
+}
 
 // Backfill description / status column for drafts if missing.
 const draftColumns = db.prepare("PRAGMA table_info(drafts)").all() as { name: string }[];
@@ -145,6 +155,14 @@ if (!draftsHaveTargetClosesAt) {
     // Spalte existiert bereits.
   }
 }
+const draftsHaveImageCredit = draftColumns.some((c) => c.name === "imageCredit");
+if (!draftsHaveImageCredit) {
+  try {
+    db.exec("ALTER TABLE drafts ADD COLUMN imageCredit TEXT");
+  } catch {
+    // Spalte existiert bereits.
+  }
+}
 
 // Backfill role column for users if missing.
 const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
@@ -162,8 +180,8 @@ const countStmt = db.prepare("SELECT COUNT(*) as cnt FROM questions");
 const hasQuestions = ((countStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasQuestions) {
   const insert = db.prepare(
-    `INSERT INTO questions (id, title, summary, description, region, imageUrl, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-     VALUES (@id, @title, @summary, @description, @region, @imageUrl, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
+    `INSERT INTO questions (id, title, summary, description, region, imageUrl, imageCredit, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+     VALUES (@id, @title, @summary, @description, @region, @imageUrl, @imageCredit, @category, @categoryIcon, @categoryColor, @closesAt, @yesVotes, @noVotes, @views, @status)`
   );
   const baseline = 120;
   for (const q of allQuestions) {
@@ -173,6 +191,7 @@ if (!hasQuestions) {
       ...q,
       region: q.region ?? null,
       imageUrl: q.imageUrl ?? null,
+      imageCredit: (q as any).imageCredit ?? null,
       yesVotes,
       noVotes,
       views: q.views ?? 0,
@@ -188,6 +207,7 @@ type QuestionRow = {
   description?: string | null;
   region?: string | null;
   imageUrl?: string | null;
+  imageCredit?: string | null;
   category: string;
   categoryIcon: string;
   categoryColor: string;
@@ -206,6 +226,7 @@ type DraftRow = {
   description?: string | null;
   region?: string | null;
   imageUrl?: string | null;
+  imageCredit?: string | null;
   category: string;
   votesFor: number;
   votesAgainst: number;
@@ -300,6 +321,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     description: row.description ?? undefined,
     region: row.region ?? undefined,
     imageUrl: row.imageUrl ?? undefined,
+    imageCredit: row.imageCredit ?? undefined,
     category: row.category,
     categoryIcon: row.categoryIcon,
     categoryColor: row.categoryColor,
@@ -321,14 +343,15 @@ const draftCountStmt = db.prepare("SELECT COUNT(*) as cnt FROM drafts");
 const hasDrafts = ((draftCountStmt.get() as { cnt: number | null })?.cnt ?? 0) > 0;
 if (!hasDrafts) {
   const insertDraft = db.prepare(
-    `INSERT INTO drafts (id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status)
-     VALUES (@id, @title, @description, @region, @imageUrl, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
+    `INSERT INTO drafts (id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status)
+     VALUES (@id, @title, @description, @region, @imageUrl, @imageCredit, @category, @votesFor, @votesAgainst, @timeLeftHours, 'open')`
   );
   for (const d of draftQueue) {
     insertDraft.run({
       ...d,
       region: d.region ?? null,
       imageUrl: d.imageUrl ?? null,
+      imageCredit: (d as any).imageCredit ?? null,
     });
   }
 }
@@ -336,7 +359,7 @@ if (!hasDrafts) {
 export function getDrafts(): Draft[] {
   const rows = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, targetClosesAt, status FROM drafts"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, targetClosesAt, status FROM drafts"
     )
     .all() as DraftRow[];
   return rows.map((row) => ({
@@ -345,6 +368,7 @@ export function getDrafts(): Draft[] {
     description: row.description ?? undefined,
     region: row.region ?? undefined,
     imageUrl: row.imageUrl ?? undefined,
+    imageCredit: row.imageCredit ?? undefined,
     category: row.category,
     votesFor: row.votesFor,
     votesAgainst: row.votesAgainst,
@@ -359,6 +383,7 @@ export function createDraft(input: {
   description?: string;
   region?: string;
   imageUrl?: string;
+  imageCredit?: string;
   timeLeftHours?: number;
   targetClosesAt?: string;
   }): Draft {
@@ -373,6 +398,7 @@ export function createDraft(input: {
     description: input.description,
     region: input.region,
     imageUrl: input.imageUrl,
+    imageCredit: input.imageCredit,
     category: input.category,
     votesFor: 0,
     votesAgainst: 0,
@@ -380,13 +406,14 @@ export function createDraft(input: {
     status: "open",
   };
   db.prepare(
-    "INSERT INTO drafts (id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, targetClosesAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO drafts (id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, targetClosesAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
     draft.id,
     draft.title,
     draft.description ?? null,
     draft.region ?? null,
     draft.imageUrl ?? null,
+    draft.imageCredit ?? null,
     draft.category,
     draft.votesFor,
     draft.votesAgainst,
@@ -419,8 +446,8 @@ function maybePromoteDraft(row: DraftRow) {
     const summary = row.region ? `${row.category} · ${row.region}` : row.category;
 
     db.prepare(
-      `INSERT OR IGNORE INTO questions (id, title, summary, description, region, imageUrl, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR IGNORE INTO questions (id, title, summary, description, region, imageUrl, imageCredit, category, categoryIcon, categoryColor, closesAt, yesVotes, noVotes, views, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       questionId,
       row.title,
@@ -428,6 +455,7 @@ function maybePromoteDraft(row: DraftRow) {
       row.description ?? null,
       row.region ?? null,
       row.imageUrl ?? null,
+      row.imageCredit ?? null,
       row.category,
       cat?.icon ?? "?",
       cat?.color ?? "#22c55e",
@@ -457,7 +485,7 @@ export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null
 
   const row = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   if (!row) return null;
@@ -466,7 +494,7 @@ export function voteOnDraft(id: string, choice: DraftReviewChoice): Draft | null
 
   const updatedRow = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   const effective = updatedRow ?? row;
@@ -503,7 +531,7 @@ function mapDraftRow(row: DraftRow): Draft {
 export function adminAcceptDraft(id: string): Draft | null {
   const row = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   if (!row) return null;
@@ -546,7 +574,7 @@ export function adminAcceptDraft(id: string): Draft | null {
 
   const updated = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   return updated ? mapDraftRow(updated) : mapDraftRow(row);
@@ -555,7 +583,7 @@ export function adminAcceptDraft(id: string): Draft | null {
 export function adminRejectDraft(id: string): Draft | null {
   const row = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   if (!row) return null;
@@ -566,7 +594,7 @@ export function adminRejectDraft(id: string): Draft | null {
 
   const updated = db
     .prepare(
-      "SELECT id, title, description, region, imageUrl, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
+      "SELECT id, title, description, region, imageUrl, imageCredit, category, votesFor, votesAgainst, timeLeftHours, status FROM drafts WHERE id = ?"
     )
     .get(id) as DraftRow | undefined;
   return updated ? mapDraftRow(updated) : mapDraftRow(row);

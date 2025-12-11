@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getUserBySession } from "@/app/data/db";
 import {
-  adminArchiveQuestion,
-  adminDeleteQuestion,
-  getUserBySession,
-} from "@/app/data/db";
+  adminArchiveQuestionInSupabase,
+  adminDeleteQuestionInSupabase,
+} from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
 
@@ -43,9 +43,9 @@ export async function POST(request: Request) {
 
   let question;
   if (action === "archive") {
-    question = adminArchiveQuestion(questionId);
+    question = await adminArchiveQuestionInSupabase(questionId);
   } else if (action === "delete") {
-    question = adminDeleteQuestion(questionId);
+    question = await adminDeleteQuestionInSupabase(questionId);
   } else {
     return NextResponse.json({ error: "Unbekannte Admin-Aktion." }, { status: 400 });
   }
@@ -56,4 +56,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ question });
 }
-

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createDraft, getUserBySession } from "@/app/data/db";
+import { getUserBySession } from "@/app/data/db";
+import { createDraftInSupabase } from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
 
@@ -10,6 +11,7 @@ type DraftInput = {
   category?: string;
   region?: string;
   imageUrl?: string;
+  imageCredit?: string;
   timeLeftHours?: number;
   closesAt?: string;
 };
@@ -19,7 +21,7 @@ export async function POST(request: Request) {
   const sessionId = cookieStore.get("fv_user")?.value;
   if (!sessionId || !getUserBySession(sessionId)) {
     return NextResponse.json(
-      { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
+      { error: "Bitte melde dich an, bevor du eine Frage vorschlaegst." },
       { status: 401 }
     );
   }
@@ -38,6 +40,7 @@ export async function POST(request: Request) {
   const imageUrlRaw = (body.imageUrl ?? "").trim();
   const imageUrl =
     imageUrlRaw && imageUrlRaw.length > 4 && imageUrlRaw.length < 500 ? imageUrlRaw : undefined;
+  const imageCredit = (body.imageCredit ?? "").trim() || undefined;
   const closesAtRaw = (body.closesAt ?? "").trim();
   const targetClosesAt =
     closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
@@ -54,6 +57,16 @@ export async function POST(request: Request) {
       ? body.timeLeftHours
       : 72;
 
-  const draft = createDraft({ title, category, description, region, imageUrl, timeLeftHours, targetClosesAt });
+  const draft = await createDraftInSupabase({
+    title,
+    category,
+    description,
+    region,
+    imageUrl,
+    imageCredit,
+    timeLeftHours,
+    targetClosesAt,
+  });
   return NextResponse.json({ draft }, { status: 201 });
 }
+
