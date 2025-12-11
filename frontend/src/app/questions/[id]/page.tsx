@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import type { Question } from "@/app/data/mock";
-import { getUserBySession } from "@/app/data/db";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import AdminControls from "./AdminControls";
 
 export const dynamic = "force-dynamic";
@@ -90,17 +90,17 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-export default async function QuestionDetail(props: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await props.params;
-  const { id } = resolvedParams;
-  const question = await fetchQuestion(id);
-  if (!question) {
-    notFound();
-  }
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get("fv_user")?.value;
-  const currentUser = sessionId ? getUserBySession(sessionId) : null;
-  const isAdmin = currentUser?.role === "admin";
+  export default async function QuestionDetail(props: { params: Promise<{ id: string }> }) {
+    const resolvedParams = await props.params;
+    const { id } = resolvedParams;
+    const question = await fetchQuestion(id);
+    if (!question) {
+      notFound();
+    }
+    const cookieStore = await cookies();
+    const sessionId = cookieStore.get("fv_user")?.value;
+    const currentUser = sessionId ? await getUserBySessionSupabase(sessionId) : null;
+    const isAdmin = currentUser?.role === "admin";
   const votedLabel =
     question.userChoice === "yes" ? "Du hast Ja gestimmt" : question.userChoice === "no" ? "Du hast Nein gestimmt" : null;
 

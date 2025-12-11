@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getUserBySession } from "@/app/data/db";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import {
   adminAcceptDraftInSupabase,
   adminDeleteDraftInSupabase,
@@ -17,11 +17,11 @@ type AdminDraftBody = {
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
-  const user = sessionId ? getUserBySession(sessionId) : null;
+  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
     return NextResponse.json(
-      { error: "Nur Admins duerfen diese Aktion ausfuehren." },
+      { error: "Nur Admins dürfen diese Aktion ausführen." },
       { status: 403 }
     );
   }
@@ -30,13 +30,13 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as AdminDraftBody;
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const draftId = body.draftId?.trim();
   const action = body.action;
   if (!draftId || !action) {
-    return NextResponse.json({ error: "Draft-ID oder Aktion fehlt/ungueltig." }, { status: 400 });
+    return NextResponse.json({ error: "Draft-ID oder Aktion fehlt/ungültig." }, { status: 400 });
   }
 
   let draft;
