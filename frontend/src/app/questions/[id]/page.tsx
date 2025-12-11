@@ -126,7 +126,7 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-10 lg:px-6">
         <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
-          &larr; Zurueck zum Feed
+          &larr; Zurück zum Feed
         </Link>
 
         <header className="mt-4 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 px-6 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
@@ -156,17 +156,20 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
           </div>
           <div className="mt-4 flex gap-4">
             {question.imageUrl && (
-              <div className="flex w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+              <div className="inline-flex max-h-24 max-w-[7rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
                 <img
                   src={question.imageUrl}
                   alt={question.title}
-                  className="max-h-24 max-w-[7rem] object-contain"
+                  className="h-auto w-auto max-h-24 max-w-[7rem] object-contain"
                   loading="lazy"
                 />
               </div>
             )}
             <div className="flex-1">
               <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
+              {question.imageCredit && (
+                <p className="mt-1 text-xs text-slate-400">{question.imageCredit}</p>
+              )}
             </div>
           </div>
           <p className="text-base text-slate-200">{question.description}</p>
@@ -214,7 +217,7 @@ export default async function QuestionDetail(props: { params: Promise<{ id: stri
               <StatsCard
                 label="Ranking-Score"
                 value={rankingScore}
-                hint="Kombiniert Engagement, Qualitaet und Frische"
+                hint="Kombiniert Engagement, Qualität und Frische"
               />
               <StatsCard
                 label="Status"

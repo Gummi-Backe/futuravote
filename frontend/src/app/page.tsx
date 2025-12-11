@@ -128,17 +128,20 @@ function EventCard({
       <div className="space-y-3">
         <div className="flex gap-4">
           {question.imageUrl && (
-            <div className="flex w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+            <div className="inline-flex max-h-24 max-w-[7rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
               <img
                 src={question.imageUrl}
                 alt={question.title}
-                className="max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
+                className="h-auto w-auto max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
                 loading="lazy"
               />
             </div>
           )}
           <div className="flex-1">
             <h3 className="text-xl font-bold leading-tight text-white">{question.title}</h3>
+            {question.imageCredit && (
+              <p className="mt-1 text-[10px] text-slate-400 line-clamp-1">{question.imageCredit}</p>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200">
@@ -232,17 +235,20 @@ function DraftCard({
       </div>
       <div className="flex gap-3">
         {draft.imageUrl && (
-          <div className="flex w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+          <div className="inline-flex max-h-20 max-w-[6rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
             <img
               src={draft.imageUrl}
               alt={draft.title}
-              className="max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
+              className="h-auto w-auto max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
               loading="lazy"
             />
           </div>
         )}
         <div className="flex-1">
           <h4 className="text-lg font-semibold leading-snug text-white">{draft.title}</h4>
+          {draft.imageCredit && (
+            <p className="mt-1 text-[10px] text-slate-400 line-clamp-1">{draft.imageCredit}</p>
+          )}
         </div>
       </div>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
@@ -782,8 +788,8 @@ export default function Home() {
           </div>
         )}
         <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-6 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-xl text-emerald-100 shadow-lg shadow-emerald-500/40">
                 FV
               </div>
@@ -795,12 +801,25 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-1 flex-col items-end gap-2">
               {currentUser && (
                 <div className="flex items-center gap-2 rounded-xl bg-black/30 px-3 py-2 text-xs text-slate-200">
-                  <span>
-                    Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span>
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigateWithTransition("/profil")}
+                    className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-300/60 hover:text-emerald-50"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/30 text-[11px] text-emerald-50">
+                      {(currentUser.displayName || currentUser.email)
+                        .split(" ")
+                        .filter(Boolean)
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase() || "U"}
+                    </span>
+                    <span>Eingeloggt als {currentUser.displayName}</span>
+                  </button>
                   {currentUser.role === "admin" && (
                     <span className="rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
                       Admin
@@ -815,38 +834,43 @@ export default function Home() {
                   </button>
                 </div>
               )}
-              <button
-                type="button"
-                className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
-                onClick={() => {
-                  if (!currentUser) {
-                    navigateWithTransition("/auth");
-                  } else {
-                    navigateWithTransition("/drafts/new");
-                  }
-                }}
-              >
-                Frage stellen
-              </button>
-              <button
-                type="button"
-                className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
-                onClick={() => {
-                  setShowReviewOnly((prev) => !prev);
-                  if (typeof window !== "undefined") {
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }
-                }}
-              >
-                {showReviewOnly ? "Zurueck zum Feed" : "Review"}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigateWithTransition("/auth")}
-                className="rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500"
-              >
-                Login / Register
-              </button>
+
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
+                  onClick={() => {
+                    if (!currentUser) {
+                      navigateWithTransition("/auth");
+                    } else {
+                      navigateWithTransition("/drafts/new");
+                    }
+                  }}
+                >
+                  Frage stellen
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                  onClick={() => {
+                    setShowReviewOnly((prev) => !prev);
+                    if (typeof window !== "undefined") {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }
+                  }}
+                >
+                {showReviewOnly ? "Zurück zum Feed" : "Review"}
+                </button>
+                {!currentUser && (
+                  <button
+                    type="button"
+                    onClick={() => navigateWithTransition("/auth")}
+                    className="rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                  >
+                    Login / Register
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

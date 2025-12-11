@@ -241,8 +241,8 @@ export default function NewDraftPage() {
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Frage vorschlagen</h1>
           <p className="mt-1 text-sm text-slate-300">
-            Reiche eine neue Prognosefrage ein. Sie erscheint im Draft-Review-Bereich, wo die Community die Qualität
-            einschätzen kann.
+            Reiche eine neue Prognosefrage ein. Sie erscheint zuerst im Review-Bereich: Dort bewertet die Community die
+            Qualität und entscheidet gemeinsam, ob deine Frage in die öffentliche Ja/Nein-Abstimmung übernommen wird.
           </p>
 
           <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">

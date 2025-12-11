@@ -1,11 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TermsContent } from "../terms/TermsContent";
 
 type Mode = "login" | "register";
 
-type AuthUser = { id: string; email: string; displayName: string; role?: "user" | "admin" } | null;
+type AuthUser =
+  | {
+      id: string;
+      email: string;
+      displayName: string;
+      role?: "user" | "admin";
+    }
+  | null;
 
 export default function AuthPage() {
   const router = useRouter();
@@ -20,6 +29,7 @@ export default function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser>(null);
+  const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
     void fetch("/api/auth/me")
@@ -28,18 +38,29 @@ export default function AuthPage() {
       .catch(() => setCurrentUser(null));
   }, []);
 
-  const handleSubmit = async (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
       setError("Bitte E-Mail und Passwort eingeben.");
+      return;
+    }
+
+    if (!trimmedEmail.includes("@") || !trimmedEmail.includes(".") || trimmedEmail.length < 5) {
+      setError("Bitte gib eine gültige E-Mail-Adresse ein.");
       return;
     }
 
     if (mode === "register") {
       if (!displayName.trim()) {
         setError("Bitte gib einen Anzeige-Namen ein.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Das Passwort sollte mindestens 8 Zeichen lang sein.");
         return;
       }
       if (password !== passwordConfirm) {
@@ -58,19 +79,22 @@ export default function AuthPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
           displayName: displayName.trim() || undefined,
         }),
       });
+
       const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Anmeldung fehlgeschlagen.");
         return;
       }
+
       setCurrentUser(data.user ?? null);
       router.push("/");
-    } catch {
+    } catch (err) {
+      console.error(err);
       setError("Netzwerkfehler. Bitte versuche es erneut.");
     } finally {
       setSubmitting(false);
@@ -90,7 +114,7 @@ export default function AuthPage() {
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">
-            {mode === "login" ? "Login / Register" : "Account anlegen"}
+            {mode === "login" ? "Login / Registrieren" : "Account anlegen"}
           </h1>
           <p className="mt-1 text-sm text-slate-300">
             Mit einem Account kannst du neue Fragen vorschlagen und im Review-Bereich mitentscheiden, welche Themen in
@@ -99,8 +123,9 @@ export default function AuthPage() {
 
           {currentUser && (
             <p className="mt-3 rounded-xl bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-              Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span> (
-              {currentUser.email}). Du kannst die Seite normal nutzen oder mit einem anderen Account einloggen.
+              Eingeloggt als <span className="font-semibold">{currentUser.displayName}</span>{" "}
+              <span className="text-emerald-200">({currentUser.email})</span>. Du kannst die Seite normal nutzen oder
+              dich mit einem anderen Account einloggen.
             </p>
           )}
 
@@ -218,10 +243,14 @@ export default function AuthPage() {
                   />
                   <label htmlFor="acceptTos" className="text-xs text-slate-200">
                     Ich akzeptiere die{" "}
-                    <a href="/terms" className="text-emerald-300 underline hover:text-emerald-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowTerms(true)}
+                      className="text-emerald-300 underline hover:text-emerald-200"
+                    >
                       Nutzungsbedingungen
-                    </a>{" "}
-                    von Future-Vote und bestätige, dass ich nur Inhalte (z. B. Bilder) hochlade, an denen ich die
+                    </button>{" "}
+                    von Future-Vote und bestätige, dass ich nur Inhalte (z. B. Bilder) hochlade, an denen ich die
                     erforderlichen Rechte besitze.
                   </label>
                 </div>
@@ -235,11 +264,45 @@ export default function AuthPage() {
               disabled={submitting}
               className="mt-2 w-full rounded-xl bg-emerald-500/80 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-80"
             >
-              {mode === "login" ? "Einloggen" : "Account erstellen"}
+              {submitting
+                ? mode === "login"
+                  ? "Einloggen..."
+                  : "Account wird erstellt..."
+                : mode === "login"
+                ? "Einloggen"
+                : "Account erstellen"}
             </button>
           </form>
         </section>
       </div>
+
+      {showTerms && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowTerms(false)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/15 bg-slate-950/95 p-6 text-slate-200 shadow-2xl shadow-black/60"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-emerald-200">
+                Nutzungsbedingungen
+              </h2>
+              <button
+                type="button"
+                className="rounded-full border border-white/25 px-3 py-1 text-xs font-semibold text-slate-100 hover:border-emerald-300/60 hover:text-emerald-100"
+                onClick={() => setShowTerms(false)}
+              >
+                Schließen
+              </button>
+            </div>
+
+            <TermsContent />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
+

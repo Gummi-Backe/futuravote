@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getUserBySession, voteOnDraft, type DraftReviewChoice } from "@/app/data/db";
+import { getUserBySession } from "@/app/data/db";
+import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
 
@@ -36,11 +37,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ungueltige Auswahl." }, { status: 400 });
   }
 
-  const draft = voteOnDraft(draftId, choice);
+  const draft = await voteOnDraftInSupabase(draftId, choice);
   if (!draft) {
     return NextResponse.json({ error: "Draft nicht gefunden." }, { status: 404 });
   }
 
   return NextResponse.json({ draft }, { status: 200 });
 }
-
