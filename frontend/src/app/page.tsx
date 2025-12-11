@@ -357,21 +357,34 @@ export default function Home() {
 
   const categoryOptions = useMemo(() => {
     const map = new Map<string, { label: string; icon: string; color: string }>();
+
+    // Basis-Kategorien immer anbieten
     for (const cat of categories) {
       map.set(cat.label, cat);
     }
+
+    const now = Date.now();
+
+    // Nur Kategorien von aktuell laufenden Fragen (Voting noch aktiv)
     for (const q of questions) {
+      const closesMs = Date.parse(q.closesAt);
+      const isActive = !Number.isNaN(closesMs) ? closesMs >= now : true;
+      if (!isActive) continue;
       if (!map.has(q.category)) {
         map.set(q.category, { label: q.category, icon: "?", color: "#64748b" });
       }
     }
+
+    // Und Kategorien von offenen Drafts im Review-Bereich
     for (const d of drafts) {
       const status = d.status ?? "open";
-      if (status === "rejected") continue;
+      const isActiveDraft = status === "open" && d.timeLeftHours > 0;
+      if (!isActiveDraft) continue;
       if (!map.has(d.category)) {
         map.set(d.category, { label: d.category, icon: "?", color: "#64748b" });
       }
     }
+
     return Array.from(map.values());
   }, [questions, drafts]);
 
