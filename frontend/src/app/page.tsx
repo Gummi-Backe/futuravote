@@ -1039,7 +1039,7 @@ export default function Home() {
             </div>
             {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
             {error && <div className="text-sm text-rose-200">{error}</div>}
-            <div className="mx-auto w-full max-w-xl md:max-w-none">
+            <div className="mx-auto w-full max-w-xl">
               <div
                 key={`${activeTab}-${activeCategory ?? "all"}`}
                 className="list-enter grid gap-5 md:grid-cols-2"
@@ -1126,7 +1126,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <div className="mx-auto w-full max-w-xl md:max-w-none">
+          <div className="mx-auto w-full max-w-xl">
             <div
               key={`drafts-${activeCategory ?? "all"}`}
               className="list-enter grid gap-5 md:grid-cols-2"
