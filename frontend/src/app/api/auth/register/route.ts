@@ -7,6 +7,8 @@ import {
   hasAdminUserSupabase,
   type UserRole,
 } from "@/app/data/dbSupabaseUsers";
+import { createEmailVerificationTokenSupabase } from "@/app/data/dbSupabaseUsers";
+import { sendVerificationEmail } from "@/app/lib/email";
 
 export const revalidate = 0;
 
@@ -69,10 +71,30 @@ export async function POST(request: Request) {
       displayName: trimmedName,
       role,
     });
+
+    // Verifikations-Token erzeugen und E-Mail (oder Log) versenden
+    try {
+      const token = await createEmailVerificationTokenSupabase(user.id);
+      const verificationUrl = new URL(`/api/auth/verify?token=${encodeURIComponent(token)}`, request.url).toString();
+      await sendVerificationEmail({
+        to: user.email,
+        displayName: user.displayName,
+        verificationUrl,
+      });
+    } catch (verificationError) {
+      console.error("Konnte Verifikations-E-Mail nicht senden:", verificationError);
+      // Registrierung soll trotzdem funktionieren; Verifikation kann spaeter erneut angestossen werden.
+    }
     const sessionId = await createUserSessionSupabase(user.id);
 
     const response = NextResponse.json({
-      user: { id: user.id, email: user.email, displayName: user.displayName },
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        emailVerified: user.emailVerified,
+      },
     });
 
     response.cookies.set("fv_user", sessionId, {
