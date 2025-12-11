@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getUserBySession } from "@/app/data/db";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { createDraftInSupabase } from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
@@ -19,9 +19,10 @@ type DraftInput = {
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
-  if (!sessionId || !getUserBySession(sessionId)) {
+  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
+  if (!sessionId || !user) {
     return NextResponse.json(
-      { error: "Bitte melde dich an, bevor du eine Frage vorschlaegst." },
+      { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
       { status: 401 }
     );
   }
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as DraftInput;
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const title = (body.title ?? "").trim();
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
   }
   if (!category) {
-    return NextResponse.json({ error: "Bitte waehle eine Kategorie." }, { status: 400 });
+    return NextResponse.json({ error: "Bitte wähle eine Kategorie." }, { status: 400 });
   }
 
   const timeLeftHours =
@@ -69,4 +70,3 @@ export async function POST(request: Request) {
   });
   return NextResponse.json({ draft }, { status: 201 });
 }
-

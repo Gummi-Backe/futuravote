@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getUserBySession } from "@/app/data/db";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function ProfilPage() {
     redirect("/auth");
   }
 
-  const user = getUserBySession(sessionId);
+  const user = await getUserBySessionSupabase(sessionId);
   if (!user) {
     redirect("/auth");
   }
@@ -75,4 +75,3 @@ export default async function ProfilPage() {
     </main>
   );
 }
-
