@@ -71,6 +71,93 @@ export async function createUserSupabase(input: {
   return mapUser(data as DbUser);
 }
 
+export async function createEmailVerificationTokenSupabase(
+  userId: string,
+  ttlHours: number = 24
+): Promise<string> {
+  const supabase = getSupabaseClient();
+  const id = randomUUID();
+  const token = randomUUID();
+  const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
+
+  // Alte Tokens fuer den Nutzer aufraeumen
+  await supabase.from("email_verifications").delete().eq("user_id", userId);
+
+  const { error } = await supabase.from("email_verifications").insert({
+    id,
+    user_id: userId,
+    token,
+    expires_at: expiresAt,
+  });
+
+  if (error) {
+    throw new Error(`Supabase createEmailVerificationToken fehlgeschlagen: ${error.message}`);
+  }
+
+  return token;
+}
+
+export async function verifyEmailByTokenSupabase(token: string): Promise<User | null> {
+  const supabase = getSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("email_verifications")
+    .select(
+      `
+        id,
+        user_id,
+        expires_at,
+        users (
+          id,
+          email,
+          password_hash,
+          display_name,
+          role,
+          email_verified,
+          created_at,
+          default_region
+        )
+      `
+    )
+    .eq("token", token)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase verifyEmailByToken Select fehlgeschlagen: ${error.message}`);
+  }
+  if (!data || !(data as any).users) {
+    return null;
+  }
+
+  const row = data as any;
+  const expiresAt = Date.parse(row.expires_at as string);
+  if (Number.isNaN(expiresAt) || expiresAt < Date.now()) {
+    // Abgelaufenes Token loeschen
+    await supabase.from("email_verifications").delete().eq("id", row.id as string);
+    return null;
+  }
+
+  const userRow = row.users as DbUser;
+
+  if (!userRow.email_verified) {
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ email_verified: true })
+      .eq("id", userRow.id);
+
+    if (updateError) {
+      throw new Error(`Supabase verifyEmailByToken Update fehlgeschlagen: ${updateError.message}`);
+    }
+
+    userRow.email_verified = true;
+  }
+
+  // Alle Tokens fuer diesen Nutzer entfernen
+  await supabase.from("email_verifications").delete().eq("user_id", userRow.id);
+
+  return mapUser(userRow);
+}
+
 export async function getUserByEmailSupabase(email: string): Promise<User | null> {
   const supabase = getSupabaseClient();
 

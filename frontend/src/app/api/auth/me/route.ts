@@ -27,6 +27,7 @@ export async function GET() {
         displayName: user.displayName,
         role: user.role,
         defaultRegion: user.defaultRegion,
+        emailVerified: user.emailVerified,
       },
     });
   } catch (error) {
