@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { categories, type Draft, type Question } from "./mock";
 import { getSupabaseClient } from "@/app/lib/supabaseClient";
+import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
 export type VoteChoice = "yes" | "no";
 export type DraftReviewChoice = "good" | "bad";
@@ -58,22 +59,53 @@ type DraftRow = {
   created_at: string | null;
 };
 
+const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 const DATA_ROOT =
   process.env.DATA_DIR ?? (process.env.VERCEL ? "/tmp/futuravote" : path.join(process.cwd(), "data"));
 const IMAGES_DIR = path.join(DATA_ROOT, "images");
 
 function deleteImageFileIfPresent(imageUrl?: string | null) {
   if (!imageUrl) return;
-  const lastSlash = imageUrl.lastIndexOf("/");
-  const fileName = lastSlash >= 0 ? imageUrl.slice(lastSlash + 1) : imageUrl;
-  if (!fileName) return;
-  const filePath = path.join(IMAGES_DIR, fileName);
+
   try {
+    // Supabase-Public-URL? (neuer Weg)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (supabaseUrl && imageUrl.startsWith(supabaseUrl)) {
+      try {
+        const url = new URL(imageUrl);
+        const publicPrefix = "/storage/v1/object/public/";
+        const idx = url.pathname.indexOf(publicPrefix);
+        if (idx >= 0) {
+          const pathPart = url.pathname.slice(idx + publicPrefix.length);
+          const [bucket, ...rest] = pathPart.split("/");
+          const pathInBucket = rest.join("/");
+          if (bucket === IMAGE_BUCKET && pathInBucket) {
+            const supabase = getSupabaseServerClient();
+            supabase.storage
+              .from(IMAGE_BUCKET)
+              .remove([pathInBucket])
+              .catch((err) => {
+                console.error("Failed to delete image from Supabase Storage", err);
+              });
+            return;
+          }
+        }
+      } catch (parseError) {
+        console.error("Failed to parse Supabase image URL for deletion", parseError);
+      }
+    }
+
+    // Legacy: lokale Bilddatei l�schen (z.B. bei altem SQLite-Setup)
+    const lastSlash = imageUrl.lastIndexOf("/");
+    const fileName = lastSlash >= 0 ? imageUrl.slice(lastSlash + 1) : imageUrl;
+    if (!fileName) return;
+    const filePath = path.join(IMAGES_DIR, fileName);
+
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
   } catch (error) {
-    console.error("Failed to delete image file", filePath, error);
+    console.error("Failed to delete image file", imageUrl, error);
   }
 }
 

@@ -1,17 +1,9 @@
 import { randomUUID } from "crypto";
-import fs from "fs";
-import path from "path";
 import sharp from "sharp";
 import { NextResponse } from "next/server";
+import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
-const DATA_ROOT =
-  process.env.DATA_DIR ??
-  (process.env.VERCEL ? "/tmp/futuravote" : path.join(process.cwd(), "data"));
-const IMAGES_DIR = path.join(DATA_ROOT, "images");
-
-if (!fs.existsSync(IMAGES_DIR)) {
-  fs.mkdirSync(IMAGES_DIR, { recursive: true });
-}
+const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 
 export const revalidate = 0;
 
@@ -29,17 +21,35 @@ export async function POST(request: Request) {
   try {
     const id = randomUUID();
     const targetFilename = `${id}.jpg`;
-    const targetPath = path.join(IMAGES_DIR, targetFilename);
 
+    // Bild vor dem Upload auf eine kleine, einheitliche Größe verkleinern
     const resized = await sharp(buffer)
-      // Maximal ca. 250×150 Pixel, Seitenverhältnis bleibt erhalten
+      // Maximal ca. 250x150 Pixel, Seitenverhältnis bleibt erhalten
       .resize(250, 150, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer();
 
-    await fs.promises.writeFile(targetPath, resized);
+    const supabase = getSupabaseServerClient();
 
-    const imageUrl = `/api/images/${targetFilename}`;
+    const pathInBucket = `questions/${targetFilename}`;
+    const { error: uploadError } = await supabase.storage.from(IMAGE_BUCKET).upload(pathInBucket, resized, {
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+
+    if (uploadError) {
+      console.error("Supabase Storage upload failed", uploadError);
+      return NextResponse.json(
+        { error: "Bild konnte nicht in den Bildspeicher hochgeladen werden." },
+        { status: 500 }
+      );
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(IMAGE_BUCKET).getPublicUrl(pathInBucket);
+
+    const imageUrl = publicUrl;
     return NextResponse.json({ imageUrl });
   } catch (error) {
     console.error("Image upload/resize failed", error);
@@ -49,3 +59,4 @@ export async function POST(request: Request) {
     );
   }
 }
+
