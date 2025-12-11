@@ -122,6 +122,14 @@ body {
   color: #f8fafc;
 }
 
+/* Verhindert, dass extrem lange Woerter Karten breiter machen.
+   Normale Woerter bleiben ungetrennt, nur wenn sie alleine nicht
+   in die Zeile passen, duerfen sie umbrochen werden. */
+.card-title-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .card-button {
   border-radius: 12px;
   padding: 0.75rem 1rem;

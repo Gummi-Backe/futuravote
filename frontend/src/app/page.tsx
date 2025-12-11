@@ -138,7 +138,7 @@ function EventCard({
             </div>
           )}
           <div className="flex-1">
-            <h3 className="text-xl font-bold leading-tight text-white break-words">{question.title}</h3>
+            <h3 className="card-title-wrap text-xl font-bold leading-tight text-white">{question.title}</h3>
             {question.imageCredit && (
               <p className="mt-1 text-[10px] text-slate-400 line-clamp-1">{question.imageCredit}</p>
             )}
@@ -245,7 +245,7 @@ function DraftCard({
           </div>
         )}
         <div className="flex-1">
-          <h4 className="text-lg font-semibold leading-snug text-white break-words">{draft.title}</h4>
+          <h4 className="card-title-wrap text-lg font-semibold leading-snug text-white">{draft.title}</h4>
           {draft.imageCredit && (
             <p className="mt-1 text-[10px] text-slate-400 line-clamp-1">{draft.imageCredit}</p>
           )}
