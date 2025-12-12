@@ -7,16 +7,6 @@ import { ProfileRegionForm } from "./ProfileRegionForm";
 
 export const dynamic = "force-dynamic";
 
-type ProfileStats = {
-  draftsTotal: number;
-  draftsAccepted: number;
-  draftsRejected: number;
-  votesTotal: number;
-  votesYes: number;
-  votesNo: number;
-  topCategories: { category: string; votes: number; yes: number; no: number }[];
-};
-
 export default async function ProfilPage() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
@@ -41,7 +31,18 @@ export default async function ProfilPage() {
     }
   }
 
+  // Einfache Profil-Statistiken direkt aus Supabase laden
   const supabase = getSupabaseClient();
+
+  type ProfileStats = {
+    draftsTotal: number;
+    draftsAccepted: number;
+    draftsRejected: number;
+    votesTotal: number;
+    votesYes: number;
+    votesNo: number;
+    topCategories: { category: string; votes: number; yes: number; no: number }[];
+  };
 
   let stats: ProfileStats | null = null;
   try {
@@ -80,7 +81,7 @@ export default async function ProfilPage() {
       .eq("choice", "no");
 
     // Top-Kategorien aus den eigenen Votes berechnen
-    let topCategories: ProfileStats["topCategories"] = [];
+    let topCategories: { category: string; votes: number; yes: number; no: number }[] = [];
     if (voteRows && voteRows.length > 0) {
       const questionIds = Array.from(new Set((voteRows as { question_id: string }[]).map((v) => v.question_id)));
 
@@ -161,7 +162,7 @@ export default async function ProfilPage() {
           {stats && (
             <div className="mt-5 space-y-3 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
               <p className="font-semibold text-slate-100">Deine Aktivitaet (bisher)</p>
-              <div className="mt-1 space-y-2">
+              <div className="space-y-2">
                 <Link
                   href="/profil/aktivitaet?typ=drafts_all"
                   className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
@@ -173,7 +174,6 @@ export default async function ProfilPage() {
                     {stats.draftsTotal}
                   </span>
                 </Link>
-
                 <Link
                   href="/profil/aktivitaet?typ=drafts_accepted"
                   className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
@@ -183,7 +183,6 @@ export default async function ProfilPage() {
                     {stats.draftsAccepted}
                   </span>
                 </Link>
-
                 <Link
                   href="/profil/aktivitaet?typ=drafts_rejected"
                   className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
@@ -193,7 +192,6 @@ export default async function ProfilPage() {
                     {stats.draftsRejected}
                   </span>
                 </Link>
-
                 <div className="mt-2 border-t border-white/10 pt-2 space-y-2">
                   <Link
                     href="/profil/aktivitaet?typ=votes_all"
@@ -206,7 +204,6 @@ export default async function ProfilPage() {
                       {stats.votesTotal}
                     </span>
                   </Link>
-
                   <Link
                     href="/profil/aktivitaet?typ=votes_yes"
                     className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
@@ -216,7 +213,6 @@ export default async function ProfilPage() {
                       {stats.votesYes}
                     </span>
                   </Link>
-
                   <Link
                     href="/profil/aktivitaet?typ=votes_no"
                     className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
@@ -227,23 +223,13 @@ export default async function ProfilPage() {
                     </span>
                   </Link>
                 </div>
-
                 {stats.topCategories.length > 0 && (
                   <div className="mt-2 border-t border-white/10 pt-2">
                     <p className="mb-1 font-semibold text-slate-100">Deine Top-Kategorien</p>
                     <div className="space-y-1.5">
                       {stats.topCategories.map((cat) => (
-                        <Link
-                          key={cat.category}
-                          href={{
-                            pathname: "/profil/aktivitaet",
-                            query: { typ: "votes_all", category: cat.category },
-                          }}
-                          className="group flex items-center justify-between gap-3 rounded-full px-3 py-2 text-xs text-slate-200 transition hover:bg-white/10 hover:-translate-y-0.5"
-                        >
-                          <span className="truncate font-medium text-slate-100 group-hover:text-white">
-                            {cat.category}
-                          </span>
+                        <div key={cat.category} className="flex items-center justify-between gap-3">
+                          <span className="truncate">{cat.category}</span>
                           <span className="text-[11px] font-semibold text-slate-200">
                             {cat.votes} Stimmen{" "}
                             <span className="text-emerald-200">
@@ -253,7 +239,7 @@ export default async function ProfilPage() {
                             <span className="text-rose-200">Nein {cat.no}</span>
                             )
                           </span>
-                        </Link>
+                        </div>
                       ))}
                     </div>
                   </div>
