@@ -4,13 +4,15 @@ import { cookies, headers } from "next/headers";
 import type { Question } from "@/app/data/mock";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import AdminControls from "./AdminControls";
+import { DetailVoteButtons } from "./DetailVoteButtons";
 
 export const dynamic = "force-dynamic";
 
 async function getBaseUrl() {
   const headerStore = await headers();
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
-  const protocol = headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  const protocol =
+    headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
   if (host) return `${protocol}://${host}`;
   return process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 }
@@ -39,11 +41,18 @@ function StatsCard({
   value,
   hint,
   valueClassName,
-}: { label: string; value: string; hint?: string; valueClassName?: string }) {
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-md shadow-black/20">
       <span className="text-xs uppercase tracking-wide text-slate-300">{label}</span>
-      <span className={`break-words text-lg font-semibold text-white ${valueClassName ?? ""}`}>{value}</span>
+      <span className={`break-words text-lg font-semibold text-white ${valueClassName ?? ""}`}>
+        {value}
+      </span>
       {hint ? <span className="text-xs text-slate-400">{hint}</span> : null}
     </div>
   );
@@ -90,19 +99,21 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-  export default async function QuestionDetail(props: { params: Promise<{ id: string }> }) {
-    const resolvedParams = await props.params;
-    const { id } = resolvedParams;
-    const question = await fetchQuestion(id);
-    if (!question) {
-      notFound();
-    }
-    const cookieStore = await cookies();
-    const sessionId = cookieStore.get("fv_user")?.value;
-    const currentUser = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-    const isAdmin = currentUser?.role === "admin";
-  const votedLabel =
-    question.userChoice === "yes" ? "Du hast Ja gestimmt" : question.userChoice === "no" ? "Du hast Nein gestimmt" : null;
+export default async function QuestionDetail(props: {
+  params: Promise<{ id: string }>;
+}) {
+  const resolvedParams = await props.params;
+  const { id } = resolvedParams;
+
+  const question = await fetchQuestion(id);
+  if (!question) {
+    notFound();
+  }
+
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("fv_user")?.value;
+  const currentUser = sessionId ? await getUserBySessionSupabase(sessionId) : null;
+  const isAdmin = currentUser?.role === "admin";
 
   const yesVotes = question.yesVotes ?? 0;
   const noVotes = question.noVotes ?? 0;
@@ -118,9 +129,14 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
       })
     : "unbekannt";
   const statusLabel =
-    question.status === "archived"
-      ? "gestoppt"
-      : question.status ?? "aktiv";
+    question.status === "archived" ? "gestoppt" : question.status ?? "aktiv";
+
+  const votedLabel =
+    question.userChoice === "yes"
+      ? "Du hast Ja gestimmt"
+      : question.userChoice === "no"
+        ? "Du hast Nein gestimmt"
+        : null;
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
@@ -134,18 +150,23 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
             <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
               <span
                 className="flex h-11 w-11 items-center justify-center rounded-full text-lg"
-                style={{ backgroundColor: `${question.categoryColor}22`, color: question.categoryColor }}
+                style={{
+                  backgroundColor: `${question.categoryColor}22`,
+                  color: question.categoryColor,
+                }}
               >
                 {question.categoryIcon}
               </span>
               <div className="flex flex-col leading-tight">
-                <span className="text-xs uppercase tracking-[0.2rem] text-slate-300">{question.category}</span>
+                <span className="text-xs uppercase tracking-[0.2rem] text-slate-300">
+                  {question.category}
+                </span>
                 <span className="text-sm text-slate-200">{question.summary}</span>
               </div>
             </div>
             <div className="flex flex-col items-end gap-2 text-right">
               <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">
-                ? {formatDeadline(question.closesAt)}
+                ⏳ {formatDeadline(question.closesAt)}
               </span>
               {votedLabel && (
                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
@@ -154,6 +175,7 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
               )}
             </div>
           </div>
+
           <div className="mt-4 flex gap-4">
             {question.imageUrl && (
               <div className="inline-flex max-h-24 max-w-[7rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
@@ -166,22 +188,31 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
               </div>
             )}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">{question.title}</h1>
+              <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">
+                {question.title}
+              </h1>
               {question.imageCredit && (
                 <p className="mt-1 text-xs text-slate-400">{question.imageCredit}</p>
               )}
             </div>
           </div>
-          <p className="text-base text-slate-200">{question.description}</p>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
+
+          {question.description && (
+            <p className="mt-4 text-base text-slate-200">{question.description}</p>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-200">
             <span className="rounded-full bg-white/5 px-3 py-1">
               {question.yesPct}% Ja ({yesVotes})
             </span>
             <span className="rounded-full bg-white/5 px-3 py-1">
               {question.noPct}% Nein ({noVotes})
             </span>
-            <span className="rounded-full bg-white/5 px-3 py-1">Insgesamt {totalVotes} Stimmen</span>
+            <span className="rounded-full bg-white/5 px-3 py-1">
+              Insgesamt {totalVotes} Stimmen
+            </span>
           </div>
+
           {isAdmin && (
             <div className="mt-4">
               <AdminControls questionId={id} isArchived={question.status === "archived"} />
@@ -194,7 +225,7 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
             <div className="flex items-center justify-between text-sm text-slate-200">
               <span>Community glaubt</span>
               <span className="font-semibold text-white">
-                {question.yesPct}% Ja ú {question.noPct}% Nein
+                {question.yesPct}% Ja · {question.noPct}% Nein
               </span>
             </div>
             <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
@@ -202,7 +233,7 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
           </div>
 
           <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15">
-            <h3 className="text-sm font-semibold text-white">Meta & Stats</h3>
+            <h3 className="text-sm font-semibold text-white">Meta &amp; Stats</h3>
             <div className="grid grid-cols-2 gap-3">
               <StatsCard
                 label="Votes (absolut)"
@@ -243,15 +274,16 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
           </div>
         </section>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2">
-          <button className="card-button yes opacity-70 cursor-not-allowed" disabled>
-            Ja (bald verfügbar)
-          </button>
-          <button className="card-button no opacity-70 cursor-not-allowed" disabled>
-            Nein (bald verfügbar)
-          </button>
-        </section>
+        <DetailVoteButtons
+          questionId={id}
+          initialChoice={
+            question.userChoice === "yes" || question.userChoice === "no"
+              ? question.userChoice
+              : null
+          }
+        />
       </div>
     </main>
   );
 }
+
