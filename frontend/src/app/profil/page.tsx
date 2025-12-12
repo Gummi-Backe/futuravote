@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { getSupabaseClient } from "@/app/lib/supabaseClient";
 import { ProfileRegionForm } from "./ProfileRegionForm";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,103 @@ export default async function ProfilPage() {
     }
   }
 
+  // Einfache Profil-Statistiken direkt aus Supabase laden
+  const supabase = getSupabaseClient();
+
+  type ProfileStats = {
+    draftsTotal: number;
+    draftsAccepted: number;
+    draftsRejected: number;
+    votesTotal: number;
+    votesYes: number;
+    votesNo: number;
+    topCategories: { category: string; votes: number; yes: number; no: number }[];
+  };
+
+  let stats: ProfileStats | null = null;
+  try {
+    const { count: draftsTotal } = await supabase
+      .from("drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("creator_id", user.id);
+
+    const { count: draftsAccepted } = await supabase
+      .from("drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("creator_id", user.id)
+      .eq("status", "accepted");
+
+    const { count: draftsRejected } = await supabase
+      .from("drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("creator_id", user.id)
+      .eq("status", "rejected");
+
+    const { count: votesTotal, data: voteRows } = await supabase
+      .from("votes")
+      .select("question_id, choice", { count: "exact" })
+      .eq("user_id", user.id);
+
+    const { count: votesYes } = await supabase
+      .from("votes")
+      .select("question_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("choice", "yes");
+
+    const { count: votesNo } = await supabase
+      .from("votes")
+      .select("question_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("choice", "no");
+
+    // Top-Kategorien aus den eigenen Votes berechnen
+    let topCategories: { category: string; votes: number; yes: number; no: number }[] = [];
+    if (voteRows && voteRows.length > 0) {
+      const questionIds = Array.from(new Set((voteRows as { question_id: string }[]).map((v) => v.question_id)));
+
+      const { data: questionRows } = await supabase
+        .from("questions")
+        .select("id, category")
+        .in("id", questionIds);
+
+      const categoryById = new Map<string, string>();
+      (questionRows as { id: string; category: string }[] | null | undefined)?.forEach((q) => {
+        categoryById.set(q.id, q.category ?? "Sonstiges");
+      });
+
+      const statsMap = new Map<string, { category: string; votes: number; yes: number; no: number }>();
+      (voteRows as { question_id: string; choice: "yes" | "no" }[]).forEach((vote) => {
+        const category = categoryById.get(vote.question_id) ?? "Sonstiges";
+        const current = statsMap.get(category) ?? { category, votes: 0, yes: 0, no: 0 };
+        current.votes += 1;
+        if (vote.choice === "yes") current.yes += 1;
+        if (vote.choice === "no") current.no += 1;
+        statsMap.set(category, current);
+      });
+
+      topCategories = Array.from(statsMap.values())
+        .sort((a, b) => b.votes - a.votes)
+        .slice(0, 3);
+    }
+
+    stats = {
+      draftsTotal: draftsTotal ?? 0,
+      draftsAccepted: draftsAccepted ?? 0,
+      draftsRejected: draftsRejected ?? 0,
+      votesTotal: votesTotal ?? 0,
+      votesYes: votesYes ?? 0,
+      votesNo: votesNo ?? 0,
+      topCategories,
+    };
+  } catch {
+    stats = null;
+  }
+
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-16 pt-10">
         <Link href="/" className="self-start text-sm text-emerald-100 hover:text-emerald-200">
-          &larr; Zurück zum Feed
+          &larr; Zurueck zum Feed
         </Link>
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
@@ -66,16 +159,99 @@ export default async function ProfilPage() {
 
           <ProfileRegionForm initialRegion={user.defaultRegion ?? null} />
 
-          <div className="mt-5 rounded-2xl bg-black/30 px-3 py-2 text-xs text-slate-300">
-            <p className="font-semibold text-slate-100">Ausblick</p>
-            <p>
-              In einer späteren Version können hier auch einfache Statistiken angezeigt werden, z. B. wie viele Fragen
-              du vorgeschlagen hast, wie viele davon angenommen wurden oder wie aktiv du im Review-Bereich bist.
-            </p>
-          </div>
+          {stats && (
+            <div className="mt-5 space-y-3 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
+              <p className="font-semibold text-slate-100">Deine Aktivitaet (bisher)</p>
+              <div className="space-y-2">
+                <Link
+                  href="/profil/aktivitaet?typ=drafts_all"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
+                >
+                  <span className="font-medium text-slate-100 group-hover:text-white">
+                    Vorgeschlagene Fragen
+                  </span>
+                  <span className="rounded-full bg-black/40 px-2 py-1 text-[11px] font-semibold text-slate-50 group-hover:bg-black/60">
+                    {stats.draftsTotal}
+                  </span>
+                </Link>
+                <Link
+                  href="/profil/aktivitaet?typ=drafts_accepted"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
+                >
+                  <span className="font-medium text-slate-100 group-hover:text-white">Davon angenommen</span>
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] font-semibold text-emerald-100 group-hover:bg-emerald-500/30">
+                    {stats.draftsAccepted}
+                  </span>
+                </Link>
+                <Link
+                  href="/profil/aktivitaet?typ=drafts_rejected"
+                  className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
+                >
+                  <span className="font-medium text-slate-100 group-hover:text-white">Davon abgelehnt</span>
+                  <span className="rounded-full bg-rose-500/20 px-2 py-1 text-[11px] font-semibold text-rose-100 group-hover:bg-rose-500/30">
+                    {stats.draftsRejected}
+                  </span>
+                </Link>
+                <div className="mt-2 border-t border-white/10 pt-2 space-y-2">
+                  <Link
+                    href="/profil/aktivitaet?typ=votes_all"
+                    className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
+                  >
+                    <span className="font-medium text-slate-100 group-hover:text-white">
+                      Abgegebene Stimmen (gesamt)
+                    </span>
+                    <span className="rounded-full bg-black/40 px-2 py-1 text-[11px] font-semibold text-slate-50 group-hover:bg-black/60">
+                      {stats.votesTotal}
+                    </span>
+                  </Link>
+                  <Link
+                    href="/profil/aktivitaet?typ=votes_yes"
+                    className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
+                  >
+                    <span className="font-medium text-slate-100 group-hover:text-white">Davon Ja</span>
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] font-semibold text-emerald-100 group-hover:bg-emerald-500/30">
+                      {stats.votesYes}
+                    </span>
+                  </Link>
+                  <Link
+                    href="/profil/aktivitaet?typ=votes_no"
+                    className="group flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/10"
+                  >
+                    <span className="font-medium text-slate-100 group-hover:text-white">Davon Nein</span>
+                    <span className="rounded-full bg-rose-500/20 px-2 py-1 text-[11px] font-semibold text-rose-100 group-hover:bg-rose-500/30">
+                      {stats.votesNo}
+                    </span>
+                  </Link>
+                </div>
+                {stats.topCategories.length > 0 && (
+                  <div className="mt-2 border-t border-white/10 pt-2">
+                    <p className="mb-1 font-semibold text-slate-100">Deine Top-Kategorien</p>
+                    <div className="space-y-1.5">
+                      {stats.topCategories.map((cat) => (
+                        <div key={cat.category} className="flex items-center justify-between gap-3">
+                          <span className="truncate">{cat.category}</span>
+                          <span className="text-[11px] font-semibold text-slate-200">
+                            {cat.votes} Stimmen{" "}
+                            <span className="text-emerald-200">
+                              (Ja {cat.yes}
+                            </span>
+                            <span className="text-slate-400"> · </span>
+                            <span className="text-rose-200">Nein {cat.no}</span>
+                            )
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Hinweis: Die Zahlen basieren auf Daten, die seit Einfuehrung der Supabase-DB gesammelt werden.
+              </p>
+            </div>
+          )}
         </section>
       </div>
     </main>
   );
 }
-

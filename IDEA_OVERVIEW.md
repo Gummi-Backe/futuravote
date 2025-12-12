@@ -29,4 +29,6 @@
 - [x] "Frage vorschlagen": Validierung (Mindestlaenge Titel/Beschreibung, eigene Kategorie) und Erfolgshinweis im Feed nach Einreichen
 - [x] Client-seitiges Infinite Scroll fuer Fragen-Feed und Draft-Review-Bereich (weitere Kacheln werden beim Scrollen automatisch nachgeladen)
 - [x] Regionen-Konzept (Grundversion): Fragen und Drafts besitzen ein optionales Regionsfeld und koennen im Feed nach Region gefiltert werden
-- [x] Zusätzlicher Feed-Tab "Endet bald" hebt bald auslaufende Fragen gesammelt hervor (Sortierung nach Enddatum)
+- [x] Zusдzlicher Feed-Tab "Endet bald" hebt bald auslaufende Fragen gesammelt hervor (Sortierung nach Enddatum)
+- [ ] Profil-Aktivitaetsansicht: Klick auf die Zahlen unter "Deine Aktivitaet (bisher)" im Profil oeffnet eine eigene Seite mit gefilterten Kacheln (z.B. alle eigenen Drafts, nur angenommene Drafts, eigene Abstimmungen mit Ja/Nein), sortiert standardmaessig nach neuester Aktivitaet.
+

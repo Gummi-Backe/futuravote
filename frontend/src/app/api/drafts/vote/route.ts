@@ -1,6 +1,4 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
@@ -11,16 +9,6 @@ type VoteBody = {
 };
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get("fv_user")?.value;
-  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-  if (!sessionId || !user) {
-    return NextResponse.json(
-      { error: "Bitte melde dich an, bevor du im Review-Bereich abstimmst." },
-      { status: 401 }
-    );
-  }
-
   let body: VoteBody;
   try {
     body = (await request.json()) as VoteBody;
@@ -45,3 +33,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ draft }, { status: 200 });
 }
+

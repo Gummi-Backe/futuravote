@@ -16,6 +16,8 @@
 - User-Model anlegen; Registrierung/Login; Sessions oder JWT; Passwort-Hashing.
 - RBAC-Middleware: Gast, User, Moderator, Admin; Guards pro Route.
 - Basis-Profileendpunkte: eigenes Profil lesen, einfache Reputation anzeigen.
+- [ ] Personalisierte Profil-Aktivitaet: Im Profil werden die Zahlen unter "Deine Aktivitaet (bisher)" als klickbare, animierte Buttons umgesetzt. Ein Klick oeffnet eine eigene Aktivitaetsansicht (z. B. "Meine Drafts", "Meine Abstimmungen"), in der die passenden Kacheln in sinnvoller Reihenfolge angezeigt werden (standardmaessig neueste zuerst; zusaetzlich einfache Filter wie "Angenommen/Abgelehnt" bzw. "Ja/Nein"). Basis: Votes werden neben `session_id` auch mit `user_id` verknuepft.
+- [x] Interessen-Statistiken pro Nutzer (Grundversion): im Profil werden bereits eine einfache Ja/Nein-Quote sowie Top-Kategorien auf Basis der eigenen Votes angezeigt; spaeter koennen diese Daten zusaetzlich fuer Filter im Feed genutzt werden (z.B. "zeige mir nur Fragen aus meinen Top-Kategorien").
 
 **Auth-Felder & Registrierung (spezifisch fuer Future-Vote)**
 - [x] Felddefinition festgelegt:
@@ -27,7 +29,7 @@
 - [x] Backend-Endpoints fuer Registrierung/Login inkl. sicherem Passwort-Hashing und Session-Cookies (`/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me`).
 - [x] Einfache Profilseite (`/profil`) fuer eingeloggte Nutzer: Anzeige von E-Mail, Anzeige-Name, Rolle und Registrierungsdatum; Link ueber den Namen/Avatar im Header und von der Auth-Seite aus erreichbar.
 - [ ] Profil-Statistiken ergaenzen: spaeter im Profil einfache Uebersicht anzeigen (z. B. Anzahl vorgeschlagener Fragen, wie viele davon angenommen wurden, Anzahl abgegebener Reviews/Votes und ggf. ein einfacher Vertrauens-Score). Diese Werte werden aus der echten Produktionsdatenbank berechnet, sobald die Plattform ernsthaft genutzt wird.
-- [ ] E-Mail-Verifizierung ergaenzen: nach Registrierung Bestaetigungslink verschicken (zusaetzliche Tabelle `email_verifications` + Feld `email_verified` in `users`); Draft-Einreichung/Review und spaeter auch Login nur nach verifizierter E-Mail erlauben.
+- [x] E-Mail-Verifizierung ergaenzen: nach Registrierung wird ein Bestaetigungslink verschickt (Tabelle `email_verifications` + Feld `email_verified` in `users` sind angelegt); Draft-Einreichung ist nur mit verifizierter E-Mail moeglich, Login bleibt bewusst auch ohne Bestaetigung erlaubt.
 - [ ] Passwort-Reset-Flow (Passwort vergessen) mit E-Mail-Link planen und spaeter umsetzen.
 
 ## Phase 3: Datenmodell & API
@@ -188,6 +190,12 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
  - [x] Tab "Noch nicht abgestimmt" (frueher "Unbeantwortet"): zeigt Fragen, bei denen der aktuelle Nutzer in dieser Session noch keine Stimme abgegeben hat (unabhaengig davon, wie viele andere schon abgestimmt haben)
  - [ ] Schwelle fuer "wenig Stimmen" dynamisch machen: Statt eines festen Werts (z. B. < 10) spaeter anhand von Statistik aus der Datenbank berechnen (z. B. Median/Perzentile der Stimmenanzahl pro Altersgruppe der Fragen) und daraus eine adaptive Grenze ableiten, ab wann eine Frage als "wenig bewertet" gilt. Diese Logik wird sinnvollerweise mit der spaeteren Postgres‑/Produktionsdatenbank umgesetzt.
  - [x] Einfache Infinite-Scroll-Logik fuer Feed und Review-Bereich: Zunaechst nur ein Teil der Kacheln wird gerendert, weitere werden beim Scrollen automatisch nachgeladen (Client-seitig, API weiterhin ohne Paging)
+ - [ ] Echte Pagination fuer Fragen und Drafts:
+   - API `/api/questions` um Paging-Parameter erweitern (`pageSize`, `questionsCursor`, `draftsCursor`, `tab`, `category`, `region`).
+   - Fragen und Drafts serverseitig sortieren und filtern (inkl. Tabs "Top", "Endet bald", "Neu & wenig bewertet", "Noch nicht abgestimmt") und pro Request nur eine Seite zurueckgeben.
+   - Cursor-basiertes Paging (z.B. ueber `created_at` + `id`) bevorzugen, damit das Ranking stabil bleibt.
+   - Im Frontend echten Infinite-Scroll bauen: initial erste Seite laden, beim Scrollen mit `nextCursor` weitere Seiten nachladen; bei Tab-/Filterwechsel State leeren und neu ab Seite 1 laden.
+   - Ziel: auch bei sehr vielen Fragen/Drafts nur einen kleinen Ausschnitt im Browser halten und trotzdem alle bisherigen Filter-/Sortierregeln beibehalten.
 
 ### Private / Link-basierte Umfragen (neu vorgeschlagen)
 - [ ] Fragen koennen beim Einreichen als "nur per Link teilbar" markiert werden (zusaetzliches Feld `visibility = "public" | "linkOnly"` im Fragenmodell).
@@ -204,20 +212,14 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [ ] Region wird auch im Ranking beruecksichtigt (z. B. getrennte Scores pro Region oder unterschiedliche Tabs wie "Top global" / "Top in meiner Region").
 
 ### Persistente Datenbank / Migration von SQLite
-- [x] Aktuell: SQLite-Datei pro Umgebung (`dev.db` lokal; ephemere Datei auf Vercel unter `/tmp/futuravote`), geeignet fuer MVP und interne Tests, aber nicht fuer laengerfristige Accounts in Produktion.
 - [x] Supabase-Projekt fuer Future-Vote angelegt (Region: EU/Frankfurt), Zugangsdaten sicher im Passwortmanager hinterlegt.
 - [x] Basis-Supabase-Client im Frontend angelegt (`src/app/lib/supabaseClient.ts`), der die Umgebungsvariablen `NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY` nutzt.
 - [x] Einmalige Synchronisation von SQLite nach Supabase fuer `questions` und `drafts` implementiert (`scripts/sync-sqlite-to-supabase.cjs`, npm-Skript `npm run sync:sqlite-to-supabase`).
 - [x] Eigenen Supabase-Datenpfad fuer Fragen/Votes implementiert (`src/app/data/dbSupabase.ts`) und API-Routen umgestellt: `/api/questions`, `/api/questions/[id]`, `/api/votes`, `/api/health`.
-- [x] Umgebungsvariablen in Vercel setzen (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) und sicherstellen, dass sie **nicht** ins Git-Repo geraten.
-- [x] Draft-/Admin-Operationen (Promote/Archivieren/Loeschen von Fragen) ebenfalls auf Supabase umstellen, so dass `questions` nicht mehr aus SQLite geschrieben wird.
-- [x] User/Auth-Daten (users, user_sessions) auf Supabase verschieben; die alte SQLite-Datei bleibt nur noch als lokales Backup/Snapshot erhalten und wird fuer neue Deployments nicht mehr verwendet.
-- [x] Vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Pruefen, ob alle produktiven Writes nur noch gegen Supabase laufen und SQLite abgeschaltet werden kann.
+- [x] Draft-/Admin-Operationen (Promote/Archivieren/Loeschen von Fragen) ebenfalls auf Supabase umgestellt, so dass `questions` nicht mehr aus SQLite geschrieben wird.
+- [x] User/Auth-Daten (users, user_sessions, email_verifications) auf Supabase verschoben; die alte SQLite-Datei dient nur noch als lokales Backup/Snapshot und wird fuer neue Deployments nicht mehr verwendet.
 - [ ] Supabase RLS & Policies einrichten: Row Level Security fuer `questions`, `votes`, `drafts`, `users`, `user_sessions` aktivieren und saubere Policies definieren (z. B. jeder darf Fragen lesen, Votes nur eigene sehen/schreiben, Userdaten nur serverseitig mit Service-Key), damit der anon-Key keine ungeschuetzten Zugriffe ermoeglicht.
-- [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die DB-Migration und RLS-Konfiguration vor dem naechsten Schritt sinnvoll/notwendig ist.
-- [x] Aktuell: SQLite-Datei pro Umgebung (`dev.db` lokal; ephemere Datei auf Vercel unter `/tmp/futuravote`), geeignet fuer MVP und interne Tests, aber nicht fuer laengerfristige Accounts in Produktion.
-- [ ] Spaetestens vor ersten oeffentlichen Tests oder aktiver Bewerbung der Seite: Umstellung auf eine persistente DB (z. B. Postgres bei Supabase/Neon/Vercel Postgres), inkl. Migration der Tabellen `questions`, `drafts`, `users`, `user_sessions`, `votes`.
-- [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die DB-Migration vor dem naechsten Schritt sinnvoll/notwendig ist.
+- [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die RLS-Konfiguration vor dem naechsten Schritt sinnvoll/notwendig ist.
 ### Detailseite (Stand)
 - [x] Detailseite zeigt echte absolute Votes (Ja/Nein) und Gesamtanzahl
 - [x] Views und Ranking-Score werden aus der DB angezeigt
@@ -226,7 +228,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [ ] Detail-Layout weiter verfeinern (Responsiveness der Bild/Titel-Zeile pruefen, Abstaende/Typografie auf Mobile optimieren)
 
 ### Noch offene Punkte aus den letzten Sessions
-- [ ] Login-/Auth-Phase umsetzen: Frage vorschlagen und Draft-Review nur fuer eingeloggte Nutzer freischalten (siehe Phase 2/5)
+- [x] Login-/Auth-Phase umgesetzt: Frage vorschlagen ist nur fuer eingeloggte Nutzer mit verifizierter E-Mail moeglich; Draft-Review bleibt wie geplant ohne Login moeglich.
 - [x] Standard-Region im Profil und regionale Priorisierung im Feed (siehe Regionen-Abschnitt)
 - [ ] Erweiterter Datums-Picker fuer Review-Zeitraum: echtes Kalender-Widget, keine Auswahl in der Vergangenheit, gute Mobile-Bedienbarkeit
 - [ ] Bessere Fehler-UX beim Bild-Upload (Progress/Spinner, klare Hinweistexte bei zu grosser Datei oder ungueltigem Format)

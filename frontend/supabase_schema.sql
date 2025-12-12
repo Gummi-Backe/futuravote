@@ -27,14 +27,22 @@ create table if not exists public.questions (
 create table if not exists public.votes (
   question_id text not null references public.questions(id) on delete cascade,
   session_id  text not null,
+  user_id     text references public.users(id),
   choice      text not null,
   created_at  timestamptz not null default now(),
   primary key (question_id, session_id)
 );
 
+-- Falls die Spalte fuer den Benutzer-Bezug noch fehlt, nachtraeglich anlegen
+alter table if exists public.votes
+  add column if not exists user_id text references public.users(id);
+
+create index if not exists votes_user_id_idx on public.votes(user_id);
+
 -- Drafts im Review-Bereich
 create table if not exists public.drafts (
   id              text primary key,
+  creator_id      text references public.users(id),
   title           text not null,
   description     text,
   region          text,
@@ -48,6 +56,12 @@ create table if not exists public.drafts (
   status          text not null default 'open',
   created_at      timestamptz not null default now()
 );
+
+-- Falls die Spalte fuer den Ersteller noch fehlt, nachtraeglich anlegen
+alter table if exists public.drafts
+  add column if not exists creator_id text references public.users(id);
+
+create index if not exists drafts_creator_id_idx on public.drafts(creator_id);
 
 -- Registrierte Nutzer
 create table if not exists public.users (

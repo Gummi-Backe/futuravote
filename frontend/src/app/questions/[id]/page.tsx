@@ -286,4 +286,3 @@ export default async function QuestionDetail(props: {
     </main>
   );
 }
-

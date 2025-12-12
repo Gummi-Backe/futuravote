@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  allQuestions as initialQuestions,
-  categories,
-  draftQueue as initialDrafts,
-  type Draft,
-  type Question,
-} from "./data/mock";
+import { categories, type Draft, type Question } from "./data/mock";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -21,6 +15,28 @@ const feedTabs = [
   { id: "new", label: "Neu & unbewertet", icon: "🆕" },
   { id: "unanswered", label: "Unbeantwortet", icon: "⭕" },
 ];
+
+function formatDraftTimeLeft(hours: number): string {
+  const totalHours = Math.max(0, Math.floor(hours));
+  if (totalHours <= 0) return "Abgelaufen";
+
+  if (totalHours < 24) {
+    return `${totalHours}h`;
+  }
+
+  const totalDays = Math.floor(totalHours / 24);
+  const years = Math.floor(totalDays / 365);
+  const daysAfterYears = totalDays % 365;
+  const months = Math.floor(daysAfterYears / 30);
+  const days = daysAfterYears % 30;
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years}J`);
+  if (months > 0) parts.push(`${months}M`);
+  if (days > 0 || parts.length === 0) parts.push(`${days}T`);
+
+  return parts.join(" ");
+}
 
 function formatDeadline(date: string) {
   const now = new Date();
@@ -86,7 +102,7 @@ function EventCard({
 
   return (
     <article
-      className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-emerald-500/10 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 mx-auto ${
+      className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 mx-auto ${
         voted ? "border-emerald-300/50 shadow-emerald-400/30" : ""
       } ${
         isClosingSoon ? "border-amber-300/60 shadow-amber-400/30" : ""
@@ -231,7 +247,9 @@ function DraftCard({
     <article className="flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30 mx-auto">
       <div className="flex items-center justify-between text-xs text-slate-200">
         <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
-        <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">{draft.timeLeftHours}h</span>
+        <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+          {formatDraftTimeLeft(draft.timeLeftHours)}
+        </span>
       </div>
       <div className="flex gap-3">
         {draft.imageUrl && (
@@ -327,8 +345,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<Question[]>(initialQuestions);
-  const [drafts, setDrafts] = useState<Draft[]>(initialDrafts);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -345,10 +363,15 @@ export default function Home() {
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
+  const [questionsOffset, setQuestionsOffset] = useState(0);
+  const [draftsOffset, setDraftsOffset] = useState(0);
+  const [questionsTotal, setQuestionsTotal] = useState<number | null>(null);
+  const [draftsTotal, setDraftsTotal] = useState<number | null>(null);
   const [showReviewOnly, setShowReviewOnly] = useState(false);
-  const [hasAppliedDefaultRegion, setHasAppliedDefaultRegion] = useState(false);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const draftsEndRef = useRef<HTMLDivElement | null>(null);
+  const [loadingMoreQuestions, setLoadingMoreQuestions] = useState(false);
+  const [loadingMoreDrafts, setLoadingMoreDrafts] = useState(false);
   const tabs = useMemo(
     () => [
       ...feedTabs.slice(0, 2),
@@ -413,7 +436,18 @@ export default function Home() {
     return Array.from(set);
   }, [questions, drafts]);
 
-  const mainRegions = useMemo(() => regionOptions.slice(0, 10), [regionOptions]);
+  const mainRegions = useMemo(() => {
+    const base = regionOptions.slice(0, 10);
+    // Standard-Region des Nutzers immer in den sichtbaren Buttons halten
+    // (nicht unter "..." verstecken)
+    const userRegion = currentUser?.defaultRegion;
+    if (userRegion && regionOptions.includes(userRegion)) {
+      if (!base.includes(userRegion)) {
+        return [userRegion, ...base.filter((r) => r !== userRegion)];
+      }
+    }
+    return base;
+  }, [regionOptions, currentUser?.defaultRegion]);
   const extraRegions = useMemo(() => regionOptions.slice(10), [regionOptions]);
 
   const extraCategories = useMemo(
@@ -424,21 +458,49 @@ export default function Home() {
   const fetchLatest = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/questions");
+      const params = new URLSearchParams();
+      params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
+      params.set("questionsOffset", "0");
+      params.set("draftsOffset", "0");
+      params.set("tab", activeTab);
+      if (activeCategory) params.set("category", activeCategory);
+      if (activeRegion) params.set("region", activeRegion);
+
+      const res = await fetch(`/api/questions?${params.toString()}`);
       if (!res.ok) throw new Error("API Response not ok");
       const data = await res.json();
-      setQuestions(data.questions ?? initialQuestions);
-      setDrafts(data.drafts ?? initialDrafts);
+
+      const initialQuestions: Question[] = data.questions ?? [];
+      const initialDrafts: Draft[] = data.drafts ?? [];
+
+      // Sicherstellen, dass keine Duplikate entstehen (z.B. nach Filterwechsel)
+      const uniqueQuestions = Array.from(
+        new Map(initialQuestions.map((q) => [q.id, q])).values(),
+      );
+      const uniqueDrafts = Array.from(
+        new Map(initialDrafts.map((d) => [d.id, d])).values(),
+      );
+
+      setQuestions(uniqueQuestions);
+      setDrafts(uniqueDrafts);
+      setQuestionsOffset(uniqueQuestions.length);
+      setDraftsOffset(uniqueDrafts.length);
+      setQuestionsTotal(typeof data.questionsTotal === "number" ? data.questionsTotal : null);
+      setDraftsTotal(typeof data.draftsTotal === "number" ? data.draftsTotal : null);
       setError(null);
       setToast(null);
     } catch {
-      setQuestions(initialQuestions);
-      setDrafts(initialDrafts);
-      setError("Konnte Daten nicht laden (zeige Mock-Daten).");
+      setQuestions([]);
+      setDrafts([]);
+      setQuestionsOffset(0);
+      setDraftsOffset(0);
+      setQuestionsTotal(null);
+      setDraftsTotal(null);
+      setError("Konnte Daten nicht laden.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab, activeCategory, activeRegion]);
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
     if (toastTimer.current) {
@@ -484,15 +546,6 @@ export default function Home() {
       .catch(() => setCurrentUser(null));
   }, []);
 
-  useEffect(() => {
-    if (hasAppliedDefaultRegion) return;
-    if (!currentUser || !currentUser.defaultRegion) return;
-    if (!regionOptions.includes(currentUser.defaultRegion)) return;
-
-    setActiveRegion(currentUser.defaultRegion);
-    setHasAppliedDefaultRegion(true);
-  }, [currentUser, hasAppliedDefaultRegion, regionOptions]);
-
   const handleLogout = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
@@ -504,27 +557,11 @@ export default function Home() {
   }, []);
 
   const filteredQuestions = useMemo(() => {
+    // Die eigentliche Tab-Logik (Alle, Top, Endet bald, Neu & wenig bewertet,
+    // Noch nicht abgestimmt) wird serverseitig in /api/questions und
+    // getQuestionsPageFromSupabase umgesetzt. Hier filtern wir nur noch nach
+    // Kategorie und Region, falls sich diese ändern.
     let result = questions;
-    if (activeTab === "trending") {
-      result = result.filter((q) => q.status === "trending");
-    } else if (activeTab === "new") {
-      const now = Date.now();
-      const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
-      result = result.filter((q) => {
-        const created = q.createdAt ? Date.parse(q.createdAt) : NaN;
-        const ageOk = Number.isFinite(created) ? now - created <= maxAgeMs : true;
-        const yes = q.yesVotes ?? 0;
-        const no = q.noVotes ?? 0;
-        const totalVotes = yes + no;
-        return ageOk && totalVotes < 10;
-      });
-    } else if (activeTab === "unanswered") {
-      result = result.filter((q) => !q.userChoice);
-    } else if (activeTab === "top") {
-      result = result.filter((q) => q.status === "top" || q.status === "closingSoon");
-    } else if (activeTab === "closingSoon") {
-      result = result.filter((q) => q.status === "closingSoon");
-    }
 
     if (activeCategory) {
       result = result.filter((q) => q.category === activeCategory);
@@ -536,30 +573,10 @@ export default function Home() {
         result = result.filter((q) => q.region === activeRegion);
       }
     }
-    const sorted = [...result];
 
-    if (activeTab === "new") {
-      sorted.sort((a, b) => {
-        const aTime = a.createdAt ? Date.parse(a.createdAt) : 0;
-        const bTime = b.createdAt ? Date.parse(b.createdAt) : 0;
-        return bTime - aTime;
-      });
-    } else if (activeTab === "closingSoon") {
-      sorted.sort((a, b) => {
-        const aTime = Date.parse(a.closesAt);
-        const bTime = Date.parse(b.closesAt);
-        return aTime - bTime;
-      });
-    } else {
-      sorted.sort((a, b) => {
-        const aScore = typeof a.rankingScore === "number" ? a.rankingScore : 0;
-        const bScore = typeof b.rankingScore === "number" ? b.rankingScore : 0;
-        return bScore - aScore;
-      });
-    }
-
-    return sorted;
-  }, [activeTab, activeCategory, activeRegion, questions]);
+    // Reihenfolge so lassen, wie sie vom Server kommt.
+    return result;
+  }, [activeCategory, activeRegion, questions]);
 
   const visibleQuestions = useMemo(
     () => filteredQuestions.slice(0, visibleQuestionCount),
@@ -601,36 +618,145 @@ export default function Home() {
   }, [filteredDrafts.length]);
 
   useEffect(() => {
-    if (!questionsEndRef.current || filteredQuestions.length <= QUESTIONS_PAGE_SIZE) return;
+    if (!questionsEndRef.current) return;
     if (typeof IntersectionObserver === "undefined") return;
     const target = questionsEndRef.current;
     const observer = new IntersectionObserver((entries) => {
       const [entry] = entries;
-      if (entry.isIntersecting) {
+      if (!entry.isIntersecting) return;
+
+      // Erst lokal mehr anzeigen, falls vorhanden
+      if (visibleQuestionCount < filteredQuestions.length) {
         setVisibleQuestionCount((prev) =>
           Math.min(prev + QUESTIONS_PAGE_SIZE, filteredQuestions.length)
         );
+        return;
       }
+
+      const alreadyLoadedAll =
+        questionsTotal !== null && questions.length >= questionsTotal;
+      if (alreadyLoadedAll || loadingMoreQuestions || questions.length === 0) {
+        return;
+      }
+
+      setLoadingMoreQuestions(true);
+      void (async () => {
+        try {
+          const params = new URLSearchParams();
+          params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
+          params.set("questionsOffset", String(questionsOffset));
+          params.set("draftsOffset", "0");
+          params.set("tab", activeTab);
+          if (activeCategory) params.set("category", activeCategory);
+          if (activeRegion) params.set("region", activeRegion);
+
+          const res = await fetch(`/api/questions?${params.toString()}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const newQuestions: Question[] = data.questions ?? [];
+
+          if (newQuestions.length > 0) {
+            setQuestions((prev) => {
+              const map = new Map<string, Question>();
+              for (const q of prev) map.set(q.id, q);
+              for (const q of newQuestions) map.set(q.id, q);
+              return Array.from(map.values());
+            });
+            setQuestionsOffset((prev) => prev + newQuestions.length);
+            if (typeof data.questionsTotal === "number") {
+              setQuestionsTotal(data.questionsTotal);
+            }
+          }
+        } catch {
+          // Fehler beim Nachladen ignorieren
+        } finally {
+          setLoadingMoreQuestions(false);
+        }
+      })();
     });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [filteredQuestions.length]);
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    filteredQuestions.length,
+    questions.length,
+    questionsOffset,
+    questionsTotal,
+    visibleQuestionCount,
+    loadingMoreQuestions,
+  ]);
 
   useEffect(() => {
-    if (!draftsEndRef.current || filteredDrafts.length <= DRAFTS_PAGE_SIZE) return;
+    if (!draftsEndRef.current) return;
     if (typeof IntersectionObserver === "undefined") return;
     const target = draftsEndRef.current;
     const observer = new IntersectionObserver((entries) => {
       const [entry] = entries;
-      if (entry.isIntersecting) {
+      if (!entry.isIntersecting) return;
+
+      if (visibleDraftCount < filteredDrafts.length) {
         setVisibleDraftCount((prev) =>
           Math.min(prev + DRAFTS_PAGE_SIZE, filteredDrafts.length)
         );
+        return;
       }
+
+      const alreadyLoadedAll =
+        draftsTotal !== null && drafts.length >= draftsTotal;
+      if (alreadyLoadedAll || loadingMoreDrafts || drafts.length === 0) {
+        return;
+      }
+
+      setLoadingMoreDrafts(true);
+      void (async () => {
+        try {
+          const params = new URLSearchParams();
+          params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
+          params.set("questionsOffset", "0");
+          params.set("draftsOffset", String(draftsOffset));
+          params.set("tab", activeTab);
+          if (activeCategory) params.set("category", activeCategory);
+          if (activeRegion) params.set("region", activeRegion);
+
+          const res = await fetch(`/api/questions?${params.toString()}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const newDrafts: Draft[] = data.drafts ?? [];
+
+          if (newDrafts.length > 0) {
+            setDrafts((prev) => {
+              const map = new Map<string, Draft>();
+              for (const d of prev) map.set(d.id, d);
+              for (const d of newDrafts) map.set(d.id, d);
+              return Array.from(map.values());
+            });
+            setDraftsOffset((prev) => prev + newDrafts.length);
+            if (typeof data.draftsTotal === "number") {
+              setDraftsTotal(data.draftsTotal);
+            }
+          }
+        } catch {
+          // Fehler beim Nachladen ignorieren
+        } finally {
+          setLoadingMoreDrafts(false);
+        }
+      })();
     });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [filteredDrafts.length]);
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    filteredDrafts.length,
+    drafts.length,
+    draftsOffset,
+    draftsTotal,
+    visibleDraftCount,
+    loadingMoreDrafts,
+  ]);
 
   const handleVote = useCallback(
     async (questionId: string, choice: "yes" | "no") => {
@@ -989,7 +1115,7 @@ export default function Home() {
           <button
             type="button"
             onClick={() => setActiveRegion(null)}
-            className={`rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition ${
+            className={`rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
               !activeRegion
                 ? "bg-emerald-500/25 text-white border border-emerald-300/60"
                 : "bg-white/5 text-slate-100 border border-white/15 hover:border-emerald-300/40"
@@ -997,36 +1123,45 @@ export default function Home() {
           >
             Alle Regionen
           </button>
-          {mainRegions.map((region) => (
-            <button
-              key={region}
-              type="button"
-              onClick={() => setActiveRegion(region === activeRegion ? null : region)}
-              className={`rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition ${
-                activeRegion === region
-                  ? "bg-emerald-500/25 text-white border border-emerald-300/60"
-                  : "bg-white/5 text-slate-100 border border-white/15 hover:border-emerald-300/40"
-              }`}
-            >
-              {region}
-            </button>
-          ))}
+          {mainRegions.map((region) => {
+            const isActive = activeRegion === region;
+            const isDefault = currentUser?.defaultRegion === region;
+            const baseClasses =
+              "rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition border hover:-translate-y-0.5";
+
+            let styleClasses: string;
+            if (isActive) {
+              // Aktiver Filter (immer deutlich hervorgehoben)
+              styleClasses = "bg-emerald-500/25 text-white border-emerald-300/60";
+            } else if (isDefault) {
+              // Standard-Region des Nutzers: leicht hervorgehoben, aber kein aktiver Filter
+              styleClasses = "bg-white/5 text-emerald-100 border-emerald-300/60 hover:border-emerald-300/70";
+            } else {
+              styleClasses = "bg-white/5 text-slate-100 border-white/15 hover:border-emerald-300/40";
+            }
+
+            return (
+              <button
+                key={region}
+                type="button"
+                onClick={() => setActiveRegion(region === activeRegion ? null : region)}
+                className={`${baseClasses} ${styleClasses}`}
+              >
+                {region}
+              </button>
+            );
+          })}
           {extraRegions.length > 0 && (
             <button
               type="button"
               onClick={() => setShowExtraRegions(true)}
-              className="rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 border border-white/20 bg-white/5 text-slate-100 hover:border-emerald-300/40 transition"
+              className="rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 border border-white/20 bg-white/5 text-slate-100 hover:border-emerald-300/40 transition hover:-translate-y-0.5"
               aria-label="Weitere Regionen"
             >
               ...
             </button>
           )}
         </div>
-        {currentUser?.defaultRegion && activeRegion === currentUser.defaultRegion && (
-          <p className="mt-1 text-[11px] text-emerald-200">
-            Gefiltert nach deiner Standard-Region <span className="font-semibold">{currentUser.defaultRegion}</span>.
-          </p>
-        )}
 
         {!showReviewOnly && (
           <section className="mt-8 space-y-4">

@@ -6,6 +6,7 @@ import {
   voteOnQuestionInSupabase,
   type VoteChoice,
 } from "@/app/data/dbSupabase";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 
 const RATE_LIMIT_MS = 5000;
 const lastVoteBySession = new Map<string, number>();
@@ -24,6 +25,16 @@ export async function POST(request: Request) {
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
 
+  // Optional: eingeloggten Nutzer fuer Profil-Statistiken ermitteln
+  const userSessionId = cookieStore.get("fv_user")?.value;
+  let userId: string | null = null;
+  if (userSessionId) {
+    const user = await getUserBySessionSupabase(userSessionId).catch(() => null);
+    if (user?.id) {
+      userId = user.id;
+    }
+  }
+
   const now = Date.now();
   const lastVote = lastVoteBySession.get(sessionId) ?? 0;
   const diff = now - lastVote;
@@ -39,7 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Question not found" }, { status: 404 });
   }
 
-  const updated = await voteOnQuestionInSupabase(questionId, normalizedChoice, sessionId);
+  const updated = await voteOnQuestionInSupabase(questionId, normalizedChoice, sessionId, userId);
   lastVoteBySession.set(sessionId, now);
   const response = NextResponse.json({ question: updated });
   if (!existingSession) {
