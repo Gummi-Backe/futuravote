@@ -5,9 +5,9 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import {
   getDraftsForCreatorFromSupabase,
   getQuestionsVotedByUserFromSupabase,
-  type Draft,
   type QuestionWithUserVote,
 } from "@/app/data/dbSupabase";
+import type { Draft } from "@/app/data/mock";
 
 export const dynamic = "force-dynamic";
 
