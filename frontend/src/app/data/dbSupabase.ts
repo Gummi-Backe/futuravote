@@ -17,6 +17,10 @@ export type QuestionWithVotes = Question & {
   userChoice?: VoteChoice;
 };
 
+export type QuestionWithUserVote = QuestionWithVotes & {
+  votedAt: string;
+};
+
 type QuestionRow = {
   id: string;
   title: string;
@@ -41,10 +45,12 @@ type VoteRow = {
   question_id: string;
   session_id: string;
   choice: VoteChoice;
+  created_at?: string;
 };
 
 type DraftRow = {
   id: string;
+  creator_id: string | null;
   title: string;
   description: string | null;
   region: string | null;
@@ -215,6 +221,199 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
   return (rows as QuestionRow[]).map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
 }
 
+export async function getQuestionsVotedByUserFromSupabase(options: {
+  userId: string;
+  choice?: VoteChoice | "all";
+  limit?: number;
+}): Promise<QuestionWithUserVote[]> {
+  const { userId, choice = "all", limit } = options;
+  const supabase = getSupabaseClient();
+
+  // Votes des Nutzers laden
+  let votesQuery = supabase
+    .from("votes")
+    .select("question_id, choice, created_at")
+    .eq("user_id", userId);
+
+  if (choice !== "all") {
+    votesQuery = votesQuery.eq("choice", choice);
+  }
+
+  votesQuery = votesQuery.order("created_at", { ascending: false });
+  if (typeof limit === "number" && limit > 0) {
+    votesQuery = votesQuery.limit(limit);
+  }
+
+  const { data: voteRows, error: votesError } = await votesQuery;
+  if (votesError) {
+    throw new Error(`Supabase getQuestionsVotedByUser (Votes) fehlgeschlagen: ${votesError.message}`);
+  }
+  if (!voteRows || voteRows.length === 0) {
+    return [];
+  }
+
+  // Falls derselbe Nutzer ueber mehrere Sessions auf dieselbe Frage gestimmt hat,
+  // nehmen wir nur die juengste Stimme pro Frage.
+  const perQuestion = new Map<
+    string,
+    {
+      question_id: string;
+      choice: VoteChoice;
+      created_at: string;
+    }
+  >();
+
+  for (const v of voteRows as VoteRow[]) {
+    const createdAt = (v.created_at as string | undefined) ?? new Date().toISOString();
+    const existing = perQuestion.get(v.question_id);
+    if (!existing || createdAt > existing.created_at) {
+      perQuestion.set(v.question_id, {
+        question_id: v.question_id,
+        choice: v.choice,
+        created_at: createdAt,
+      });
+    }
+  }
+
+  const uniqueVotes = Array.from(perQuestion.values()).sort((a, b) =>
+    a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0
+  );
+
+  const questionIds = uniqueVotes.map((v) => v.question_id);
+
+  const { data: questionRows, error: questionsError } = await supabase
+    .from("questions")
+    .select("*")
+    .in("id", questionIds);
+
+  if (questionsError) {
+    throw new Error(
+      `Supabase getQuestionsVotedByUser (Questions) fehlgeschlagen: ${questionsError.message}`
+    );
+  }
+  if (!questionRows || questionRows.length === 0) {
+    return [];
+  }
+
+  const byId = new Map<string, QuestionRow>();
+  for (const row of questionRows as QuestionRow[]) {
+    byId.set(row.id, row);
+  }
+
+  const result: QuestionWithUserVote[] = [];
+  for (const vote of uniqueVotes) {
+    const row = byId.get(vote.question_id);
+    if (!row) continue;
+    const mapped = mapQuestion(row, vote.choice);
+    result.push({
+      ...mapped,
+      votedAt: vote.created_at,
+    });
+  }
+
+  return result;
+}
+
+export async function getQuestionsPageFromSupabase(options: {
+  sessionId?: string;
+  limit: number;
+  offset: number;
+  tab?: string;
+  category?: string | null;
+  region?: string | null;
+}): Promise<{ items: QuestionWithVotes[]; total: number }> {
+  const { sessionId, limit, offset, tab, category, region } = options;
+  const supabase = getSupabaseClient();
+
+  let query = supabase.from("questions").select("*", { count: "exact" }).not("status", "eq", "archived");
+
+  if (category) {
+    query = query.eq("category", category);
+  }
+
+  if (region) {
+    if (region === "Global") {
+      query = query.or("region.is.null,region.eq.Global");
+    } else {
+      query = query.eq("region", region);
+    }
+  }
+
+  const now = new Date();
+
+  // Votes der aktuellen Session einmalig laden (fuer userChoice und ggf. "unanswered")
+  let sessionVotesMap = new Map<string, VoteChoice>();
+  let votedQuestionIds: string[] = [];
+  if (sessionId) {
+    const { data: votes, error: voteError } = await supabase
+      .from("votes")
+      .select("question_id, session_id, choice")
+      .eq("session_id", sessionId);
+
+    if (voteError) {
+      throw new Error(`Supabase getQuestionsPage (Votes) fehlgeschlagen: ${voteError.message}`);
+    }
+
+    const voteRows = (votes as VoteRow[]) ?? [];
+    sessionVotesMap = new Map(voteRows.map((v) => [v.question_id, v.choice]));
+
+    if (tab === "unanswered") {
+      votedQuestionIds = voteRows.map((v) => v.question_id);
+    }
+  }
+
+  if (tab === "trending") {
+    // Trending: Fragen der letzten 3 Tage, sortiert nach Ranking
+    const minCreatedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte("created_at", minCreatedAt);
+  } else if (tab === "new") {
+    // Neu & wenig bewertet: Fragen der letzten 14 Tage mit wenigen Stimmen
+    const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    query = query
+      .gte("created_at", minCreatedAt)
+      .lte("yes_votes", 5)
+      .lte("no_votes", 5);
+  } else if (tab === "top") {
+    // Top heute: Fragen der letzten 24 Stunden, nach Ranking sortiert
+    const minCreatedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte("created_at", minCreatedAt);
+  } else if (tab === "closingSoon") {
+    // Fragen, deren Abstimmung in den nächsten 14 Tagen endet
+    const todayIso = now.toISOString().split("T")[0];
+    const maxDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    query = query.gte("closes_at", todayIso).lte("closes_at", maxDate);
+  }
+
+  // "Noch nicht abgestimmt": nur Fragen ohne Vote in dieser Session
+  if (tab === "unanswered" && votedQuestionIds.length > 0) {
+    const inList = `(${votedQuestionIds.map((id) => `"${id}"`).join(",")})`;
+    query = query.not("id", "in", inList);
+  }
+
+  if (tab === "closingSoon") {
+    query = query.order("closes_at", { ascending: true });
+  } else if (tab === "new") {
+    query = query.order("created_at", { ascending: false });
+  } else {
+    query = query.order("ranking_score", { ascending: false }).order("created_at", { ascending: false });
+  }
+
+  query = query.range(offset, offset + limit - 1);
+
+  const { data: rows, error, count } = await query;
+  if (error) {
+    throw new Error(`Supabase getQuestionsPage fehlgeschlagen: ${error.message}`);
+  }
+  if (!rows || rows.length === 0) {
+    return { items: [], total: count ?? 0 };
+  }
+
+  const items = (rows as QuestionRow[]).map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+  return { items, total: count ?? items.length };
+}
+
 export async function getQuestionByIdFromSupabase(
   id: string,
   sessionId?: string
@@ -255,7 +454,8 @@ export async function getQuestionByIdFromSupabase(
 export async function voteOnQuestionInSupabase(
   id: string,
   choice: VoteChoice,
-  sessionId: string
+  sessionId: string,
+  userId?: string | null
 ): Promise<QuestionWithVotes | null> {
   const supabase = getSupabaseClient();
 
@@ -279,6 +479,7 @@ export async function voteOnQuestionInSupabase(
   const { error: insertError } = await supabase.from("votes").insert({
     question_id: id,
     session_id: sessionId,
+    user_id: userId ?? null,
     choice,
     created_at: now,
   });
@@ -342,8 +543,23 @@ export async function incrementViewsForAllInSupabase(): Promise<void> {
 // --- Drafts / Review / Admin (Supabase) ------------------------------------
 
 function mapDraftRow(row: DraftRow): Draft {
+  // Ursprüngliche Review-Dauer in Stunden
+  let timeLeft = row.time_left_hours ?? 72;
+
+  // Wenn ein Erstellungszeitpunkt vorhanden ist, berechnen wir die verbleibende Zeit
+  if (row.created_at) {
+    const createdMs = Date.parse(row.created_at);
+    if (Number.isFinite(createdMs)) {
+      const diffHours = (Date.now() - createdMs) / (1000 * 60 * 60);
+      timeLeft = Math.max(0, timeLeft - diffHours);
+    }
+  }
+
+  const roundedTimeLeft = Math.max(0, Math.round(timeLeft));
+
   return {
     id: row.id,
+    creatorId: row.creator_id ?? undefined,
     title: row.title,
     description: row.description ?? undefined,
     region: row.region ?? undefined,
@@ -352,7 +568,7 @@ function mapDraftRow(row: DraftRow): Draft {
     category: row.category,
     votesFor: row.votes_for ?? 0,
     votesAgainst: row.votes_against ?? 0,
-    timeLeftHours: row.time_left_hours ?? 72,
+    timeLeftHours: roundedTimeLeft,
     status: (row.status ?? "open") as Draft["status"],
   };
 }
@@ -371,6 +587,69 @@ export async function getDraftsFromSupabase(): Promise<Draft[]> {
   return (data as DraftRow[]).map(mapDraftRow);
 }
 
+export async function getDraftsForCreatorFromSupabase(options: {
+  creatorId: string;
+  status?: "all" | "open" | "accepted" | "rejected";
+}): Promise<Draft[]> {
+  const { creatorId, status } = options;
+  const supabase = getSupabaseClient();
+
+  let query = supabase.from("drafts").select("*").eq("creator_id", creatorId);
+
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  query = query.order("created_at", { ascending: false });
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Supabase getDraftsForCreator fehlgeschlagen: ${error.message}`);
+  }
+  if (!data) return [];
+  return (data as DraftRow[]).map(mapDraftRow);
+}
+
+export async function getDraftsPageFromSupabase(options: {
+  limit: number;
+  offset: number;
+  category?: string | null;
+  region?: string | null;
+  status?: "all" | "open" | "accepted" | "rejected";
+}): Promise<{ items: Draft[]; total: number }> {
+  const { limit, offset, category, region, status } = options;
+  const supabase = getSupabaseClient();
+
+  let query = supabase.from("drafts").select("*", { count: "exact" });
+
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  }
+
+  if (category) {
+    query = query.eq("category", category);
+  }
+
+  if (region) {
+    if (region === "Global") {
+      query = query.or("region.is.null,region.eq.Global");
+    } else {
+      query = query.eq("region", region);
+    }
+  }
+
+  query = query.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) {
+    throw new Error(`Supabase getDraftsPage fehlgeschlagen: ${error.message}`);
+  }
+  if (!data) return { items: [], total: count ?? 0 };
+
+  const items = (data as DraftRow[]).map(mapDraftRow);
+  return { items, total: count ?? items.length };
+}
+
 export async function createDraftInSupabase(input: {
   title: string;
   category: string;
@@ -380,6 +659,7 @@ export async function createDraftInSupabase(input: {
   imageCredit?: string;
   timeLeftHours?: number;
   targetClosesAt?: string;
+  creatorId?: string;
 }): Promise<Draft> {
   const supabase = getSupabaseClient();
   const id = randomUUID();
@@ -392,6 +672,7 @@ export async function createDraftInSupabase(input: {
     .from("drafts")
     .insert({
       id,
+      creator_id: input.creatorId ?? null,
       title: input.title,
       description: input.description ?? null,
       region: input.region ?? null,

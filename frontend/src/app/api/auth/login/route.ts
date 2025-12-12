@@ -50,11 +50,14 @@ export async function POST(request: Request) {
       user: { id: user.id, email: user.email, displayName: user.displayName },
     });
 
+    // Persistente Login-Session: Cookie bleibt auch nach Browser-Neustart erhalten,
+    // bis der Nutzer sich aktiv ausloggt (oder die Session abgelaufen/geloescht wird).
     response.cookies.set("fv_user", sessionId, {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 30, // 30 Tage in Sekunden
     });
 
     return response;

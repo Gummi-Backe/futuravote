@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     imageCredit,
     timeLeftHours,
     targetClosesAt,
+    creatorId: user.id,
   });
   return NextResponse.json({ draft }, { status: 201 });
 }

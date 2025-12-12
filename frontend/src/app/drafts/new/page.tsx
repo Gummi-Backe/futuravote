@@ -198,7 +198,10 @@ export default function NewDraftPage() {
     let finalRegion = "";
     if (regionSelect === "__custom_region") {
       finalRegion = customRegion.trim();
-    } else if (regionSelect !== "Global") {
+    } else if (regionSelect === "Global") {
+      // Global explizit als Region speichern, damit es in der DB sichtbar ist
+      finalRegion = "Global";
+    } else {
       finalRegion = regionSelect;
     }
 
@@ -225,6 +228,17 @@ export default function NewDraftPage() {
       finalClosesAt = closesAt.toISOString();
       const diffMs = closesAt.getTime() - now.getTime();
       finalTimeLeftHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+    }
+
+    if (!finalClosesAt) {
+      if (typeof window !== "undefined") {
+        const ok = window.confirm(
+          "Du hast kein genaues Enddatum für die Umfrage angegeben. Standardmäßig läuft sie 14 Tage ab jetzt. Möchtest du fortfahren?"
+        );
+        if (!ok) {
+          return;
+        }
+      }
     }
 
     setSubmitting(true);
@@ -261,7 +275,7 @@ export default function NewDraftPage() {
           title: trimmedTitle,
           description: trimmedDescription || undefined,
           category: finalCategory,
-          region: finalRegion || undefined,
+          region: finalRegion || "Global",
           imageUrl: finalImageUrl,
           imageCredit: trimmedImageCredit || undefined,
           timeLeftHours: finalTimeLeftHours,

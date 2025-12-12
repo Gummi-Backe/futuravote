@@ -32,6 +32,10 @@ export type Question = {
 
 export type Draft = {
   id: string;
+  /**
+   * Optionaler Ersteller des Drafts (Supabase-User).
+   */
+  creatorId?: string;
   title: string;
   description?: string;
   /**
@@ -50,7 +54,7 @@ export type Draft = {
   votesFor: number;
   votesAgainst: number;
   timeLeftHours: number;
-   status?: "open" | "accepted" | "rejected";
+  status?: "open" | "accepted" | "rejected";
 };
 
 export const categories = [
