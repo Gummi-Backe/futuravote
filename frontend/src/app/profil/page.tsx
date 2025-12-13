@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
-import { getSupabaseClient } from "@/app/lib/supabaseClient";
+import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { ProfileRegionForm } from "./ProfileRegionForm";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function ProfilPage() {
   }
 
   // Einfache Profil-Statistiken direkt aus Supabase laden
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   type ProfileStats = {
     draftsTotal: number;
@@ -161,7 +161,7 @@ export default async function ProfilPage() {
 
           {stats && (
             <div className="mt-5 space-y-3 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
-              <p className="font-semibold text-slate-100">Deine Aktivitaet (bisher)</p>
+              <p className="font-semibold text-slate-100">Deine Aktivität (bisher)</p>
               <div className="space-y-2">
                 <Link
                   href="/profil/aktivitaet?typ=drafts_all"

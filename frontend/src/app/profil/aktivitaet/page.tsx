@@ -322,7 +322,7 @@ export default async function ProfilAktivitaetPage({
         </Link>
 
         <header className="mt-2 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
-          <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Profil-Aktivitaet</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Profil-Aktivität</p>
           <h1 className="mt-1 text-2xl font-bold text-white">{config.title}</h1>
           <p className="mt-2 text-sm text-slate-200">{config.description}</p>
           <p className="mt-3 text-xs text-slate-400">

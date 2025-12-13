@@ -16,7 +16,7 @@
 - User-Model anlegen; Registrierung/Login; Sessions oder JWT; Passwort-Hashing.
 - RBAC-Middleware: Gast, User, Moderator, Admin; Guards pro Route.
 - Basis-Profileendpunkte: eigenes Profil lesen, einfache Reputation anzeigen.
-- [ ] Personalisierte Profil-Aktivitaet: Im Profil werden die Zahlen unter "Deine Aktivitaet (bisher)" als klickbare, animierte Buttons umgesetzt. Ein Klick oeffnet eine eigene Aktivitaetsansicht (z. B. "Meine Drafts", "Meine Abstimmungen"), in der die passenden Kacheln in sinnvoller Reihenfolge angezeigt werden (standardmaessig neueste zuerst; zusaetzlich einfache Filter wie "Angenommen/Abgelehnt" bzw. "Ja/Nein"). Basis: Votes werden neben `session_id` auch mit `user_id` verknuepft.
+- [x] Personalisierte Profil-Aktivitaet: Im Profil werden die Zahlen unter "Deine Aktivitaet (bisher)" als klickbare, animierte Buttons umgesetzt. Ein Klick oeffnet eine eigene Aktivitaetsansicht (z. B. "Meine Drafts", "Meine Abstimmungen"), in der die passenden Kacheln in sinnvoller Reihenfolge angezeigt werden (standardmaessig neueste zuerst; zusaetzlich einfache Filter wie "Angenommen/Abgelehnt" bzw. "Ja/Nein"). Basis: Votes werden neben `session_id` auch mit `user_id` verknuepft.
 - [x] Interessen-Statistiken pro Nutzer (Grundversion): im Profil werden bereits eine einfache Ja/Nein-Quote sowie Top-Kategorien auf Basis der eigenen Votes angezeigt; spaeter koennen diese Daten zusaetzlich fuer Filter im Feed genutzt werden (z.B. "zeige mir nur Fragen aus meinen Top-Kategorien").
 
 **Auth-Felder & Registrierung (spezifisch fuer Future-Vote)**

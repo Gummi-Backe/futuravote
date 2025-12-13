@@ -8,6 +8,11 @@ Next.js + Tailwind (App Router) mit Kachel-Feed fuer Ja/Nein-Prognosen, Draft-Re
 - `npm run lint` → ESLint
 - `npm run build` → Produktionsbuild
 
+### Supabase / Sicherheit
+- Fuer Produktion/oeffentliche Tests: `SUPABASE_SERVICE_ROLE_KEY` als Server-Secret setzen und RLS aktivieren.
+- SQL dafuer liegt in `../supabase/rls_policies.sql`.
+
+
 ### Struktur
 - `src/app/page.tsx` → Landing + Kachel-Grid + Draft-Review (Mock-Daten)
 - `src/app/questions/[id]/page.tsx` → Frage-Detailseite (Mock-Daten)

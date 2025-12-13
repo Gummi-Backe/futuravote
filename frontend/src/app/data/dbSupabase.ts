@@ -1,8 +1,10 @@
+import "server-only";
+
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { categories, type Draft, type Question } from "./mock";
-import { getSupabaseClient } from "@/app/lib/supabaseClient";
+import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
 export type VoteChoice = "yes" | "no";
@@ -188,7 +190,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
 }
 
 export async function getQuestionsFromSupabase(sessionId?: string): Promise<QuestionWithVotes[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data: rows, error } = await supabase
     .from("questions")
@@ -227,7 +229,7 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
   limit?: number;
 }): Promise<QuestionWithUserVote[]> {
   const { userId, choice = "all", limit } = options;
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   // Votes des Nutzers laden
   let votesQuery = supabase
@@ -323,7 +325,7 @@ export async function getQuestionsPageFromSupabase(options: {
   region?: string | null;
 }): Promise<{ items: QuestionWithVotes[]; total: number }> {
   const { sessionId, limit, offset, tab, category, region } = options;
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   let query = supabase.from("questions").select("*", { count: "exact" }).not("status", "eq", "archived");
 
@@ -418,7 +420,7 @@ export async function getQuestionByIdFromSupabase(
   id: string,
   sessionId?: string
 ): Promise<QuestionWithVotes | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data: row, error } = await supabase
     .from("questions")
@@ -457,7 +459,7 @@ export async function voteOnQuestionInSupabase(
   sessionId: string,
   userId?: string | null
 ): Promise<QuestionWithVotes | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   // Doppelvotes in derselben Session verhindern
   const { data: existingVote, error: existingError } = await supabase
@@ -520,7 +522,7 @@ export async function voteOnQuestionInSupabase(
 }
 
 export async function incrementViewsForAllInSupabase(): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data: rows, error } = await supabase.from("questions").select("id, views");
   if (error) {
@@ -574,7 +576,7 @@ function mapDraftRow(row: DraftRow): Draft {
 }
 
 export async function getDraftsFromSupabase(): Promise<Draft[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("drafts")
     .select("*")
@@ -592,7 +594,7 @@ export async function getDraftsForCreatorFromSupabase(options: {
   status?: "all" | "open" | "accepted" | "rejected";
 }): Promise<Draft[]> {
   const { creatorId, status } = options;
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   let query = supabase.from("drafts").select("*").eq("creator_id", creatorId);
 
@@ -618,7 +620,7 @@ export async function getDraftsPageFromSupabase(options: {
   status?: "all" | "open" | "accepted" | "rejected";
 }): Promise<{ items: Draft[]; total: number }> {
   const { limit, offset, category, region, status } = options;
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   let query = supabase.from("drafts").select("*", { count: "exact" });
 
@@ -661,7 +663,7 @@ export async function createDraftInSupabase(input: {
   targetClosesAt?: string;
   creatorId?: string;
 }): Promise<Draft> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const id = randomUUID();
   const timeLeft =
     typeof input.timeLeftHours === "number" && Number.isFinite(input.timeLeftHours) && input.timeLeftHours > 0
@@ -699,7 +701,7 @@ export async function createDraftInSupabase(input: {
 }
 
 async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const status = row.status ?? "open";
   if (status !== "open") return;
@@ -768,7 +770,7 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
 }
 
 export async function voteOnDraftInSupabase(id: string, choice: DraftReviewChoice): Promise<Draft | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data: row, error } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();
   if (error) {
@@ -801,7 +803,7 @@ export async function voteOnDraftInSupabase(id: string, choice: DraftReviewChoic
 }
 
 export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data: row, error } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();
   if (error) {
     throw new Error(`Supabase adminAcceptDraft (select) fehlgeschlagen: ${error.message}`);
@@ -868,7 +870,7 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
 }
 
 export async function adminRejectDraftInSupabase(id: string): Promise<Draft | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data: row, error } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();
   if (error) {
     throw new Error(`Supabase adminRejectDraft (select) fehlgeschlagen: ${error.message}`);
@@ -895,7 +897,7 @@ export async function adminRejectDraftInSupabase(id: string): Promise<Draft | nu
 }
 
 export async function adminDeleteDraftInSupabase(id: string): Promise<Draft | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data: row, error } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();
   if (error) {
     throw new Error(`Supabase adminDeleteDraft (select) fehlgeschlagen: ${error.message}`);
@@ -914,7 +916,7 @@ export async function adminDeleteDraftInSupabase(id: string): Promise<Draft | nu
 }
 
 export async function adminArchiveQuestionInSupabase(id: string): Promise<QuestionWithVotes | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data: existingRow, error: selectError } = await supabase
     .from("questions")
     .select("*")
@@ -941,7 +943,7 @@ export async function adminArchiveQuestionInSupabase(id: string): Promise<Questi
 }
 
 export async function adminDeleteQuestionInSupabase(id: string): Promise<QuestionWithVotes | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data: row, error } = await supabase.from("questions").select("*").eq("id", id).maybeSingle();
   if (error) {
     throw new Error(`Supabase adminDeleteQuestion (select) fehlgeschlagen: ${error.message}`);

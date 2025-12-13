@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createUserSessionSupabase, getUserByEmailSupabase } from "@/app/data/dbSupabaseUsers";
+import {
+  createUserSessionSupabase,
+  getUserByEmailSupabase,
+  getUserPasswordHashByEmailSupabase,
+} from "@/app/data/dbSupabaseUsers";
 
 export const revalidate = 0;
 
@@ -25,23 +29,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "E-Mail oder Passwort ist falsch." }, { status: 401 });
     }
 
-    // Passwort-Hash aus Supabase holen
-    const userForPassword = await getUserByEmailSupabase(trimmedEmail);
-    if (!userForPassword) {
-      return NextResponse.json({ error: "E-Mail oder Passwort ist falsch." }, { status: 401 });
-    }
-
-    // userForPassword enthält password_hash im Supabase-Row; wir lesen ihn über einen separaten Select
-    // (einfachheitshalber erneut über getUserByEmailSupabase, intern wird die vollständige Zeile verwendet)
-
-    const supabase = (await import("@/app/lib/supabaseClient")).getSupabaseClient();
-    const { data, error } = await supabase
-      .from("users")
-      .select("password_hash")
-      .eq("email", trimmedEmail)
-      .maybeSingle();
-
-    if (error || !data?.password_hash || !verifyPassword(password, data.password_hash)) {
+    const passwordHash = await getUserPasswordHashByEmailSupabase(trimmedEmail);
+    if (!passwordHash || !verifyPassword(password, passwordHash)) {
       return NextResponse.json({ error: "E-Mail oder Passwort ist falsch." }, { status: 401 });
     }
 
