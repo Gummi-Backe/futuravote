@@ -9,19 +9,26 @@ import {
 
 export const revalidate = 0;
 
+type IncludeMode = "both" | "questions" | "drafts";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const tab = searchParams.get("tab") ?? undefined;
   const category = searchParams.get("category");
   const region = searchParams.get("region");
+
+  const include = (searchParams.get("include") as IncludeMode | null) ?? "both";
+  const includeQuestions = include !== "drafts";
+  const includeDrafts = include !== "questions";
+
   const pageSizeParam = searchParams.get("pageSize");
   const questionsOffsetParam = searchParams.get("questionsOffset");
   const draftsOffsetParam = searchParams.get("draftsOffset");
 
-  const pageSize = Math.min(
-    Math.max(Number(pageSizeParam) || 16, 4),
-    64
-  );
+  const questionsCursor = searchParams.get("questionsCursor");
+  const draftsCursor = searchParams.get("draftsCursor");
+
+  const pageSize = Math.min(Math.max(Number(pageSizeParam) || 16, 4), 64);
   const questionsOffset = Math.max(Number(questionsOffsetParam) || 0, 0);
   const draftsOffset = Math.max(Number(draftsOffsetParam) || 0, 0);
 
@@ -30,29 +37,40 @@ export async function GET(request: Request) {
   const sessionId = existingSession ?? randomUUID();
 
   await incrementViewsForAllInSupabase();
+
   const [questionsPage, draftsPage] = await Promise.all([
-    getQuestionsPageFromSupabase({
-      sessionId,
-      limit: pageSize,
-      offset: questionsOffset,
-      tab,
-      category,
-      region,
-    }),
-    getDraftsPageFromSupabase({
-      limit: pageSize,
-      offset: draftsOffset,
-      category,
-      region,
-      status: "open",
-    }),
+    includeQuestions
+      ? getQuestionsPageFromSupabase({
+          sessionId,
+          limit: pageSize,
+          offset: questionsOffset,
+          cursor: questionsCursor,
+          tab,
+          category,
+          region,
+        })
+      : Promise.resolve({ items: [], total: 0, nextCursor: null }),
+    includeDrafts
+      ? getDraftsPageFromSupabase({
+          limit: pageSize,
+          offset: draftsOffset,
+          cursor: draftsCursor,
+          category,
+          region,
+          status: "open",
+        })
+      : Promise.resolve({ items: [], total: 0, nextCursor: null }),
   ]);
+
   const response = NextResponse.json({
-    questions: questionsPage.items,
-    drafts: draftsPage.items,
-    questionsTotal: questionsPage.total,
-    draftsTotal: draftsPage.total,
+    questions: includeQuestions ? questionsPage.items : [],
+    drafts: includeDrafts ? draftsPage.items : [],
+    questionsTotal: includeQuestions ? questionsPage.total : null,
+    draftsTotal: includeDrafts ? draftsPage.total : null,
+    questionsNextCursor: includeQuestions ? questionsPage.nextCursor : null,
+    draftsNextCursor: includeDrafts ? draftsPage.nextCursor : null,
   });
+
   if (!existingSession) {
     response.cookies.set("fv_session", sessionId, {
       path: "/",
@@ -61,5 +79,6 @@ export async function GET(request: Request) {
       secure: process.env.NODE_ENV === "production",
     });
   }
+
   return response;
 }

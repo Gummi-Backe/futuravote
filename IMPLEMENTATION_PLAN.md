@@ -190,7 +190,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
  - [x] Tab "Noch nicht abgestimmt" (frueher "Unbeantwortet"): zeigt Fragen, bei denen der aktuelle Nutzer in dieser Session noch keine Stimme abgegeben hat (unabhaengig davon, wie viele andere schon abgestimmt haben)
  - [ ] Schwelle fuer "wenig Stimmen" dynamisch machen: Statt eines festen Werts (z. B. < 10) spaeter anhand von Statistik aus der Datenbank berechnen (z. B. Median/Perzentile der Stimmenanzahl pro Altersgruppe der Fragen) und daraus eine adaptive Grenze ableiten, ab wann eine Frage als "wenig bewertet" gilt. Diese Logik wird sinnvollerweise mit der spaeteren Postgres‑/Produktionsdatenbank umgesetzt.
  - [x] Einfache Infinite-Scroll-Logik fuer Feed und Review-Bereich: Zunaechst nur ein Teil der Kacheln wird gerendert, weitere werden beim Scrollen automatisch nachgeladen (Client-seitig, API weiterhin ohne Paging)
- - [ ] Echte Pagination fuer Fragen und Drafts:
+ - [x] Echte Pagination fuer Fragen und Drafts:
    - API `/api/questions` um Paging-Parameter erweitern (`pageSize`, `questionsCursor`, `draftsCursor`, `tab`, `category`, `region`).
    - Fragen und Drafts serverseitig sortieren und filtern (inkl. Tabs "Top", "Endet bald", "Neu & wenig bewertet", "Noch nicht abgestimmt") und pro Request nur eine Seite zurueckgeben.
    - Cursor-basiertes Paging (z.B. ueber `created_at` + `id`) bevorzugen, damit das Ranking stabil bleibt.
