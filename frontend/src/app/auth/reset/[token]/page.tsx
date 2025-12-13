@@ -1,11 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useMemo, useState, type FormEvent } from "react";
 
-export default function PasswordResetTokenPage({ params }: { params: { token: string } }) {
+export default function PasswordResetTokenPage() {
   const router = useRouter();
-  const token = params.token;
+  const params = useParams();
+
+  const token = useMemo(() => {
+    const raw = (params as any)?.token as string | string[] | undefined;
+    if (!raw) return "";
+    return Array.isArray(raw) ? raw[0] ?? "" : raw;
+  }, [params]);
 
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
@@ -18,6 +24,11 @@ export default function PasswordResetTokenPage({ params }: { params: { token: st
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+
+    if (!token) {
+      setError("Token fehlt. Bitte nutze den Link aus der E-Mail erneut.");
+      return;
+    }
 
     if (!password || password.length < 8) {
       setError("Das Passwort muss mindestens 8 Zeichen lang sein.");
@@ -63,6 +74,12 @@ export default function PasswordResetTokenPage({ params }: { params: { token: st
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Neues Passwort setzen</h1>
+
+          {!token && !success && (
+            <div className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+              Token fehlt. Bitte oeffne den Reset-Link aus deiner E-Mail erneut.
+            </div>
+          )}
 
           {success ? (
             <div className="mt-4 space-y-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
@@ -127,7 +144,7 @@ export default function PasswordResetTokenPage({ params }: { params: { token: st
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !token}
                 className="w-full rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-500 disabled:opacity-60"
               >
                 {submitting ? "Speichere..." : "Passwort setzen"}
