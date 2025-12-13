@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const questionsCursor = searchParams.get("questionsCursor");
   const draftsCursor = searchParams.get("draftsCursor");
 
-  const pageSize = Math.min(Math.max(Number(pageSizeParam) || 16, 4), 64);
+  const pageSize = Math.min(Math.max(Number(pageSizeParam) || 16, 1), 64);
   const questionsOffset = Math.max(Number(questionsOffsetParam) || 0, 0);
   const draftsOffset = Math.max(Number(draftsOffsetParam) || 0, 0);
 
