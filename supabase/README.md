@@ -6,7 +6,9 @@ sollte RLS (Row Level Security) aktiv sein.
 
 ### Vorgehen
 - In Supabase: `SQL Editor` oeffnen
-- Inhalt aus `supabase/draft_reviews.sql` ausfuehren (einmalig)`n- Inhalt aus `supabase/rls_policies.sql` ausfuehren (idempotent)
+- Inhalt aus `supabase/draft_reviews.sql` ausfuehren (einmalig)
+- Inhalt aus `supabase/password_resets.sql` ausfuehren (einmalig)
+- Inhalt aus `supabase/rls_policies.sql` ausfuehren (idempotent)
 - In Vercel/Prod und lokal sicherstellen:
   - `SUPABASE_SERVICE_ROLE_KEY` ist als **Server-Secret** gesetzt (niemals `NEXT_PUBLIC_...`)
 

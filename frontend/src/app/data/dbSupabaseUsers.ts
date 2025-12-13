@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 
 export type UserRole = "user" | "admin";
@@ -279,4 +279,91 @@ export async function updateUserDefaultRegionSupabase(
   }
 
   return mapUser(data as DbUser);
+}
+function sha256Hex(input: string): string {
+  return createHash("sha256").update(input).digest("hex");
+}
+
+export async function createPasswordResetTokenSupabase(options: {
+  userId: string;
+  ttlMinutes?: number;
+}): Promise<string> {
+  const supabase = getSupabaseAdminClient();
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = sha256Hex(token);
+  const ttlMinutes = options.ttlMinutes ?? 60;
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+
+  // Vorherige Tokens fuer den Nutzer aufraeumen
+  await supabase.from("password_resets").delete().eq("user_id", options.userId);
+
+  const { error } = await supabase.from("password_resets").insert({
+    user_id: options.userId,
+    token_hash: tokenHash,
+    expires_at: expiresAt,
+  });
+
+  if (error) {
+    throw new Error(`Supabase createPasswordResetToken fehlgeschlagen: ${error.message}`);
+  }
+
+  return token;
+}
+
+export async function resetPasswordByTokenSupabase(options: {
+  token: string;
+  newPasswordHash: string;
+}): Promise<{ ok: boolean; reason?: "invalid" | "expired" | "used" }> {
+  const supabase = getSupabaseAdminClient();
+  const tokenHash = sha256Hex(options.token);
+
+  const { data, error } = await supabase
+    .from("password_resets")
+    .select("id, user_id, expires_at, used_at")
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase resetPasswordByToken (select) fehlgeschlagen: ${error.message}`);
+  }
+  if (!data) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const row = data as any;
+  if (row.used_at) {
+    return { ok: false, reason: "used" };
+  }
+
+  const expiresMs = Date.parse(row.expires_at as string);
+  if (Number.isNaN(expiresMs) || expiresMs < Date.now()) {
+    // Abgelaufene Tokens entfernen
+    await supabase.from("password_resets").delete().eq("id", row.id as string);
+    return { ok: false, reason: "expired" };
+  }
+
+  const userId = row.user_id as string;
+
+  const { error: updateUserError } = await supabase
+    .from("users")
+    .update({ password_hash: options.newPasswordHash })
+    .eq("id", userId);
+
+  if (updateUserError) {
+    throw new Error(`Supabase resetPasswordByToken (update user) fehlgeschlagen: ${updateUserError.message}`);
+  }
+
+  const { error: markUsedError } = await supabase
+    .from("password_resets")
+    .update({ used_at: new Date().toISOString() })
+    .eq("id", row.id as string);
+
+  if (markUsedError) {
+    throw new Error(`Supabase resetPasswordByToken (mark used) fehlgeschlagen: ${markUsedError.message}`);
+  }
+
+  // Alle Sessions des Users invalidieren
+  await supabase.from("user_sessions").delete().eq("user_id", userId);
+
+  return { ok: true };
 }

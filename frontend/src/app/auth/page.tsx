@@ -225,6 +225,15 @@ export default function AuthPage() {
               </div>
             </div>
 
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={() => router.push("/auth/reset")}
+                className="text-left text-xs text-emerald-100 hover:text-emerald-200"
+              >
+                Passwort vergessen?
+              </button>
+            )}
             {mode === "register" && (
               <>
                 <div className="space-y-1">

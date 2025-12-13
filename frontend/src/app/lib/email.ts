@@ -64,4 +64,42 @@ export async function sendVerificationEmail(options: {
     html,
   });
 }
+export async function sendPasswordResetEmail(options: {
+  to: string;
+  displayName: string;
+  resetUrl: string;
+}): Promise<void> {
+  const transport = getTransporter();
 
+  const subject = "Passwort zuruecksetzen fuer Future-Vote";
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    "du hast (oder jemand anderes hat) ein Zuruecksetzen deines Passworts angefordert.",
+    "Klicke auf den folgenden Link, um ein neues Passwort zu setzen:",
+    options.resetUrl,
+    "",
+    "Der Link ist nur kurze Zeit gueltig. Wenn du das nicht warst, ignoriere diese E-Mail.",
+  ].join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>du hast (oder jemand anderes hat) ein Zuruecksetzen deines Passworts angefordert.</p>
+    <p>Klicke auf den folgenden Link, um ein neues Passwort zu setzen:</p>
+    <p><a href="${options.resetUrl}">${options.resetUrl}</a></p>
+    <p><strong>Hinweis:</strong> Der Link ist nur kurze Zeit gueltig. Wenn du das nicht warst, ignoriere diese E-Mail.</p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Passwort-Reset-Link:", options.resetUrl);
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}
