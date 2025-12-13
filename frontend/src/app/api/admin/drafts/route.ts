@@ -14,6 +14,9 @@ type AdminDraftBody = {
   action?: "accept" | "reject" | "delete";
 };
 
+export async function GET() {
+  return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
+}
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;

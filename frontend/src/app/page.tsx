@@ -7,6 +7,7 @@ import { categories, type Draft, type Question } from "./data/mock";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
+const REVIEWED_DRAFTS_STORAGE_KEY = "fv_reviewed_drafts_v1";
 
 const feedTabs = [
   { id: "all", label: "Alle", icon: "✨" },
@@ -537,6 +538,34 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const raw = window.localStorage.getItem(REVIEWED_DRAFTS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return;
+      setReviewedDrafts(parsed as Record<string, boolean>);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const markDraftReviewed = useCallback((draftId: string) => {
+    setReviewedDrafts((prev) => {
+      const next = { ...prev, [draftId]: true };
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(REVIEWED_DRAFTS_STORAGE_KEY, JSON.stringify(next));
+        }
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     // Aktuellen User fuer UI (Login-Status) abrufen
     void fetch("/api/auth/me")
@@ -807,17 +836,6 @@ export default function Home() {
       if (!debugMultiReview && reviewedDrafts[draftId]) return;
 
       setDraftSubmittingId(draftId);
-      setDrafts((prev) =>
-        prev.map((d) =>
-          d.id === draftId
-            ? {
-                ...d,
-                votesFor: choice === "good" ? d.votesFor + 1 : d.votesFor,
-                votesAgainst: choice === "bad" ? d.votesAgainst + 1 : d.votesAgainst,
-              }
-            : d
-        )
-      );
 
       try {
         const res = await fetch("/api/drafts/vote", {
@@ -825,14 +843,22 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ draftId, choice }),
         });
-        const data = await res.json();
+
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(data?.error ?? "Draft-Review fehlgeschlagen");
         }
+
         const updated = data.draft as Draft;
         setDrafts((prev) => prev.map((d) => (d.id === draftId ? updated : d)));
-        setReviewedDrafts((prev) => ({ ...prev, [draftId]: true }));
-        showToast("Dein Review wurde gespeichert.", "success");
+        markDraftReviewed(draftId);
+
+        if (data?.alreadyVoted) {
+          showToast("Du hast diesen Draft bereits bewertet.", "error");
+        } else {
+          showToast("Dein Review wurde gespeichert.", "success");
+        }
+
         await fetchLatest();
       } catch {
         setError("Draft-Review fehlgeschlagen. Bitte versuche es erneut.");
@@ -842,7 +868,7 @@ export default function Home() {
         setDraftSubmittingId(null);
       }
     },
-    [debugMultiReview, fetchLatest, reviewedDrafts, showToast]
+    [debugMultiReview, fetchLatest, markDraftReviewed, reviewedDrafts, showToast]
   );
 
   const handleAdminDraftAction = useCallback(
