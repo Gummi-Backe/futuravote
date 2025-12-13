@@ -218,7 +218,7 @@ Ziel: Feed-Ranking wie bei Instagram – schnelles, hohes Engagement wird gepush
 - [x] Eigenen Supabase-Datenpfad fuer Fragen/Votes implementiert (`src/app/data/dbSupabase.ts`) und API-Routen umgestellt: `/api/questions`, `/api/questions/[id]`, `/api/votes`, `/api/health`.
 - [x] Draft-/Admin-Operationen (Promote/Archivieren/Loeschen von Fragen) ebenfalls auf Supabase umgestellt, so dass `questions` nicht mehr aus SQLite geschrieben wird.
 - [x] User/Auth-Daten (users, user_sessions, email_verifications) auf Supabase verschoben; die alte SQLite-Datei dient nur noch als lokales Backup/Snapshot und wird fuer neue Deployments nicht mehr verwendet.
-- [ ] Supabase RLS & Policies einrichten: Row Level Security fuer `questions`, `votes`, `drafts`, `users`, `user_sessions` aktivieren und saubere Policies definieren (z. B. jeder darf Fragen lesen, Votes nur eigene sehen/schreiben, Userdaten nur serverseitig mit Service-Key), damit der anon-Key keine ungeschuetzten Zugriffe ermoeglicht.
+- [x] Supabase RLS & Policies einrichten: Row Level Security fuer `questions`, `votes`, `drafts`, `users`, `user_sessions` aktivieren und saubere Policies definieren (z. B. jeder darf Fragen lesen, Votes nur eigene sehen/schreiben, Userdaten nur serverseitig mit Service-Key), damit der anon-Key keine ungeschuetzten Zugriffe ermoeglicht.
 - [ ] Assistent soll den Betreiber explizit darauf hinweisen, sobald im Chat von "oeffentlichem Test", "Beta", "Werbung" oder aehnlichen Begriffen die Rede ist, dass die RLS-Konfiguration vor dem naechsten Schritt sinnvoll/notwendig ist.
 ### Detailseite (Stand)
 - [x] Detailseite zeigt echte absolute Votes (Ja/Nein) und Gesamtanzahl
