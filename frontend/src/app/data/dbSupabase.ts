@@ -971,16 +971,39 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
   }
 }
 
-export async function voteOnDraftInSupabase(id: string, choice: DraftReviewChoice): Promise<Draft | null> {
+export async function voteOnDraftInSupabase(
+  id: string,
+  choice: DraftReviewChoice,
+  sessionId: string
+): Promise<{ draft: Draft | null; alreadyVoted: boolean }> {
   const supabase = getSupabaseAdminClient();
 
   const { data: row, error } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();
   if (error) {
     throw new Error(`Supabase voteOnDraft (select) fehlgeschlagen: ${error.message}`);
   }
-  if (!row) return null;
+  if (!row) return { draft: null, alreadyVoted: false };
 
   const draftRow = row as DraftRow;
+
+  // Prevent multiple reviews for the same draft within the same anonymous session.
+  const { error: reviewInsertError } = await supabase
+    .from("draft_reviews")
+    .insert({ draft_id: id, session_id: sessionId, choice });
+
+  if (reviewInsertError) {
+    const code = (reviewInsertError as any).code as string | undefined;
+    if (code === "23505") {
+      return { draft: mapDraftRow(draftRow), alreadyVoted: true };
+    }
+    if (code === "42P01") {
+      throw new Error(
+        "Supabase table 'draft_reviews' is missing. Run supabase/draft_reviews.sql in the Supabase SQL Editor first."
+      );
+    }
+    throw new Error(`Supabase voteOnDraft (review insert) fehlgeschlagen: ${reviewInsertError.message}`);
+  }
+
   const nextVotesFor = choice === "good" ? (draftRow.votes_for ?? 0) + 1 : draftRow.votes_for ?? 0;
   const nextVotesAgainst = choice === "bad" ? (draftRow.votes_against ?? 0) + 1 : draftRow.votes_against ?? 0;
 
@@ -1001,9 +1024,8 @@ export async function voteOnDraftInSupabase(id: string, choice: DraftReviewChoic
 
   await maybePromoteDraftInSupabase(effectiveRow);
 
-  return mapDraftRow(effectiveRow);
+  return { draft: mapDraftRow(effectiveRow), alreadyVoted: false };
 }
-
 export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | null> {
   const supabase = getSupabaseAdminClient();
   const { data: row, error } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();

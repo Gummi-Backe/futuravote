@@ -14,6 +14,7 @@ alter table if exists public.votes enable row level security;
 alter table if exists public.users enable row level security;
 alter table if exists public.user_sessions enable row level security;
 alter table if exists public.email_verifications enable row level security;
+alter table if exists public.draft_reviews enable row level security;
 
 -- Idempotent: Policies neu anlegen
 drop policy if exists "Public read questions" on public.questions;

@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
 
@@ -13,7 +15,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as VoteBody;
   } catch {
-    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
   }
 
   const draftId = body.draftId?.trim();
@@ -23,14 +25,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Draft-ID fehlt." }, { status: 400 });
   }
   if (choice !== "good" && choice !== "bad") {
-    return NextResponse.json({ error: "Ungültige Auswahl." }, { status: 400 });
+    return NextResponse.json({ error: "Ungueltige Auswahl." }, { status: 400 });
   }
 
-  const draft = await voteOnDraftInSupabase(draftId, choice);
+  const cookieStore = await cookies();
+  const existingSession = cookieStore.get("fv_session")?.value;
+  const sessionId = existingSession ?? randomUUID();
+
+  const { draft, alreadyVoted } = await voteOnDraftInSupabase(draftId, choice, sessionId);
   if (!draft) {
     return NextResponse.json({ error: "Draft nicht gefunden." }, { status: 404 });
   }
 
-  return NextResponse.json({ draft }, { status: 200 });
-}
+  const response = NextResponse.json({ draft, alreadyVoted }, { status: 200 });
 
+  if (!existingSession) {
+    response.cookies.set("fv_session", sessionId, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+
+  return response;
+}

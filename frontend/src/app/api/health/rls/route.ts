@@ -96,6 +96,7 @@ export async function GET() {
       checkSensitiveTable({ table: "email_verifications", keyColumns: ["id"] }),
       // votes hat bei uns keinen einfachen "id"-PK; wir pruefen per (question_id, session_id).
       checkSensitiveTable({ table: "votes", keyColumns: ["question_id", "session_id"] }),
+      checkSensitiveTable({ table: "draft_reviews", keyColumns: ["draft_id", "session_id"] }),
     ]);
 
     const strictOk = checks.every((c) => c.blocked === true);
