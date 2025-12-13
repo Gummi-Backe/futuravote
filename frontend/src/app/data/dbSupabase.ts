@@ -395,20 +395,7 @@ export async function getQuestionsPageFromSupabase(options: {
 }): Promise<{ items: QuestionWithVotes[]; total: number; nextCursor: string | null }> {
   const { sessionId, limit, offset, cursor, tab, category, region } = options;
   const supabase = getSupabaseAdminClient();
-
-  let query = supabase.from("questions").select("*", { count: "exact" }).not("status", "eq", "archived");
-
-  if (category) {
-    query = query.eq("category", category);
-  }
-
-  if (region) {
-    if (region === "Global") {
-      query = query.or("region.is.null,region.eq.Global");
-    } else {
-      query = query.eq("region", region);
-    }
-  }
+  const cursorMode = Boolean(cursor);
 
   const now = new Date();
 
@@ -433,35 +420,69 @@ export async function getQuestionsPageFromSupabase(options: {
     }
   }
 
-  if (tab === "trending") {
-    // Trending: Fragen der letzten 3 Tage, sortiert nach Ranking
-    const minCreatedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    query = query.gte("created_at", minCreatedAt);
-  } else if (tab === "new") {
-    // Neu & wenig bewertet: Fragen der letzten 14 Tage mit wenigen Stimmen
-    const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
-    query = query
-      .gte("created_at", minCreatedAt)
-      .lte("yes_votes", 5)
-      .lte("no_votes", 5);
-  } else if (tab === "top") {
-    // Top heute: Fragen der letzten 24 Stunden, nach Ranking sortiert
-    const minCreatedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    query = query.gte("created_at", minCreatedAt);
-  } else if (tab === "closingSoon") {
-    // Fragen, deren Abstimmung in den naechsten 14 Tagen endet
-    const todayIso = now.toISOString().split("T")[0];
-    const maxDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0];
-    query = query.gte("closes_at", todayIso).lte("closes_at", maxDate);
+  const applyFilters = (query: any) => {
+    query = query.not("status", "eq", "archived");
+
+    if (category) {
+      query = query.eq("category", category);
+    }
+
+    if (region) {
+      if (region === "Global") {
+        query = query.or("region.is.null,region.eq.Global");
+      } else {
+        query = query.eq("region", region);
+      }
+    }
+
+    if (tab === "trending") {
+      // Trending: Fragen der letzten 3 Tage, sortiert nach Ranking
+      const minCreatedAt = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte("created_at", minCreatedAt);
+    } else if (tab === "new") {
+      // Neu & wenig bewertet: Fragen der letzten 14 Tage mit wenigen Stimmen
+      const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      query = query
+        .gte("created_at", minCreatedAt)
+        .lte("yes_votes", 5)
+        .lte("no_votes", 5);
+    } else if (tab === "top") {
+      // Top heute: Fragen der letzten 24 Stunden, nach Ranking sortiert
+      const minCreatedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte("created_at", minCreatedAt);
+    } else if (tab === "closingSoon") {
+      // Fragen, deren Abstimmung in den naechsten 14 Tagen endet
+      const todayIso = now.toISOString().split("T")[0];
+      const maxDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+      query = query.gte("closes_at", todayIso).lte("closes_at", maxDate);
+    }
+
+    // "Noch nicht abgestimmt": nur Fragen ohne Vote in dieser Session
+    if (tab === "unanswered" && votedQuestionIds.length > 0) {
+      const inList = `(${votedQuestionIds.map((id) => `"${id}"`).join(",")})`;
+      query = query.not("id", "in", inList);
+    }
+
+    return query;
+  };
+
+  let totalCount: number | null = null;
+  if (cursorMode) {
+    const countQuery = applyFilters(supabase.from("questions").select("id", { count: "exact", head: true }));
+    const { error: countError, count } = await countQuery;
+    if (countError) {
+      throw new Error(`Supabase getQuestionsPage (Count) fehlgeschlagen: ${countError.message}`);
+    }
+    totalCount = count ?? 0;
   }
 
-  // "Noch nicht abgestimmt": nur Fragen ohne Vote in dieser Session
-  if (tab === "unanswered" && votedQuestionIds.length > 0) {
-    const inList = `(${votedQuestionIds.map((id) => `"${id}"`).join(",")})`;
-    query = query.not("id", "in", inList);
-  }
+  let query = cursorMode
+    ? supabase.from("questions").select("*")
+    : supabase.from("questions").select("*", { count: "exact" });
+
+  query = applyFilters(query);
 
   const decoded = decodeCursor(cursor);
 
@@ -496,8 +517,8 @@ export async function getQuestionsPageFromSupabase(options: {
     }
   }
 
-  if (cursor) {
-    query = query.limit(limit);
+  if (cursorMode) {
+    query = query.limit(limit + 1);
   } else {
     query = query.range(offset, offset + limit - 1);
   }
@@ -506,16 +527,21 @@ export async function getQuestionsPageFromSupabase(options: {
   if (error) {
     throw new Error(`Supabase getQuestionsPage fehlgeschlagen: ${error.message}`);
   }
-  if (!rows || rows.length === 0) {
-    return { items: [], total: count ?? 0, nextCursor: null };
+
+  const typedRows = (rows as QuestionRow[]) ?? [];
+  if (typedRows.length === 0) {
+    return { items: [], total: cursorMode ? totalCount ?? 0 : count ?? 0, nextCursor: null };
   }
 
-  const typedRows = rows as QuestionRow[];
-  const items = typedRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+  const total = cursorMode ? totalCount ?? typedRows.length : count ?? typedRows.length;
+  const hasMore = cursorMode ? typedRows.length > limit : offset + typedRows.length < total;
+  const pageRows = cursorMode && typedRows.length > limit ? typedRows.slice(0, limit) : typedRows;
 
-  const lastRow = typedRows[typedRows.length - 1];
+  const items = pageRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+
+  const lastRow = pageRows[pageRows.length - 1];
   let nextCursor: string | null = null;
-  if (lastRow && typedRows.length === limit) {
+  if (lastRow && hasMore) {
     if (tab === "closingSoon") {
       nextCursor = encodeCursor({
         v: 1,
@@ -541,9 +567,8 @@ export async function getQuestionsPageFromSupabase(options: {
     }
   }
 
-  return { items, total: count ?? items.length, nextCursor };
+  return { items, total, nextCursor };
 }
-
 export async function getQuestionByIdFromSupabase(
   id: string,
   sessionId?: string
@@ -750,24 +775,40 @@ export async function getDraftsPageFromSupabase(options: {
 }): Promise<{ items: Draft[]; total: number; nextCursor: string | null }> {
   const { limit, offset, cursor, category, region, status } = options;
   const supabase = getSupabaseAdminClient();
+  const cursorMode = Boolean(cursor);
 
-  let query = supabase.from("drafts").select("*", { count: "exact" });
-
-  if (status && status !== "all") {
-    query = query.eq("status", status);
-  }
-
-  if (category) {
-    query = query.eq("category", category);
-  }
-
-  if (region) {
-    if (region === "Global") {
-      query = query.or("region.is.null,region.eq.Global");
-    } else {
-      query = query.eq("region", region);
+  const applyFilters = (query: any) => {
+    if (status && status !== "all") {
+      query = query.eq("status", status);
     }
+
+    if (category) {
+      query = query.eq("category", category);
+    }
+
+    if (region) {
+      if (region === "Global") {
+        query = query.or("region.is.null,region.eq.Global");
+      } else {
+        query = query.eq("region", region);
+      }
+    }
+
+    return query;
+  };
+
+  let totalCount: number | null = null;
+  if (cursorMode) {
+    const countQuery = applyFilters(supabase.from("drafts").select("id", { count: "exact", head: true }));
+    const { error: countError, count } = await countQuery;
+    if (countError) {
+      throw new Error(`Supabase getDraftsPage (Count) fehlgeschlagen: ${countError.message}`);
+    }
+    totalCount = count ?? 0;
   }
+
+  let query = cursorMode ? supabase.from("drafts").select("*") : supabase.from("drafts").select("*", { count: "exact" });
+  query = applyFilters(query);
 
   query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
 
@@ -779,8 +820,8 @@ export async function getDraftsPageFromSupabase(options: {
     );
   }
 
-  if (cursor) {
-    query = query.limit(limit);
+  if (cursorMode) {
+    query = query.limit(limit + 1);
   } else {
     query = query.range(offset, offset + limit - 1);
   }
@@ -789,14 +830,20 @@ export async function getDraftsPageFromSupabase(options: {
   if (error) {
     throw new Error(`Supabase getDraftsPage fehlgeschlagen: ${error.message}`);
   }
-  if (!data) return { items: [], total: count ?? 0, nextCursor: null };
 
-  const rows = data as DraftRow[];
-  const items = rows.map(mapDraftRow);
+  const rows = (data as DraftRow[]) ?? [];
+  if (rows.length === 0) {
+    return { items: [], total: cursorMode ? totalCount ?? 0 : count ?? 0, nextCursor: null };
+  }
 
-  const lastRow = rows[rows.length - 1];
+  const total = cursorMode ? totalCount ?? rows.length : count ?? rows.length;
+  const hasMore = cursorMode ? rows.length > limit : offset + rows.length < total;
+  const pageRows = cursorMode && rows.length > limit ? rows.slice(0, limit) : rows;
+  const items = pageRows.map(mapDraftRow);
+
+  const lastRow = pageRows[pageRows.length - 1];
   const nextCursor =
-    lastRow && rows.length === limit
+    lastRow && hasMore
       ? encodeCursor({
           v: 1,
           kind: "drafts",
@@ -805,9 +852,8 @@ export async function getDraftsPageFromSupabase(options: {
         })
       : null;
 
-  return { items, total: count ?? items.length, nextCursor };
+  return { items, total, nextCursor };
 }
-
 export async function createDraftInSupabase(input: {
   title: string;
   category: string;
