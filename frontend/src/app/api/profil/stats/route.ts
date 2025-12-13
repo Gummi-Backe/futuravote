@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
-import { getSupabaseClient } from "@/app/lib/supabaseClient";
+import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 
 export const revalidate = 0;
 
@@ -17,7 +17,7 @@ export async function GET() {
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   // Draft-Statistiken (als Ersteller)
   const { count: draftsTotal } = await supabase

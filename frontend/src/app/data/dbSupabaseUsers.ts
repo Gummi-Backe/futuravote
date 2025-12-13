@@ -1,5 +1,7 @@
+import "server-only";
+
 import { randomUUID } from "crypto";
-import { getSupabaseClient } from "@/app/lib/supabaseClient";
+import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 
 export type UserRole = "user" | "admin";
 
@@ -43,7 +45,7 @@ export async function createUserSupabase(input: {
   role?: UserRole;
   defaultRegion?: string | null;
 }): Promise<User> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const id = randomUUID();
   const role: UserRole = input.role ?? "user";
   const defaultRegion = input.defaultRegion ?? null;
@@ -71,11 +73,28 @@ export async function createUserSupabase(input: {
   return mapUser(data as DbUser);
 }
 
+export async function getUserPasswordHashByEmailSupabase(email: string): Promise<string | null> {
+  const supabase = getSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("password_hash")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase getUserPasswordHashByEmail fehlgeschlagen: ${error.message}`);
+  }
+
+  return (data as any)?.password_hash ?? null;
+}
+
+
 export async function createEmailVerificationTokenSupabase(
   userId: string,
   ttlHours: number = 24
 ): Promise<string> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const id = randomUUID();
   const token = randomUUID();
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
@@ -98,7 +117,7 @@ export async function createEmailVerificationTokenSupabase(
 }
 
 export async function verifyEmailByTokenSupabase(token: string): Promise<User | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from("email_verifications")
@@ -159,7 +178,7 @@ export async function verifyEmailByTokenSupabase(token: string): Promise<User | 
 }
 
 export async function getUserByEmailSupabase(email: string): Promise<User | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from("users")
@@ -176,7 +195,7 @@ export async function getUserByEmailSupabase(email: string): Promise<User | null
 }
 
 export async function hasAdminUserSupabase(): Promise<boolean> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("users")
     .select("id")
@@ -193,7 +212,7 @@ export async function hasAdminUserSupabase(): Promise<boolean> {
 }
 
 export async function createUserSessionSupabase(userId: string): Promise<string> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   const id = randomUUID();
 
   const { error } = await supabase.from("user_sessions").insert({
@@ -209,7 +228,7 @@ export async function createUserSessionSupabase(userId: string): Promise<string>
 }
 
 export async function getUserBySessionSupabase(sessionId: string): Promise<User | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from("user_sessions")
@@ -243,7 +262,7 @@ export async function updateUserDefaultRegionSupabase(
   userId: string,
   region: string | null
 ): Promise<User> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   const { data, error } = await supabase
     .from("users")
