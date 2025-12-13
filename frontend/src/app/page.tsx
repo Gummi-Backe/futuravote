@@ -173,7 +173,7 @@ function EventCard({
             <span suppressHydrationWarning>{formatDeadline(question.closesAt)}</span>
           </span>
           <span className="text-slate-200">
-            Ja {question.yesPct}% · Nein {question.noPct}%
+            Ja {question.yesVotes} ({question.yesPct}%) · Nein {question.noVotes} ({question.noPct}%)
           </span>
         </div>
         <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
@@ -277,11 +277,17 @@ function DraftCard({
         </p>
       )}
       <div className="flex items-center gap-2 text-xs text-slate-200">
-        <span className="font-semibold text-emerald-200">{yesPct}% gute Frage</span>
+        <span className="font-semibold text-emerald-200">{draft.votesFor} Gut ({yesPct}%)</span>
         <span className="text-slate-400">·</span>
-        <span className="font-semibold text-rose-200">{noPct}% ablehnen</span>
+        <span className="font-semibold text-rose-200">{draft.votesAgainst} Schlecht ({noPct}%)</span>
       </div>
       <VoteBar yesPct={yesPct} noPct={noPct} />
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
+        <span>Bis Entscheidung: min. 5 Reviews & +2 Vorsprung</span>
+        <span>
+          Aktuell: {draft.votesFor + draft.votesAgainst}/5 Reviews · Vorsprung {Math.abs(draft.votesFor - draft.votesAgainst)}/2
+        </span>
+      </div>
       <div className="flex gap-3">
         <button
           type="button"

@@ -5,16 +5,27 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { categories } from "@/app/data/mock";
 
-function getMinEndDateTimeString(): string {
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function getTodayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = pad2(now.getMonth() + 1);
+  const day = pad2(now.getDate());
+  return `${year}-${month}-${day}`;
+}
+
+function getMinTimeStringForDate(date: string): string {
+  const today = getTodayDateString();
+  if (!date || date !== today) return "00:00";
+
   const now = new Date();
   now.setMinutes(now.getMinutes() + 5);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const year = now.getFullYear();
-  const month = pad(now.getMonth() + 1);
-  const day = pad(now.getDate());
-  const hour = pad(now.getHours());
-  const minute = pad(now.getMinutes());
-  return `${year}-${month}-${day}T${hour}:${minute}`;
+  const hour = pad2(now.getHours());
+  const minute = pad2(now.getMinutes());
+  return `${hour}:${minute}`;
 }
 
 function getPreviewCategoryLetter(category: string, customCategory: string, useCustomCategory: boolean): string {
@@ -84,7 +95,10 @@ export default function NewDraftPage() {
 
   const [reviewMode, setReviewMode] = useState<"duration" | "endDate">("duration");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
-  const [endDateTime, setEndDateTime] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [endTime, setEndTime] = useState<string>("");
+  const minEndDate = getTodayDateString();
+  const minEndTime = getMinTimeStringForDate(endDate || minEndDate);
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageCredit, setImageCredit] = useState("");
@@ -215,14 +229,15 @@ export default function NewDraftPage() {
       }
       finalTimeLeftHours = timeLeftHours;
     } else {
-      if (!endDateTime) {
-        setError("Bitte wähle ein Datum und eine Uhrzeit für das Ende des Reviews.");
+      const composedEndDateTime = endDate && endTime ? `${endDate}T${endTime}` : "";
+      if (!composedEndDateTime) {
+        setError("Bitte waehle ein Datum und eine Uhrzeit fuer das Ende des Reviews.");
         return;
       }
-      const closesAt = new Date(endDateTime);
+      const closesAt = new Date(composedEndDateTime);
       const now = new Date();
       if (Number.isNaN(closesAt.getTime()) || closesAt <= now) {
-        setError("Das gewählte Datum liegt in der Vergangenheit. Bitte wähle einen Zeitpunkt in der Zukunft.");
+        setError("Das gewaehlte Datum liegt in der Vergangenheit. Bitte waehle einen Zeitpunkt in der Zukunft.");
         return;
       }
       finalClosesAt = closesAt.toISOString();
@@ -615,7 +630,15 @@ export default function NewDraftPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setReviewMode("endDate")}
+                  onClick={() => {
+                    const initialDate = endDate || minEndDate;
+                    const initialMinTime = getMinTimeStringForDate(initialDate);
+                    setEndDate(initialDate);
+                    if (!endTime || endTime < initialMinTime) {
+                      setEndTime(initialMinTime);
+                    }
+                    setReviewMode("endDate");
+                  }}
                   className={`rounded-full px-3 py-1 transition ${
                     reviewMode === "endDate"
                       ? "bg-emerald-500/40 text-white"
@@ -643,14 +666,42 @@ export default function NewDraftPage() {
                 </>
               ) : (
                 <>
-                  <input
-                    id="endDateTime"
-                    type="datetime-local"
-                    value={endDateTime}
-                    onChange={(e) => setEndDateTime(e.target.value)}
-                    min={getMinEndDateTimeString()}
-                    className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  />
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label htmlFor="endDate" className="text-xs font-medium text-slate-200">
+                        Datum
+                      </label>
+                      <input
+                        id="endDate"
+                        type="date"
+                        value={endDate}
+                        min={minEndDate}
+                        onChange={(e) => {
+                          const nextDate = e.target.value;
+                          setEndDate(nextDate);
+                          const nextMinTime = getMinTimeStringForDate(nextDate || minEndDate);
+                          if (!endTime || endTime < nextMinTime) {
+                            setEndTime(nextMinTime);
+                          }
+                        }}
+                        className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="endTime" className="text-xs font-medium text-slate-200">
+                        Uhrzeit
+                      </label>
+                      <input
+                        id="endTime"
+                        type="time"
+                        value={endTime}
+                        min={getMinTimeStringForDate(endDate || minEndDate)}
+                        step={300}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                      />
+                    </div>
+                  </div>
                   <p className="text-xs text-slate-400">
                     Wähle genau, bis wann die Community deine Frage reviewen kann. Intern wird daraus eine Dauer in
                     Stunden berechnet.
