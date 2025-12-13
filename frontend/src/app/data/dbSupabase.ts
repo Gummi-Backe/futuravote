@@ -43,6 +43,74 @@ type QuestionRow = {
   created_at: string | null;
 };
 
+type QuestionsRankCursor = {
+  v: 1;
+  kind: "questions_rank";
+  rankingScore: number;
+  createdAt: string;
+  id: string;
+};
+
+type QuestionsNewCursor = {
+  v: 1;
+  kind: "questions_new";
+  createdAt: string;
+  id: string;
+};
+
+type QuestionsClosingCursor = {
+  v: 1;
+  kind: "questions_closing";
+  closesAt: string;
+  id: string;
+};
+
+type DraftsCursor = {
+  v: 1;
+  kind: "drafts";
+  createdAt: string;
+  id: string;
+};
+
+type CursorPayload = QuestionsRankCursor | QuestionsNewCursor | QuestionsClosingCursor | DraftsCursor;
+
+function toBase64Url(input: string): string {
+  return Buffer.from(input, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(input: string): string {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((input.length + 3) % 4);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function encodeCursor(payload: CursorPayload): string {
+  return toBase64Url(JSON.stringify(payload));
+}
+
+function decodeCursor(raw?: string | null): CursorPayload | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(fromBase64Url(raw)) as Partial<CursorPayload>;
+    if (parsed?.v != 1) return null;
+    if (typeof (parsed as any).kind !== "string") return null;
+    return parsed as CursorPayload;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeTimestamp(value: string | null | undefined): string {
+  if (!value) return new Date(0).toISOString();
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return new Date(0).toISOString();
+  return new Date(parsed).toISOString();
+}
+
+
 type VoteRow = {
   question_id: string;
   session_id: string;
@@ -320,11 +388,12 @@ export async function getQuestionsPageFromSupabase(options: {
   sessionId?: string;
   limit: number;
   offset: number;
+  cursor?: string | null;
   tab?: string;
   category?: string | null;
   region?: string | null;
-}): Promise<{ items: QuestionWithVotes[]; total: number }> {
-  const { sessionId, limit, offset, tab, category, region } = options;
+}): Promise<{ items: QuestionWithVotes[]; total: number; nextCursor: string | null }> {
+  const { sessionId, limit, offset, cursor, tab, category, region } = options;
   const supabase = getSupabaseAdminClient();
 
   let query = supabase.from("questions").select("*", { count: "exact" }).not("status", "eq", "archived");
@@ -380,7 +449,7 @@ export async function getQuestionsPageFromSupabase(options: {
     const minCreatedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
     query = query.gte("created_at", minCreatedAt);
   } else if (tab === "closingSoon") {
-    // Fragen, deren Abstimmung in den nächsten 14 Tagen endet
+    // Fragen, deren Abstimmung in den naechsten 14 Tagen endet
     const todayIso = now.toISOString().split("T")[0];
     const maxDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -394,26 +463,85 @@ export async function getQuestionsPageFromSupabase(options: {
     query = query.not("id", "in", inList);
   }
 
+  const decoded = decodeCursor(cursor);
+
   if (tab === "closingSoon") {
-    query = query.order("closes_at", { ascending: true });
+    query = query.order("closes_at", { ascending: true }).order("id", { ascending: true });
+
+    if (decoded?.kind === "questions_closing") {
+      query = query.or(
+        `closes_at.gt.${decoded.closesAt},and(closes_at.eq.${decoded.closesAt},id.gt.${decoded.id})`
+      );
+    }
   } else if (tab === "new") {
-    query = query.order("created_at", { ascending: false });
+    query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
+
+    if (decoded?.kind === "questions_new") {
+      const createdAt = normalizeTimestamp(decoded.createdAt);
+      query = query.or(
+        `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${decoded.id})`
+      );
+    }
   } else {
-    query = query.order("ranking_score", { ascending: false }).order("created_at", { ascending: false });
+    query = query
+      .order("ranking_score", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+
+    if (decoded?.kind === "questions_rank") {
+      const createdAt = normalizeTimestamp(decoded.createdAt);
+      query = query.or(
+        `ranking_score.lt.${decoded.rankingScore},and(ranking_score.eq.${decoded.rankingScore},created_at.lt.${createdAt}),and(ranking_score.eq.${decoded.rankingScore},created_at.eq.${createdAt},id.lt.${decoded.id})`
+      );
+    }
   }
 
-  query = query.range(offset, offset + limit - 1);
+  if (cursor) {
+    query = query.limit(limit);
+  } else {
+    query = query.range(offset, offset + limit - 1);
+  }
 
   const { data: rows, error, count } = await query;
   if (error) {
     throw new Error(`Supabase getQuestionsPage fehlgeschlagen: ${error.message}`);
   }
   if (!rows || rows.length === 0) {
-    return { items: [], total: count ?? 0 };
+    return { items: [], total: count ?? 0, nextCursor: null };
   }
 
-  const items = (rows as QuestionRow[]).map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
-  return { items, total: count ?? items.length };
+  const typedRows = rows as QuestionRow[];
+  const items = typedRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+
+  const lastRow = typedRows[typedRows.length - 1];
+  let nextCursor: string | null = null;
+  if (lastRow && typedRows.length === limit) {
+    if (tab === "closingSoon") {
+      nextCursor = encodeCursor({
+        v: 1,
+        kind: "questions_closing",
+        closesAt: lastRow.closes_at,
+        id: lastRow.id,
+      });
+    } else if (tab === "new") {
+      nextCursor = encodeCursor({
+        v: 1,
+        kind: "questions_new",
+        createdAt: normalizeTimestamp(lastRow.created_at),
+        id: lastRow.id,
+      });
+    } else {
+      nextCursor = encodeCursor({
+        v: 1,
+        kind: "questions_rank",
+        rankingScore: Number(lastRow.ranking_score ?? 0),
+        createdAt: normalizeTimestamp(lastRow.created_at),
+        id: lastRow.id,
+      });
+    }
+  }
+
+  return { items, total: count ?? items.length, nextCursor };
 }
 
 export async function getQuestionByIdFromSupabase(
@@ -615,11 +743,12 @@ export async function getDraftsForCreatorFromSupabase(options: {
 export async function getDraftsPageFromSupabase(options: {
   limit: number;
   offset: number;
+  cursor?: string | null;
   category?: string | null;
   region?: string | null;
   status?: "all" | "open" | "accepted" | "rejected";
-}): Promise<{ items: Draft[]; total: number }> {
-  const { limit, offset, category, region, status } = options;
+}): Promise<{ items: Draft[]; total: number; nextCursor: string | null }> {
+  const { limit, offset, cursor, category, region, status } = options;
   const supabase = getSupabaseAdminClient();
 
   let query = supabase.from("drafts").select("*", { count: "exact" });
@@ -640,16 +769,43 @@ export async function getDraftsPageFromSupabase(options: {
     }
   }
 
-  query = query.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+  query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
+
+  const decoded = decodeCursor(cursor);
+  if (decoded?.kind == "drafts") {
+    const createdAt = normalizeTimestamp(decoded.createdAt);
+    query = query.or(
+      `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${decoded.id})`
+    );
+  }
+
+  if (cursor) {
+    query = query.limit(limit);
+  } else {
+    query = query.range(offset, offset + limit - 1);
+  }
 
   const { data, error, count } = await query;
   if (error) {
     throw new Error(`Supabase getDraftsPage fehlgeschlagen: ${error.message}`);
   }
-  if (!data) return { items: [], total: count ?? 0 };
+  if (!data) return { items: [], total: count ?? 0, nextCursor: null };
 
-  const items = (data as DraftRow[]).map(mapDraftRow);
-  return { items, total: count ?? items.length };
+  const rows = data as DraftRow[];
+  const items = rows.map(mapDraftRow);
+
+  const lastRow = rows[rows.length - 1];
+  const nextCursor =
+    lastRow && rows.length === limit
+      ? encodeCursor({
+          v: 1,
+          kind: "drafts",
+          createdAt: normalizeTimestamp(lastRow.created_at),
+          id: lastRow.id,
+        })
+      : null;
+
+  return { items, total: count ?? items.length, nextCursor };
 }
 
 export async function createDraftInSupabase(input: {

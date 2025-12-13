@@ -363,8 +363,8 @@ export default function Home() {
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
-  const [questionsOffset, setQuestionsOffset] = useState(0);
-  const [draftsOffset, setDraftsOffset] = useState(0);
+  const [questionsCursor, setQuestionsCursor] = useState<string | null>(null);
+  const [draftsCursor, setDraftsCursor] = useState<string | null>(null);
   const [questionsTotal, setQuestionsTotal] = useState<number | null>(null);
   const [draftsTotal, setDraftsTotal] = useState<number | null>(null);
   const [showReviewOnly, setShowReviewOnly] = useState(false);
@@ -460,8 +460,7 @@ export default function Home() {
     try {
       const params = new URLSearchParams();
       params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
-      params.set("questionsOffset", "0");
-      params.set("draftsOffset", "0");
+      params.set("include", "both");
       params.set("tab", activeTab);
       if (activeCategory) params.set("category", activeCategory);
       if (activeRegion) params.set("region", activeRegion);
@@ -483,8 +482,8 @@ export default function Home() {
 
       setQuestions(uniqueQuestions);
       setDrafts(uniqueDrafts);
-      setQuestionsOffset(uniqueQuestions.length);
-      setDraftsOffset(uniqueDrafts.length);
+      setQuestionsCursor(typeof data.questionsNextCursor === "string" ? data.questionsNextCursor : null);
+      setDraftsCursor(typeof data.draftsNextCursor === "string" ? data.draftsNextCursor : null);
       setQuestionsTotal(typeof data.questionsTotal === "number" ? data.questionsTotal : null);
       setDraftsTotal(typeof data.draftsTotal === "number" ? data.draftsTotal : null);
       setError(null);
@@ -492,8 +491,8 @@ export default function Home() {
     } catch {
       setQuestions([]);
       setDrafts([]);
-      setQuestionsOffset(0);
-      setDraftsOffset(0);
+      setQuestionsCursor(null);
+      setDraftsCursor(null);
       setQuestionsTotal(null);
       setDraftsTotal(null);
       setError("Konnte Daten nicht laden.");
@@ -634,18 +633,20 @@ export default function Home() {
       }
 
       const alreadyLoadedAll =
-        questionsTotal !== null && questions.length >= questionsTotal;
+        !questionsCursor || (questionsTotal !== null && questions.length >= questionsTotal);
       if (alreadyLoadedAll || loadingMoreQuestions || questions.length === 0) {
         return;
       }
+
+      if (!questionsCursor) return;
 
       setLoadingMoreQuestions(true);
       void (async () => {
         try {
           const params = new URLSearchParams();
           params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
-          params.set("questionsOffset", String(questionsOffset));
-          params.set("draftsOffset", "0");
+          params.set("include", "questions");
+          if (questionsCursor) params.set("questionsCursor", questionsCursor);
           params.set("tab", activeTab);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
@@ -655,6 +656,11 @@ export default function Home() {
           const data = await res.json();
           const newQuestions: Question[] = data.questions ?? [];
 
+          setQuestionsCursor(typeof data.questionsNextCursor === "string" ? data.questionsNextCursor : null);
+          if (typeof data.questionsTotal === "number") {
+            setQuestionsTotal(data.questionsTotal);
+          }
+
           if (newQuestions.length > 0) {
             setQuestions((prev) => {
               const map = new Map<string, Question>();
@@ -662,11 +668,7 @@ export default function Home() {
               for (const q of newQuestions) map.set(q.id, q);
               return Array.from(map.values());
             });
-            setQuestionsOffset((prev) => prev + newQuestions.length);
-            if (typeof data.questionsTotal === "number") {
-              setQuestionsTotal(data.questionsTotal);
-            }
-          }
+}
         } catch {
           // Fehler beim Nachladen ignorieren
         } finally {
@@ -682,7 +684,7 @@ export default function Home() {
     activeRegion,
     filteredQuestions.length,
     questions.length,
-    questionsOffset,
+    questionsCursor,
     questionsTotal,
     visibleQuestionCount,
     loadingMoreQuestions,
@@ -704,18 +706,20 @@ export default function Home() {
       }
 
       const alreadyLoadedAll =
-        draftsTotal !== null && drafts.length >= draftsTotal;
+        !draftsCursor || (draftsTotal !== null && drafts.length >= draftsTotal);
       if (alreadyLoadedAll || loadingMoreDrafts || drafts.length === 0) {
         return;
       }
+
+      if (!draftsCursor) return;
 
       setLoadingMoreDrafts(true);
       void (async () => {
         try {
           const params = new URLSearchParams();
           params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
-          params.set("questionsOffset", "0");
-          params.set("draftsOffset", String(draftsOffset));
+          params.set("include", "drafts");
+          if (draftsCursor) params.set("draftsCursor", draftsCursor);
           params.set("tab", activeTab);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
@@ -725,6 +729,11 @@ export default function Home() {
           const data = await res.json();
           const newDrafts: Draft[] = data.drafts ?? [];
 
+          setDraftsCursor(typeof data.draftsNextCursor === "string" ? data.draftsNextCursor : null);
+          if (typeof data.draftsTotal === "number") {
+            setDraftsTotal(data.draftsTotal);
+          }
+
           if (newDrafts.length > 0) {
             setDrafts((prev) => {
               const map = new Map<string, Draft>();
@@ -732,11 +741,7 @@ export default function Home() {
               for (const d of newDrafts) map.set(d.id, d);
               return Array.from(map.values());
             });
-            setDraftsOffset((prev) => prev + newDrafts.length);
-            if (typeof data.draftsTotal === "number") {
-              setDraftsTotal(data.draftsTotal);
-            }
-          }
+}
         } catch {
           // Fehler beim Nachladen ignorieren
         } finally {
@@ -752,7 +757,7 @@ export default function Home() {
     activeRegion,
     filteredDrafts.length,
     drafts.length,
-    draftsOffset,
+    draftsCursor,
     draftsTotal,
     visibleDraftCount,
     loadingMoreDrafts,
