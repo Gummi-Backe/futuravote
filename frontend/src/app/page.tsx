@@ -1248,51 +1248,29 @@ export default function Home() {
             </h2>
             <div className="flex items-center gap-3 text-sm text-slate-300">
               <span className="hidden sm:inline">Community entscheidet, was live geht</span>
-              <div className="inline-flex rounded-full bg-white/5 p-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setDraftStatusFilter("open")}
-                  className={`rounded-full px-3 py-1 transition ${
-                    draftStatusFilter === "open"
-                      ? "bg-sky-500/30 text-white"
-                      : "text-slate-200 hover:bg-white/10"
-                  }`}
-                >
-                  Offen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraftStatusFilter("accepted")}
-                  className={`rounded-full px-3 py-1 transition ${
-                    draftStatusFilter === "accepted"
-                      ? "bg-emerald-500/30 text-white"
-                      : "text-slate-200 hover:bg-white/10"
-                  }`}
-                >
-                  Angenommen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraftStatusFilter("rejected")}
-                  className={`rounded-full px-3 py-1 transition ${
-                    draftStatusFilter === "rejected"
-                      ? "bg-rose-500/30 text-white"
-                      : "text-slate-200 hover:bg-white/10"
-                  }`}
-                >
-                  Abgelehnt
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraftStatusFilter("all")}
-                  className={`rounded-full px-3 py-1 transition ${
-                    draftStatusFilter === "all"
-                      ? "bg-slate-700/80 text-white"
-                      : "text-slate-200 hover:bg-white/10"
-                  }`}
-                >
-                  Alle
-                </button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {([
+                  { id: "open" as const, label: "Offen", active: "border-sky-300/60 bg-sky-500/20 text-white" },
+                  { id: "accepted" as const, label: "Angenommen", active: "border-emerald-300/60 bg-emerald-500/20 text-white" },
+                  { id: "rejected" as const, label: "Abgelehnt", active: "border-rose-300/60 bg-rose-500/20 text-white" },
+                  { id: "all" as const, label: "Alle", active: "border-slate-300/30 bg-slate-500/20 text-white" },
+                ] as const).map((item) => {
+                  const isActive = draftStatusFilter === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setDraftStatusFilter(item.id)}
+                      className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                        isActive
+                          ? item.active
+                          : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
