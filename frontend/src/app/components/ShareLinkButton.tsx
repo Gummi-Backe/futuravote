@@ -56,24 +56,66 @@ export function ShareLinkButton({
 
   const icon =
     copied ? (
-      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
         <path
-          fill="currentColor"
-          d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M20 6 9 17l-5-5"
         />
       </svg>
     ) : action === "copy" ? (
-      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+        <rect
+          x="6"
+          y="6"
+          width="11"
+          height="11"
+          rx="2.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+        />
+        <rect
+          x="9"
+          y="9"
+          width="11"
+          height="11"
+          rx="2.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+        />
         <path
-          fill="currentColor"
-          d="M3.9 12a5 5 0 0 1 5-5h4v2h-4a3 3 0 0 0 0 6h4v2h-4a5 5 0 0 1-5-5zm7.1 1h2v-2h-2v2zm4-6h4a5 5 0 0 1 0 10h-4v-2h4a3 3 0 1 0 0-6h-4V7z"
+          d="M12.2 14.7l1.7-1.7a1.7 1.7 0 0 1 2.4 2.4l-1.7 1.7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M11.8 15.3l-1.7 1.7a1.7 1.7 0 0 1-2.4-2.4l1.7-1.7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
       </svg>
     ) : (
-      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+        <circle cx="18" cy="5" r="2.6" fill="currentColor" />
+        <circle cx="6" cy="12" r="2.6" fill="currentColor" />
+        <circle cx="18" cy="19" r="2.6" fill="currentColor" />
         <path
-          fill="currentColor"
-          d="M15 8a3 3 0 1 0-2.8-4H6a4 4 0 0 0-4 4v12a4 4 0 0 0 4 4h12a4 4 0 0 0 4-4v-6.2A3 3 0 0 0 20 15a3 3 0 0 0-3-3V8h-2zm-1 0v6h6v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6.2A3 3 0 0 0 14 8zm1-4a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"
+          d="M8.3 11.1 15.7 6.4M8.3 12.9 15.7 17.6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinecap="round"
         />
       </svg>
     );
