@@ -177,7 +177,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
             <div className="space-y-2">
               {drafts.map((d) => {
                 const created = formatDate(d.createdAt);
-                const href = `/?review=1&focusDraft=${encodeURIComponent(d.id)}`;
+                const href = `/drafts/${encodeURIComponent(d.id)}`;
                 return (
                   <div
                     key={d.id}

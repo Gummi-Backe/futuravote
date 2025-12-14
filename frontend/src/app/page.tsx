@@ -301,7 +301,7 @@ function DraftCard({
       : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
 
   return (
-    <article id={`draft-${draft.id}`} className="flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30 mx-auto">
+    <article className="flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30 mx-auto">
       <div className="flex items-center justify-between text-xs text-slate-200">
         <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
@@ -656,44 +656,6 @@ export default function Home() {
       window.history.replaceState(null, "", "/");
     }
   }, [showToast]);
-
-  const [pendingFocusDraftId, setPendingFocusDraftId] = useState<string | null>(null);
-  const [handledFocusParam, setHandledFocusParam] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const review = params.get("review");
-    const focusDraft = params.get("focusDraft");
-    if (review === "1") setShowReviewOnly(true);
-    if (focusDraft) setPendingFocusDraftId(focusDraft);
-  }, []);
-
-  useEffect(() => {
-    if (handledFocusParam) return;
-    if (!pendingFocusDraftId) return;
-    if (!showReviewOnly) return;
-    if (!drafts || drafts.length === 0) return;
-
-    const el = document.getElementById(`draft-${pendingFocusDraftId}`);
-    if (!el) return;
-
-    window.setTimeout(() => {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
-
-    setHandledFocusParam(true);
-    setPendingFocusDraftId(null);
-
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("focusDraft");
-      url.searchParams.delete("review");
-      window.history.replaceState(null, "", url.toString());
-    } catch {
-      // ignore
-    }
-  }, [drafts, handledFocusParam, pendingFocusDraftId, showReviewOnly]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
