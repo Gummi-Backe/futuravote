@@ -177,13 +177,16 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
             <div className="space-y-2">
               {drafts.map((d) => {
                 const created = formatDate(d.createdAt);
+                const href = `/?review=1&focusDraft=${encodeURIComponent(d.id)}`;
                 return (
                   <div
                     key={d.id}
                     className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 shadow-sm shadow-black/20"
                   >
                     <div className="min-w-0">
-                      <span className="block truncate text-slate-100">{d.title}</span>
+                      <Link href={href} className="block truncate text-slate-100 hover:text-white">
+                        {d.title}
+                      </Link>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                         <StatusChip status={d.status} />
                         {created ? <span>{created}</span> : null}
@@ -263,4 +266,3 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     </div>
   );
 }
-
