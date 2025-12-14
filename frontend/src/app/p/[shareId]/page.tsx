@@ -104,7 +104,7 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
                   href={`mailto:?subject=${encodeURIComponent(
                     "Private Umfrage (Future-Vote)"
                   )}&body=${encodeURIComponent(
-                    `Hier ist der Link zur Umfrage:\r\n\r\n<${shareUrl}>\r\n`
+                    `Hier ist der Link zur Umfrage:\r\n\r\n${shareUrl}\r\n\r\nFalls der Link nicht klickbar ist: bitte die ganze Zeile kopieren und im Browser einfuegen.\r\n`
                   )}`}
                   className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-200/40"
                 >
