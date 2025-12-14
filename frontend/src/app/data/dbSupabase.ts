@@ -1,9 +1,9 @@
 import "server-only";
 
-import { randomUUID } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
-import { categories, type Draft, type Question } from "./mock";
+import { categories, type Draft, type PollVisibility, type Question } from "./mock";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
@@ -25,6 +25,7 @@ export type QuestionWithUserVote = QuestionWithVotes & {
 
 type QuestionRow = {
   id: string;
+  creator_id: string | null;
   title: string;
   summary: string;
   description: string | null;
@@ -41,6 +42,8 @@ type QuestionRow = {
   status: string | null;
   ranking_score: number | null;
   created_at: string | null;
+  visibility: PollVisibility | null;
+  share_id: string | null;
 };
 
 type QuestionsRankCursor = {
@@ -110,6 +113,15 @@ function normalizeTimestamp(value: string | null | undefined): string {
   return new Date(parsed).toISOString();
 }
 
+function generateShareId(): string {
+  // Nicht erratbar + URL-sicher (base64url ohne Padding)
+  return randomBytes(18)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
 
 type VoteRow = {
   question_id: string;
@@ -133,6 +145,8 @@ type DraftRow = {
   target_closes_at: string | null;
   status: string | null;
   created_at: string | null;
+  visibility: PollVisibility | null;
+  share_id: string | null;
 };
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
@@ -171,7 +185,7 @@ function deleteImageFileIfPresent(imageUrl?: string | null) {
       }
     }
 
-    // Legacy: lokale Bilddatei l�schen (z.B. bei altem SQLite-Setup)
+    // Legacy: lokale Bilddatei loeschen (z.B. bei altem SQLite-Setup)
     const lastSlash = imageUrl.lastIndexOf("/");
     const fileName = lastSlash >= 0 ? imageUrl.slice(lastSlash + 1) : imageUrl;
     if (!fileName) return;
@@ -235,6 +249,7 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
 
   return {
     id: row.id,
+    creatorId: row.creator_id ?? undefined,
     title: row.title,
     summary: row.summary,
     description: row.description ?? undefined,
@@ -254,6 +269,8 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     rankingScore,
     createdAt,
     userChoice: sessionChoice,
+    visibility: (row.visibility ?? "public") as PollVisibility,
+    shareId: row.share_id ?? undefined,
   };
 }
 
@@ -263,6 +280,7 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
   const { data: rows, error } = await supabase
     .from("questions")
     .select("*")
+    .eq("visibility", "public")
     .not("status", "eq", "archived");
 
   if (error) {
@@ -422,6 +440,7 @@ export async function getQuestionsPageFromSupabase(options: {
 
   const applyFilters = (query: any) => {
     query = query.not("status", "eq", "archived");
+    query = query.eq("visibility", "public");
 
     if (category) {
       query = query.eq("category", category);
@@ -606,6 +625,135 @@ export async function getQuestionByIdFromSupabase(
   return mapQuestion(row as QuestionRow, sessionChoice);
 }
 
+export type SharedPoll =
+  | { kind: "question"; question: QuestionWithVotes; shareId: string }
+  | { kind: "draft"; draft: Draft; shareId: string; alreadyReviewed: boolean };
+
+export async function getPollByShareIdFromSupabase(options: {
+  shareId: string;
+  sessionId?: string;
+}): Promise<SharedPoll | null> {
+  const { shareId, sessionId } = options;
+  const supabase = getSupabaseAdminClient();
+
+  const { data: questionRow, error: questionError } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("share_id", shareId)
+    .maybeSingle();
+
+  if (questionError) {
+    throw new Error(`Supabase getPollByShareId (question) fehlgeschlagen: ${questionError.message}`);
+  }
+
+  if (questionRow) {
+    let sessionChoice: VoteChoice | undefined;
+    if (sessionId) {
+      const { data: voteRow, error: voteError } = await supabase
+        .from("votes")
+        .select("choice")
+        .eq("question_id", (questionRow as any).id)
+        .eq("session_id", sessionId)
+        .maybeSingle();
+
+      if (voteError) {
+        throw new Error(`Supabase getPollByShareId (vote) fehlgeschlagen: ${voteError.message}`);
+      }
+      if (voteRow && (voteRow as any).choice) {
+        sessionChoice = (voteRow as any).choice as VoteChoice;
+      }
+    }
+
+    return {
+      kind: "question",
+      question: mapQuestion(questionRow as QuestionRow, sessionChoice),
+      shareId,
+    };
+  }
+
+  const { data: draftRow, error: draftError } = await supabase
+    .from("drafts")
+    .select("*")
+    .eq("share_id", shareId)
+    .maybeSingle();
+
+  if (draftError) {
+    throw new Error(`Supabase getPollByShareId (draft) fehlgeschlagen: ${draftError.message}`);
+  }
+  if (!draftRow) return null;
+
+  const draftTyped = draftRow as DraftRow;
+  if ((draftTyped.visibility ?? "public") === "link_only" && (draftTyped.share_id ?? null)) {
+    const cat = categories.find((c) => c.label === draftTyped.category) ?? categories[0];
+
+    let closesDate: Date;
+    if (draftTyped.target_closes_at) {
+      const parsed = Date.parse(draftTyped.target_closes_at);
+      closesDate = Number.isFinite(parsed) ? new Date(parsed) : new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+    } else {
+      closesDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+    }
+    const closesAt = closesDate.toISOString().split("T")[0];
+    const questionId = draftTyped.id.startsWith("q_") ? draftTyped.id : `q_${draftTyped.id}`;
+    const summary = draftTyped.region ? `${draftTyped.category} · ${draftTyped.region}` : draftTyped.category;
+
+    const { error: upsertError } = await supabase
+      .from("questions")
+      .upsert(
+        {
+          id: questionId,
+          creator_id: draftTyped.creator_id ?? null,
+          title: draftTyped.title,
+          summary,
+          description: draftTyped.description ?? null,
+          region: draftTyped.region ?? null,
+          image_url: draftTyped.image_url ?? null,
+          image_credit: draftTyped.image_credit ?? null,
+          category: draftTyped.category,
+          category_icon: cat?.icon ?? "?",
+          category_color: cat?.color ?? "#22c55e",
+          closes_at: closesAt,
+          yes_votes: 0,
+          no_votes: 0,
+          views: 0,
+          status: "new",
+          visibility: "link_only",
+          share_id: draftTyped.share_id ?? null,
+        },
+        { onConflict: "id" }
+      );
+
+    if (upsertError) {
+      throw new Error(`Supabase getPollByShareId (promote draft) fehlgeschlagen: ${upsertError.message}`);
+    }
+
+    const question = await getQuestionByIdFromSupabase(questionId, sessionId);
+    if (!question) return null;
+    return { kind: "question", question, shareId };
+  }
+
+  let alreadyReviewed = false;
+  if (sessionId) {
+    const { data: reviewRow, error: reviewError } = await supabase
+      .from("draft_reviews")
+      .select("id")
+      .eq("draft_id", (draftRow as any).id)
+      .eq("session_id", sessionId)
+      .maybeSingle();
+
+    if (reviewError) {
+      const code = (reviewError as any).code as string | undefined;
+      if (code !== "42P01") {
+        throw new Error(`Supabase getPollByShareId (draft review) fehlgeschlagen: ${reviewError.message}`);
+      }
+    } else if (reviewRow) {
+      alreadyReviewed = true;
+    }
+  }
+
+  return { kind: "draft", draft: mapDraftRow(draftTyped), shareId, alreadyReviewed };
+}
+
 export async function voteOnQuestionInSupabase(
   id: string,
   choice: VoteChoice,
@@ -677,7 +825,7 @@ export async function voteOnQuestionInSupabase(
 export async function incrementViewsForAllInSupabase(): Promise<void> {
   const supabase = getSupabaseAdminClient();
 
-  const { data: rows, error } = await supabase.from("questions").select("id, views");
+  const { data: rows, error } = await supabase.from("questions").select("id, views").eq("visibility", "public");
   if (error) {
     throw new Error(`Supabase Views-Select fehlgeschlagen: ${error.message}`);
   }
@@ -725,6 +873,8 @@ function mapDraftRow(row: DraftRow): Draft {
     votesAgainst: row.votes_against ?? 0,
     timeLeftHours: roundedTimeLeft,
     status: (row.status ?? "open") as Draft["status"],
+    visibility: (row.visibility ?? "public") as PollVisibility,
+    shareId: row.share_id ?? undefined,
   };
 }
 
@@ -778,6 +928,7 @@ export async function getDraftsPageFromSupabase(options: {
   const cursorMode = Boolean(cursor);
 
   const applyFilters = (query: any) => {
+    query = query.eq("visibility", "public");
     if (status && status !== "all") {
       query = query.eq("status", status);
     }
@@ -864,9 +1015,12 @@ export async function createDraftInSupabase(input: {
   timeLeftHours?: number;
   targetClosesAt?: string;
   creatorId?: string;
+  visibility?: PollVisibility;
 }): Promise<Draft> {
   const supabase = getSupabaseAdminClient();
   const id = randomUUID();
+  const visibility: PollVisibility = input.visibility === "link_only" ? "link_only" : "public";
+  const shareId = visibility === "link_only" ? generateShareId() : null;
   const timeLeft =
     typeof input.timeLeftHours === "number" && Number.isFinite(input.timeLeftHours) && input.timeLeftHours > 0
       ? Math.round(input.timeLeftHours)
@@ -888,6 +1042,8 @@ export async function createDraftInSupabase(input: {
       time_left_hours: timeLeft,
       target_closes_at: input.targetClosesAt ?? null,
       status: "open",
+      visibility,
+      share_id: shareId,
     })
     .select("*")
     .maybeSingle();
@@ -900,6 +1056,74 @@ export async function createDraftInSupabase(input: {
   }
 
   return mapDraftRow(data as DraftRow);
+}
+
+export async function createLinkOnlyQuestionInSupabase(input: {
+  title: string;
+  category: string;
+  description?: string;
+  region?: string;
+  imageUrl?: string;
+  imageCredit?: string;
+  timeLeftHours?: number;
+  targetClosesAt?: string;
+  creatorId?: string;
+}): Promise<QuestionWithVotes> {
+  const supabase = getSupabaseAdminClient();
+
+  const cat = categories.find((c) => c.label === input.category) ?? categories[0];
+  const id = `q_${randomUUID()}`;
+  const shareId = generateShareId();
+
+  let closesDate: Date;
+  if (input.targetClosesAt) {
+    const parsed = Date.parse(input.targetClosesAt);
+    closesDate = Number.isFinite(parsed) ? new Date(parsed) : new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+  } else {
+    const hours =
+      typeof input.timeLeftHours === "number" && Number.isFinite(input.timeLeftHours) && input.timeLeftHours > 0
+        ? Math.round(input.timeLeftHours)
+        : 14 * 24;
+    closesDate = new Date(Date.now() + hours * 60 * 60 * 1000);
+  }
+
+  const closesAt = closesDate.toISOString().split("T")[0];
+  const summary = input.region ? `${input.category} · ${input.region}` : input.category;
+
+  const { data, error } = await supabase
+    .from("questions")
+    .insert({
+      id,
+      creator_id: input.creatorId ?? null,
+      title: input.title,
+      summary,
+      description: input.description ?? null,
+      region: input.region ?? null,
+      image_url: input.imageUrl ?? null,
+      image_credit: input.imageCredit ?? null,
+      category: input.category,
+      category_icon: cat?.icon ?? "?",
+      category_color: cat?.color ?? "#22c55e",
+      closes_at: closesAt,
+      yes_votes: 0,
+      no_votes: 0,
+      views: 0,
+      status: "new",
+      ranking_score: 0,
+      visibility: "link_only",
+      share_id: shareId,
+    })
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase createLinkOnlyQuestion fehlgeschlagen: ${error.message}`);
+  }
+  if (!data) {
+    throw new Error("Supabase createLinkOnlyQuestion hat kein Row-Objekt zurueckgegeben.");
+  }
+
+  return mapQuestion(data as QuestionRow);
 }
 
 async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
@@ -928,14 +1152,15 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
 
     const { error: upsertError } = await supabase
       .from("questions")
-      .upsert(
-        {
-          id: questionId,
-          title: row.title,
-          summary,
-          description: row.description ?? null,
-          region: row.region ?? null,
-          image_url: row.image_url ?? null,
+        .upsert(
+          {
+            id: questionId,
+            creator_id: row.creator_id ?? null,
+            title: row.title,
+            summary,
+            description: row.description ?? null,
+            region: row.region ?? null,
+            image_url: row.image_url ?? null,
           image_credit: row.image_credit ?? null,
           category: row.category,
           category_icon: cat?.icon ?? "?",
@@ -945,6 +1170,8 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
           no_votes: 0,
           views: 0,
           status: "new",
+          visibility: (row.visibility ?? "public") as PollVisibility,
+          share_id: row.share_id ?? null,
         },
         { onConflict: "id" }
       );
@@ -1051,14 +1278,15 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
 
     const { error: upsertError } = await supabase
       .from("questions")
-      .upsert(
-        {
-          id: questionId,
-          title: draftRow.title,
-          summary,
-          description: draftRow.description ?? null,
-          region: draftRow.region ?? null,
-          image_url: draftRow.image_url ?? null,
+        .upsert(
+          {
+            id: questionId,
+            creator_id: draftRow.creator_id ?? null,
+            title: draftRow.title,
+            summary,
+            description: draftRow.description ?? null,
+            region: draftRow.region ?? null,
+            image_url: draftRow.image_url ?? null,
           image_credit: draftRow.image_credit ?? null,
           category: draftRow.category,
           category_icon: cat?.icon ?? "?",
@@ -1068,6 +1296,8 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
           no_votes: 0,
           views: 0,
           status: "new",
+          visibility: (draftRow.visibility ?? "public") as PollVisibility,
+          share_id: draftRow.share_id ?? null,
         },
         { onConflict: "id" }
       );

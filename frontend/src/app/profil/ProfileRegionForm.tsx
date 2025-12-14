@@ -34,7 +34,7 @@ export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
       setRegion(newRegion ?? "");
       setMessage(
         newRegion
-          ? `Standard-Region „${newRegion}“ gespeichert.`
+          ? `Standard-Region "${newRegion}" gespeichert.`
           : "Standard-Region entfernt. Der Feed zeigt wieder alle Regionen."
       );
     } catch {
@@ -55,7 +55,7 @@ export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
           type="text"
           value={region}
           onChange={(e) => setRegion(e.target.value)}
-          placeholder="z. B. Deutschland, Europa oder deine Stadt"
+          placeholder="z. B. Deutschland, Europa oder deine Stadt"
           maxLength={100}
           className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:border-emerald-300/70 focus:outline-none focus:ring-1 focus:ring-emerald-400/60"
         />
@@ -70,7 +70,7 @@ export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
           disabled={saving}
           className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-emerald-500/40 transition hover:-translate-y-0.5 hover:bg-emerald-400 disabled:opacity-70 disabled:hover:translate-y-0"
         >
-          {saving ? "Speichere…" : "Region speichern"}
+          {saving ? "Speichere..." : "Region speichern"}
         </button>
         <button
           type="button"

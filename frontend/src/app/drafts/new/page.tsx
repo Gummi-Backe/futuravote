@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { categories } from "@/app/data/mock";
+import { categories, type PollVisibility } from "@/app/data/mock";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -81,6 +81,59 @@ async function resizeImageClientSide(file: File, maxWidth: number, maxHeight: nu
   return blob;
 }
 
+type UploadImageJson = { imageUrl?: string; error?: string };
+
+const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+function uploadImageWithProgress(
+  formData: FormData,
+  onProgress: (pct: number) => void
+): Promise<UploadImageJson> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload-image");
+    xhr.responseType = "json";
+    xhr.timeout = 30000;
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const pct = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      onProgress(pct);
+    };
+
+    xhr.onload = () => {
+      const jsonFromResponse = xhr.response as UploadImageJson | null;
+      let json: UploadImageJson | null = jsonFromResponse;
+      if (!json && xhr.responseText) {
+        try {
+          json = JSON.parse(xhr.responseText) as UploadImageJson;
+        } catch {
+          json = null;
+        }
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(json ?? {});
+        return;
+      }
+
+      const message =
+        json?.error ??
+        (xhr.status == 413
+          ? "Die Datei ist zu gross."
+          : xhr.status == 415
+          ? "Ungueltiges Bildformat."
+          : "Das Bild konnte nicht hochgeladen werden.");
+      reject(new Error(message));
+    };
+
+    xhr.onerror = () => reject(new Error("Netzwerkfehler beim Bild-Upload."));
+    xhr.ontimeout = () => reject(new Error("Zeitueberschreitung beim Bild-Upload."));
+
+    xhr.send(formData);
+  });
+}
+
 export default function NewDraftPage() {
   const router = useRouter();
 
@@ -93,6 +146,8 @@ export default function NewDraftPage() {
   const [regionSelect, setRegionSelect] = useState<string>("Global");
   const [customRegion, setCustomRegion] = useState("");
 
+  const [visibility, setVisibility] = useState<PollVisibility>("public");
+
   const [reviewMode, setReviewMode] = useState<"duration" | "endDate">("duration");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
   const [endDate, setEndDate] = useState<string>("");
@@ -104,6 +159,9 @@ export default function NewDraftPage() {
   const [imageCredit, setImageCredit] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageUploadPhase, setImageUploadPhase] = useState<"idle" | "resizing" | "uploading">("idle");
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -258,28 +316,39 @@ export default function NewDraftPage() {
 
     setSubmitting(true);
     setError(null);
+    setImageError(null);
 
     try {
       let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
 
       if (imageFile) {
-        const resizedBlob = await resizeImageClientSide(imageFile, 250, 150);
-        const uploadData = new FormData();
-        uploadData.append("file", resizedBlob, imageFile.name || "image.jpg");
+        setImageUploadProgress(0);
+        setImageUploadPhase("resizing");
 
-        const uploadRes = await fetch("/api/upload-image", {
-          method: "POST",
-          body: uploadData,
-        });
+        try {
+          const resizedBlob = await resizeImageClientSide(imageFile, 250, 150);
+          const uploadData = new FormData();
+          uploadData.append("file", resizedBlob, imageFile.name || "image.jpg");
 
-        const uploadJson = await uploadRes.json().catch(() => null);
-        if (!uploadRes.ok || !uploadJson || !uploadJson.imageUrl) {
-          setError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
+          setImageUploadPhase("uploading");
+          const uploadJson = await uploadImageWithProgress(uploadData, (pct) => setImageUploadProgress(pct));
+
+          if (!uploadJson?.imageUrl) {
+            setImageError(uploadJson?.error ?? "Das Bild konnte nicht hochgeladen werden.");
+            return;
+          }
+
+          finalImageUrl = uploadJson.imageUrl;
+        } catch (err) {
+          console.error(err);
+          setImageError(err instanceof Error ? err.message : "Das Bild konnte nicht hochgeladen werden.");
           return;
+        } finally {
+          setImageUploadPhase("idle");
+          setImageUploadProgress(0);
         }
-
-        finalImageUrl = uploadJson.imageUrl;
       }
+
 
       const trimmedImageCredit = imageCredit.trim();
 
@@ -291,6 +360,7 @@ export default function NewDraftPage() {
           description: trimmedDescription || undefined,
           category: finalCategory,
           region: finalRegion || "Global",
+          visibility,
           imageUrl: finalImageUrl,
           imageCredit: trimmedImageCredit || undefined,
           timeLeftHours: finalTimeLeftHours,
@@ -301,6 +371,23 @@ export default function NewDraftPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         setError(data?.error ?? "Konnte deine Frage nicht speichern.");
+        return;
+      }
+
+      const createdDraft = data?.draft as { shareId?: string } | null;
+      const createdQuestion = data?.question as { shareId?: string } | null;
+      const createdShareId =
+        typeof createdDraft?.shareId === "string"
+          ? createdDraft.shareId
+          : typeof createdQuestion?.shareId === "string"
+            ? createdQuestion.shareId
+            : null;
+
+      if (visibility === "link_only" && createdShareId) {
+        setIsLeaving(true);
+        setTimeout(() => {
+          router.push(`/p/${encodeURIComponent(createdShareId)}?created=1`);
+        }, 190);
         return;
       }
 
@@ -437,9 +524,41 @@ export default function NewDraftPage() {
             Hauptabstimmung schafft.
           </p>
 
-          {currentUser && currentUser.emailVerified !== false && (
-          <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
-            <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
+           {currentUser && currentUser.emailVerified !== false && (
+             <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
+             <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-100">Sichtbarkeit</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("public")}
+                    className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      visibility === "public"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Öffentlich
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("link_only")}
+                    className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      visibility === "link_only"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Privat (nur per Link)
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Öffentlich: erscheint im Feed. Privat: nicht im Feed gelistet - jeder mit dem Link kann bewerten und
+                  später abstimmen.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <label htmlFor="title" className="text-sm font-medium text-slate-100">
                   Titel der Frage
@@ -483,26 +602,50 @@ export default function NewDraftPage() {
                   type="url"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
+                  disabled={submitting}
                   className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="https://… (kleines Vorschaubild für die Kachel)"
+                  placeholder="https://... (kleines Vorschaubild für die Kachel)"
                 />
                 <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
                   <input
                     id="imageFile"
                     type="file"
                     accept="image/*"
+                    disabled={submitting}
                     onChange={(e) => {
                       const file = e.target.files?.[0] ?? null;
+                      setImageError(null);
+
                       if (imagePreviewUrl) {
                         URL.revokeObjectURL(imagePreviewUrl);
                       }
-                      setImageFile(file);
-                      if (file) {
-                        const url = URL.createObjectURL(file);
-                        setImagePreviewUrl(url);
-                      } else {
+
+                      if (!file) {
+                        setImageFile(null);
                         setImagePreviewUrl(null);
+                        return;
                       }
+
+                      const fileType = file.type || "";
+                      if (!fileType.startsWith("image/") || fileType === "image/svg+xml") {
+                        setImageFile(null);
+                        setImagePreviewUrl(null);
+                        setImageError("Bitte waehle eine gueltige Bilddatei (z. B. JPG, PNG oder WebP).");
+                        e.currentTarget.value = "";
+                        return;
+                      }
+
+                      if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
+                        setImageFile(null);
+                        setImagePreviewUrl(null);
+                        setImageError("Die Datei ist zu gross (max. 20 MB). Bitte waehle ein kleineres Bild.");
+                        e.currentTarget.value = "";
+                        return;
+                      }
+
+                      setImageFile(file);
+                      const url = URL.createObjectURL(file);
+                      setImagePreviewUrl(url);
                     }}
                     className="block w-full text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-100 hover:file:bg-slate-700"
                   />
@@ -515,10 +658,33 @@ export default function NewDraftPage() {
                           className="max-h-16 max-w-[6rem] object-contain"
                         />
                       </div>
-                      <span>Wird auf maximal ca. 250×150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
+                      <span>Wird auf maximal ca. 250x150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
                     </div>
                   )}
                 </div>
+
+                {imageError && <p className="text-xs text-rose-300">{imageError}</p>}
+
+                {imageUploadPhase !== "idle" && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/25 border-t-white/80" />
+                        {imageUploadPhase === "resizing" ? "Bild wird vorbereitet..." : "Bild wird hochgeladen..."}
+                      </span>
+                      {imageUploadPhase === "uploading" && <span>{imageUploadProgress}%</span>}
+                    </div>
+                    {imageUploadPhase === "uploading" && (
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-black/30">
+                        <div
+                          className="h-full rounded-full bg-emerald-400/80 transition-[width]"
+                          style={{ width: `${imageUploadProgress}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-xs text-slate-400">
                   Bitte lade nur Bilder hoch, an denen du die erforderlichen Nutzungsrechte besitzt (z.&nbsp;B. eigene
                   Fotos oder lizenzierte Grafiken). Mit dem Upload bestätigst du, dass keine Urheberrechte verletzt
@@ -537,7 +703,7 @@ export default function NewDraftPage() {
                   onChange={(e) => setImageCredit(e.target.value)}
                   maxLength={140}
                   className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder='z. B. "Foto: Name / Agentur"'
+                  placeholder='z. B. "Foto: Name / Agentur"'
                 />
                 <p className="text-xs text-slate-400">
                   Diese Angabe erscheint klein unter der Frage (z.&nbsp;B. in der Kachel und in der Detailansicht),
@@ -570,7 +736,7 @@ export default function NewDraftPage() {
                     {cat.label}
                   </option>
                 ))}
-                <option value="__custom">Eigene Kategorie eingeben …</option>
+                <option value="__custom">Eigene Kategorie eingeben ...</option>
               </select>
               {useCustomCategory && (
                 <input
@@ -578,7 +744,7 @@ export default function NewDraftPage() {
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="z. B. Gesundheit, Bildung, Energie …"
+                  placeholder="z. B. Gesundheit, Bildung, Energie ..."
                 />
               )}
             </div>
@@ -605,7 +771,7 @@ export default function NewDraftPage() {
                   value={customRegion}
                   onChange={(e) => setCustomRegion(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="z. B. Berlin, NRW, Bodensee-Region"
+                  placeholder="z. B. Berlin, NRW, Bodensee-Region"
                 />
               )}
               <p className="text-xs text-slate-400">
@@ -666,6 +832,7 @@ export default function NewDraftPage() {
                 </>
               ) : (
                 <>
+
                   <div className="mt-2 grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
                       <label htmlFor="endDate" className="text-xs font-medium text-slate-200">
@@ -696,7 +863,7 @@ export default function NewDraftPage() {
                         type="time"
                         value={endTime}
                         min={getMinTimeStringForDate(endDate || minEndDate)}
-                        step={300}
+                        step={60}
                         onChange={(e) => setEndTime(e.target.value)}
                         className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                       />
@@ -718,7 +885,7 @@ export default function NewDraftPage() {
                 disabled={submitting}
                 className="rounded-xl bg-emerald-500/80 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-80"
               >
-                Frage einreichen
+                {submitting ? "Bitte warten..." : "Frage einreichen"}
               </button>
               <button
                 type="button"

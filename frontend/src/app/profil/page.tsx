@@ -1,9 +1,23 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { ProfileRegionForm } from "./ProfileRegionForm";
+import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+
+async function getBaseUrl() {
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const protocol =
+    headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
+  if (process.env.NODE_ENV !== "production" && envBaseUrl) {
+    return envBaseUrl;
+  }
+  if (host) return `${protocol}://${host}`;
+  return envBaseUrl ?? "http://localhost:3000";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +55,16 @@ export default async function ProfilPage() {
     votesTotal: number;
     votesYes: number;
     votesNo: number;
+    reviewsTotal: number;
+    trustScorePct: number | null;
+    trustScoreSample: number;
     topCategories: { category: string; votes: number; yes: number; no: number }[];
   };
 
   let stats: ProfileStats | null = null;
   try {
+    const reviewSessionId = cookieStore.get("fv_session")?.value ?? null;
+
     const { count: draftsTotal } = await supabase
       .from("drafts")
       .select("id", { count: "exact", head: true })
@@ -79,6 +98,18 @@ export default async function ProfilPage() {
       .select("question_id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("choice", "no");
+
+    const { count: reviewsTotal } = reviewSessionId
+      ? await supabase
+          .from("draft_reviews")
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", reviewSessionId)
+      : { count: 0 };
+
+    const accepted = draftsAccepted ?? 0;
+    const rejected = draftsRejected ?? 0;
+    const trustScoreSample = accepted + rejected;
+    const trustScorePct = trustScoreSample >= 3 ? Math.round((accepted / trustScoreSample) * 100) : null;
 
     // Top-Kategorien aus den eigenen Votes berechnen
     let topCategories: { category: string; votes: number; yes: number; no: number }[] = [];
@@ -117,17 +148,88 @@ export default async function ProfilPage() {
       votesTotal: votesTotal ?? 0,
       votesYes: votesYes ?? 0,
       votesNo: votesNo ?? 0,
+      reviewsTotal: reviewsTotal ?? 0,
+      trustScorePct,
+      trustScoreSample,
       topCategories,
     };
   } catch {
     stats = null;
   }
 
+  const baseUrl = await getBaseUrl();
+
+  type PrivateQuestionRow = {
+    id: string;
+    title: string;
+    share_id: string | null;
+    created_at: string | null;
+    closes_at: string | null;
+    status: string | null;
+  };
+
+  type PrivateDraftRow = {
+    id: string;
+    title: string;
+    status: string | null;
+    share_id: string | null;
+    created_at: string | null;
+  };
+
+  let privateQuestions: { id: string; title: string; shareId: string; createdAt: string | null; status: string }[] = [];
+  let privateDrafts: { id: string; title: string; status: string; shareId: string; createdAt: string | null }[] = [];
+  try {
+    const { data: qData, error: qError } = await supabase
+      .from("questions")
+      .select("id,title,share_id,created_at,closes_at,status")
+      .eq("creator_id", user.id)
+      .eq("visibility", "link_only")
+      .not("share_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (!qError && qData) {
+      privateQuestions = (qData as PrivateQuestionRow[])
+        .filter((q) => Boolean(q.share_id))
+        .map((q) => ({
+          id: q.id,
+          title: q.title,
+          shareId: q.share_id as string,
+          createdAt: q.created_at ?? null,
+          status: q.status ?? "new",
+        }));
+    }
+
+    const { data, error } = await supabase
+      .from("drafts")
+      .select("id,title,status,share_id,created_at")
+      .eq("creator_id", user.id)
+      .eq("visibility", "link_only")
+      .not("share_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (!error && data) {
+      privateDrafts = (data as PrivateDraftRow[])
+        .filter((d) => Boolean(d.share_id))
+        .map((d) => ({
+          id: d.id,
+          title: d.title,
+          status: d.status ?? "open",
+          shareId: d.share_id as string,
+          createdAt: d.created_at ?? null,
+        }));
+    }
+  } catch {
+    privateDrafts = [];
+    privateQuestions = [];
+  }
+
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-16 pt-10">
         <Link href="/" className="self-start text-sm text-emerald-100 hover:text-emerald-200">
-          &larr; Zurueck zum Feed
+          &larr; Zurück zum Feed
         </Link>
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
@@ -159,8 +261,8 @@ export default async function ProfilPage() {
 
           <ProfileRegionForm initialRegion={user.defaultRegion ?? null} />
 
-          {stats && (
-            <div className="mt-5 space-y-3 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
+           {stats && (
+             <div className="mt-5 space-y-3 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
               <p className="font-semibold text-slate-100">Deine Aktivität (bisher)</p>
               <div className="space-y-2">
                 <Link
@@ -223,6 +325,25 @@ export default async function ProfilPage() {
                     </span>
                   </Link>
                 </div>
+
+                <div className="mt-2 border-t border-white/10 pt-2 space-y-2">
+                  <div className="flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20">
+                    <span className="font-medium text-slate-100">Draft-Reviews (dieses Gerät)</span>
+                    <span className="rounded-full bg-black/40 px-2 py-1 text-[11px] font-semibold text-slate-50">
+                      {stats.reviewsTotal}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20">
+                    <span className="font-medium text-slate-100">Vertrauens-Score</span>
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-100">
+                      {stats.trustScorePct === null ? "—" : `${stats.trustScorePct}%`}
+                    </span>
+                  </div>
+                  <p className="px-3 text-[11px] text-slate-400">
+                    Der Vertrauens-Score basiert aktuell nur auf angenommen/abgelehnt bei deinen Vorschlägen (mind. 3
+                    Entscheidungen nötig). Reviews zählen nur für dieses Gerät.
+                  </p>
+                </div>
                 {stats.topCategories.length > 0 && (
                   <div className="mt-2 border-t border-white/10 pt-2">
                     <p className="mb-1 font-semibold text-slate-100">Deine Top-Kategorien</p>
@@ -246,12 +367,93 @@ export default async function ProfilPage() {
                 )}
               </div>
               <p className="mt-1 text-[11px] text-slate-400">
-                Hinweis: Die Zahlen basieren auf Daten, die seit Einfuehrung der Supabase-DB gesammelt werden.
+                Hinweis: Die Zahlen basieren auf Daten, die seit Einführung der Supabase-DB gesammelt werden.
               </p>
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
-  );
-}
+             </div>
+           )}
+
+           <div className="mt-5 space-y-2 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
+             <p className="font-semibold text-slate-100">Meine privaten Umfragen (nur per Link)</p>
+             <p className="text-[11px] text-slate-400">
+               Diese Umfragen erscheinen nicht im Feed. Du kannst den Link kopieren und teilen.
+             </p>
+             {privateQuestions.length === 0 && privateDrafts.length === 0 ? (
+               <p className="text-[11px] text-slate-400">Noch keine privaten Umfragen erstellt.</p>
+             ) : (
+               <div className="space-y-2">
+                 {privateQuestions.map((q) => {
+                   const url = `${baseUrl}/p/${encodeURIComponent(q.shareId)}`;
+                   const created =
+                     q.createdAt && !Number.isNaN(Date.parse(q.createdAt))
+                       ? new Date(q.createdAt).toLocaleDateString("de-DE", {
+                           day: "2-digit",
+                           month: "2-digit",
+                           year: "numeric",
+                         })
+                       : null;
+                   return (
+                     <div
+                       key={q.id}
+                       className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 shadow-sm shadow-black/20"
+                     >
+                       <div className="min-w-0">
+                         <Link href={`/p/${encodeURIComponent(q.shareId)}`} className="block truncate text-slate-100 hover:text-white">
+                           {q.title}
+                         </Link>
+                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                           <span className="rounded-full border border-emerald-300/30 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-50">
+                             Abstimmung
+                           </span>
+                           {created ? <span>{created}</span> : null}
+                         </div>
+                       </div>
+                       <ShareLinkButton url={url} label="Link kopieren" action="copy" className="shrink-0" />
+                     </div>
+                   );
+                 })}
+                 {privateDrafts.map((d) => {
+                   const url = `${baseUrl}/p/${encodeURIComponent(d.shareId)}`;
+                   const created =
+                     d.createdAt && !Number.isNaN(Date.parse(d.createdAt))
+                       ? new Date(d.createdAt).toLocaleDateString("de-DE", {
+                           day: "2-digit",
+                           month: "2-digit",
+                           year: "numeric",
+                         })
+                       : null;
+                   const statusLabel =
+                     d.status === "accepted" ? "Angenommen" : d.status === "rejected" ? "Abgelehnt" : "Offen";
+                   const statusClass =
+                     d.status === "accepted"
+                       ? "bg-emerald-500/15 text-emerald-100 border border-emerald-400/40"
+                       : d.status === "rejected"
+                         ? "bg-rose-500/15 text-rose-100 border border-rose-400/40"
+                         : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
+                   return (
+                     <div
+                       key={d.id}
+                       className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 shadow-sm shadow-black/20"
+                     >
+                       <div className="min-w-0">
+                         <Link href={`/p/${encodeURIComponent(d.shareId)}`} className="block truncate text-slate-100 hover:text-white">
+                           {d.title}
+                         </Link>
+                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                           <span className={`rounded-full border px-2 py-0.5 font-semibold ${statusClass}`}>
+                             {statusLabel}
+                           </span>
+                           {created ? <span>{created}</span> : null}
+                         </div>
+                       </div>
+                       <ShareLinkButton url={url} label="Link kopieren" action="copy" className="shrink-0" />
+                     </div>
+                   );
+                 })}
+               </div>
+             )}
+           </div>
+         </section>
+       </div>
+     </main>
+   );
+ }

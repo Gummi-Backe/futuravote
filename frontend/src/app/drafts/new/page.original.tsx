@@ -329,7 +329,7 @@ export default function NewDraftPage() {
                 onChange={(e) => setImageCredit(e.target.value)}
                 maxLength={140}
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                placeholder='z. B. "Foto: Name / Agentur"'
+                placeholder='z. B. "Foto: Name / Agentur"'
               />
               <p className="text-xs text-slate-400">
                 Diese Angabe erscheint klein unter der Frage (z.&nbsp;B. in der Kachel und in der Detailansicht), damit
@@ -365,7 +365,7 @@ export default function NewDraftPage() {
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                placeholder="https://… (kleines Vorschaubild für die Kachel)"
+                placeholder="https://... (kleines Vorschaubild für die Kachel)"
               />
               <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <input
@@ -396,7 +396,7 @@ export default function NewDraftPage() {
                         className="max-h-10 max-w-[4rem] object-contain"
                       />
                     </div>
-                    <span>Wird auf maximal ca. 250×150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
+                    <span>Wird auf maximal ca. 250x150 Pixel verkleinert (Seitenverhältnis bleibt erhalten).</span>
                   </div>
                 )}
               </div>
@@ -431,7 +431,7 @@ export default function NewDraftPage() {
                     {cat.label}
                   </option>
                 ))}
-                <option value="__custom">Eigene Kategorie eingeben …</option>
+                <option value="__custom">Eigene Kategorie eingeben ...</option>
               </select>
               {useCustomCategory && (
                 <input
@@ -439,7 +439,7 @@ export default function NewDraftPage() {
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  placeholder="z. B. Gesundheit, Bildung, Energie …"
+                  placeholder="z. B. Gesundheit, Bildung, Energie ..."
                 />
               )}
             </div>

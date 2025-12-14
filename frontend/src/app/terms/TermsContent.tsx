@@ -9,7 +9,7 @@ export function TermsContent() {
 
       <p className="mt-2 text-sm text-slate-300">
         Diese Nutzungsbedingungen regeln die Nutzung der Plattform{" "}
-        <span className="font-semibold">Future-Vote</span> („Plattform“). Mit
+        <span className="font-semibold">Future-Vote</span> ("Plattform"). Mit
         dem Anlegen eines Accounts oder der Nutzung der Plattform erkennst du
         diese Bedingungen an.
       </p>
@@ -80,7 +80,7 @@ export function TermsContent() {
               ausdrückliche Erlaubnis hast.
             </li>
             <li>
-              Du respektierst die Rechte abgebildeter Personen (z. B. keine
+              Du respektierst die Rechte abgebildeter Personen (z. B. keine
               unerlaubten Fotos von Dritten).
             </li>
           </ul>

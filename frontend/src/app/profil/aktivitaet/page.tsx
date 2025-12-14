@@ -38,7 +38,7 @@ function resolveViewConfig(typ?: string): ViewConfig {
       return {
         mode: "drafts",
         typ: "drafts_accepted",
-        title: "Vorgeschlagene Fragen – angenommen",
+        title: "Vorgeschlagene Fragen - angenommen",
         description: "Alle deine Vorschlaege, die es in die Hauptabstimmung geschafft haben.",
         status: "accepted",
       };
@@ -46,7 +46,7 @@ function resolveViewConfig(typ?: string): ViewConfig {
       return {
         mode: "drafts",
         typ: "drafts_rejected",
-        title: "Vorgeschlagene Fragen – abgelehnt",
+        title: "Vorgeschlagene Fragen - abgelehnt",
         description: "Vorschlaege, die von der Community abgelehnt wurden.",
         status: "rejected",
       };
@@ -54,7 +54,7 @@ function resolveViewConfig(typ?: string): ViewConfig {
       return {
         mode: "votes",
         typ: "votes_yes",
-        title: "Meine Abstimmungen – Ja",
+        title: "Meine Abstimmungen - Ja",
         description: "Fragen, bei denen du mit Ja abgestimmt hast.",
         choice: "yes",
       };
@@ -62,7 +62,7 @@ function resolveViewConfig(typ?: string): ViewConfig {
       return {
         mode: "votes",
         typ: "votes_no",
-        title: "Meine Abstimmungen – Nein",
+        title: "Meine Abstimmungen - Nein",
         description: "Fragen, bei denen du mit Nein abgestimmt hast.",
         choice: "no",
       };
@@ -70,7 +70,7 @@ function resolveViewConfig(typ?: string): ViewConfig {
       return {
         mode: "votes",
         typ: "votes_all",
-        title: "Meine Abstimmungen – alle",
+        title: "Meine Abstimmungen - alle",
         description: "Alle Fragen, bei denen du bereits abgestimmt hast.",
         choice: "all",
       };
@@ -79,7 +79,7 @@ function resolveViewConfig(typ?: string): ViewConfig {
       return {
         mode: "drafts",
         typ: "drafts_all",
-        title: "Vorgeschlagene Fragen – alle",
+        title: "Vorgeschlagene Fragen - alle",
         description: "Alle Fragen, die du bisher als Draft vorgeschlagen hast.",
         status: "all",
       };

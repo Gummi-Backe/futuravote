@@ -22,12 +22,12 @@ drop policy if exists "Public read questions" on public.questions;
 create policy "Public read questions"
 on public.questions
 for select
-using (true);
+using (visibility = 'public');
 
 drop policy if exists "Public read drafts" on public.drafts;
 create policy "Public read drafts"
 on public.drafts
 for select
-using (true);
+using (visibility = 'public');
 
 commit;

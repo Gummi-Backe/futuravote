@@ -5,6 +5,9 @@ import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif", "image/gif"]);
+
 export const revalidate = 0;
 
 export async function POST(request: Request) {
@@ -13,6 +16,26 @@ export async function POST(request: Request) {
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Keine Bilddatei erhalten." }, { status: 400 });
+  }
+
+  if (file.size <= 0) {
+    return NextResponse.json({ error: "Die Datei ist leer." }, { status: 400 });
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "Die Datei ist zu gross. Bitte waehle ein kleineres Bild (max. 8 MB)." },
+      { status: 413 }
+    );
+  }
+
+  const fileType = file.type || "";
+  if (!ALLOWED_MIME_TYPES.has(fileType)) {
+    const shownType = fileType || "unbekannt";
+    return NextResponse.json(
+      { error: `Ungueltiges Bildformat (${shownType}). Bitte nutze JPG, PNG oder WebP.` },
+      { status: 415 }
+    );
   }
 
   const arrayBuffer = await file.arrayBuffer();

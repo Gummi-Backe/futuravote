@@ -5,6 +5,8 @@ import type { Question } from "@/app/data/mock";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import AdminControls from "./AdminControls";
 import { DetailVoteButtons } from "./DetailVoteButtons";
+import { TrendSparkline } from "./TrendSparkline";
+import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +15,12 @@ async function getBaseUrl() {
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
   const protocol =
     headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
+  if (process.env.NODE_ENV !== "production" && envBaseUrl) {
+    return envBaseUrl;
+  }
   if (host) return `${protocol}://${host}`;
-  return process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  return envBaseUrl ?? "http://localhost:3000";
 }
 
 async function fetchQuestion(id: string): Promise<Question | null> {
@@ -48,28 +54,12 @@ function StatsCard({
   valueClassName?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-md shadow-black/20">
+    <div className="flex flex-col gap-1 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-md shadow-black/20 sm:p-4">
       <span className="text-xs uppercase tracking-wide text-slate-300">{label}</span>
-      <span className={`break-words text-lg font-semibold text-white ${valueClassName ?? ""}`}>
+      <span className={`break-words text-base font-semibold text-white sm:text-lg ${valueClassName ?? ""}`}>
         {value}
       </span>
       {hint ? <span className="text-xs text-slate-400">{hint}</span> : null}
-    </div>
-  );
-}
-
-function SparklinePlaceholder() {
-  return (
-    <div className="h-14 w-full rounded-xl border border-white/10 bg-black/20 p-2">
-      <svg viewBox="0 0 100 30" className="h-full w-full text-emerald-300" aria-hidden>
-        <polyline
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          points="0,20 15,22 30,18 45,12 60,15 75,9 90,14 100,10"
-        />
-      </svg>
-      <div className="mt-1 text-[11px] text-slate-400">Trend (Placeholder)</div>
     </div>
   );
 }
@@ -138,18 +128,24 @@ export default async function QuestionDetail(props: {
         ? "Du hast Nein gestimmt"
         : null;
 
+  const baseUrl = await getBaseUrl();
+  const shareUrl =
+    question.visibility === "link_only" && question.shareId
+      ? `${baseUrl}/p/${encodeURIComponent(question.shareId)}`
+      : `${baseUrl}/questions/${encodeURIComponent(id)}`;
+
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
-      <div className="mx-auto max-w-4xl px-4 pb-12 pt-10 lg:px-6">
+      <div className="mx-auto max-w-4xl px-4 pb-12 pt-8 sm:pt-10 lg:px-6">
         <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
           &larr; Zurück zum Feed
         </Link>
 
-        <header className="mt-4 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 px-6 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
-          <div className="flex items-start justify-between gap-3">
+        <header className="mt-4 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 sm:px-6 sm:py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
               <span
-                className="flex h-11 w-11 items-center justify-center rounded-full text-lg"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-lg sm:h-11 sm:w-11"
                 style={{
                   backgroundColor: `${question.categoryColor}22`,
                   color: question.categoryColor,
@@ -164,7 +160,7 @@ export default async function QuestionDetail(props: {
                 <span className="text-sm text-slate-200">{question.summary}</span>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2 text-right">
+            <div className="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
               <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">
                 ⏳ {formatDeadline(question.closesAt)}
               </span>
@@ -176,19 +172,19 @@ export default async function QuestionDetail(props: {
             </div>
           </div>
 
-          <div className="mt-4 flex gap-4">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:gap-4">
             {question.imageUrl && (
-              <div className="inline-flex max-h-24 max-w-[7rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+              <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]">
                 <img
                   src={question.imageUrl}
                   alt={question.title}
-                  className="h-auto w-auto max-h-24 max-w-[7rem] object-contain"
+                  className="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain sm:max-h-24 sm:max-w-[7rem]"
                   loading="lazy"
                 />
               </div>
             )}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold leading-tight text-white md:text-4xl">
+              <h1 className="text-2xl font-bold leading-tight text-white sm:text-3xl md:text-4xl">
                 {question.title}
               </h1>
               {question.imageCredit && (
@@ -198,19 +194,29 @@ export default async function QuestionDetail(props: {
           </div>
 
           {question.description && (
-            <p className="mt-4 text-base text-slate-200">{question.description}</p>
+            <p className="mt-4 text-sm text-slate-200 sm:text-base">{question.description}</p>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-200">
-            <span className="rounded-full bg-white/5 px-3 py-1">
-              {question.yesPct}% Ja ({yesVotes})
-            </span>
-            <span className="rounded-full bg-white/5 px-3 py-1">
-              {question.noPct}% Nein ({noVotes})
-            </span>
-            <span className="rounded-full bg-white/5 px-3 py-1">
-              Insgesamt {totalVotes} Stimmen
-            </span>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-200">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-white/5 px-3 py-1">
+                {question.yesPct}% Ja ({yesVotes})
+              </span>
+              <span className="rounded-full bg-white/5 px-3 py-1">
+                {question.noPct}% Nein ({noVotes})
+              </span>
+              <span className="rounded-full bg-white/5 px-3 py-1">
+                Insgesamt {totalVotes} Stimmen
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {question.visibility === "link_only" ? (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100">
+                  Privat (nur per Link)
+                </span>
+              ) : null}
+              <ShareLinkButton url={shareUrl} label="Teilen" action="share" />
+            </div>
           </div>
 
           {isAdmin && (
@@ -220,8 +226,8 @@ export default async function QuestionDetail(props: {
           )}
         </header>
 
-        <section className="mt-8 grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15">
+        <section className="mt-6 grid gap-6 sm:mt-8 md:grid-cols-3">
+          <div className="md:col-span-2 space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
             <div className="flex items-center justify-between text-sm text-slate-200">
               <span>Community glaubt</span>
               <span className="font-semibold text-white">
@@ -229,10 +235,10 @@ export default async function QuestionDetail(props: {
               </span>
             </div>
             <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
-            <SparklinePlaceholder />
+            <TrendSparkline questionId={id} />
           </div>
 
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15">
+          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
             <h3 className="text-sm font-semibold text-white">Meta &amp; Stats</h3>
             <div className="grid grid-cols-2 gap-3">
               <StatsCard

@@ -290,7 +290,7 @@ export default function AuthPage() {
                     >
                       Nutzungsbedingungen
                     </button>{" "}
-                    von Future-Vote und bestätige, dass ich nur Inhalte (z. B. Bilder) hochlade, an denen ich die
+                    von Future-Vote und bestätige, dass ich nur Inhalte (z. B. Bilder) hochlade, an denen ich die
                     erforderlichen Rechte besitze.
                   </label>
                 </div>

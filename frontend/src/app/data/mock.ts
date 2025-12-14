@@ -1,5 +1,8 @@
+export type PollVisibility = "public" | "link_only";
+
 export type Question = {
   id: string;
+  creatorId?: string;
   title: string;
   summary: string;
   description?: string;
@@ -28,6 +31,8 @@ export type Question = {
   userChoice?: "yes" | "no";
   createdAt?: string;
   rankingScore?: number;
+  visibility?: PollVisibility;
+  shareId?: string;
 };
 
 export type Draft = {
@@ -55,6 +60,8 @@ export type Draft = {
   votesAgainst: number;
   timeLeftHours: number;
   status?: "open" | "accepted" | "rejected";
+  visibility?: PollVisibility;
+  shareId?: string;
 };
 
 export const categories = [

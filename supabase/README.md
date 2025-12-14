@@ -6,6 +6,7 @@ sollte RLS (Row Level Security) aktiv sein.
 
 ### Vorgehen
 - In Supabase: `SQL Editor` oeffnen
+- Inhalt aus `supabase/link_only_polls.sql` ausfuehren (einmalig, falls du Private/Link-only Umfragen nutzt)
 - Inhalt aus `supabase/draft_reviews.sql` ausfuehren (einmalig)
 - Inhalt aus `supabase/password_resets.sql` ausfuehren (einmalig)
 - Inhalt aus `supabase/rls_policies.sql` ausfuehren (idempotent)

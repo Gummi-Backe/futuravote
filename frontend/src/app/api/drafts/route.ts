@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
-import { createDraftInSupabase } from "@/app/data/dbSupabase";
+import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/data/dbSupabase";
+import type { PollVisibility } from "@/app/data/mock";
 
 export const revalidate = 0;
 
@@ -14,6 +15,7 @@ type DraftInput = {
   imageCredit?: string;
   timeLeftHours?: number;
   closesAt?: string;
+  visibility?: PollVisibility;
 };
 
 export async function POST(request: Request) {
@@ -53,10 +55,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bitte wähle eine Kategorie." }, { status: 400 });
   }
 
+  const visibility: PollVisibility =
+    body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
+
   const timeLeftHours =
     typeof body.timeLeftHours === "number" && Number.isFinite(body.timeLeftHours) && body.timeLeftHours > 0
       ? body.timeLeftHours
       : 72;
+
+  if (visibility === "link_only") {
+    const question = await createLinkOnlyQuestionInSupabase({
+      title,
+      category,
+      description,
+      region,
+      imageUrl,
+      imageCredit,
+      timeLeftHours,
+      targetClosesAt,
+      creatorId: user.id,
+    });
+    return NextResponse.json({ question }, { status: 201 });
+  }
 
   const draft = await createDraftInSupabase({
     title,
@@ -68,6 +88,7 @@ export async function POST(request: Request) {
     timeLeftHours,
     targetClosesAt,
     creatorId: user.id,
+    visibility,
   });
   return NextResponse.json({ draft }, { status: 201 });
 }

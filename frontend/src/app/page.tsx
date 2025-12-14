@@ -84,6 +84,44 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
+function FeedCardSkeleton({ variant }: { variant: "question" | "draft" }) {
+  return (
+    <article
+      aria-hidden="true"
+      className="relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20 mx-auto animate-pulse"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-white/10" />
+          <div className="space-y-2">
+            <div className="h-3 w-24 rounded-full bg-white/10" />
+            <div className="h-3 w-32 rounded-full bg-white/10" />
+          </div>
+        </div>
+        <div className="h-6 w-24 rounded-full bg-white/10" />
+      </div>
+
+      <div className="space-y-2">
+        <div className="h-5 w-4/5 rounded-lg bg-white/10" />
+        <div className="h-4 w-3/5 rounded-lg bg-white/10" />
+      </div>
+
+      <div className="space-y-2">
+        <div className="h-2 w-full rounded-full bg-white/10" />
+        <div className="flex justify-between text-[11px] text-slate-500">
+          <span>{variant === "question" ? "Ja/Nein" : "Gut/Schlecht"}</span>
+          <span>Lade...</span>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <div className="h-11 flex-1 rounded-xl bg-white/10" />
+        <div className="h-11 flex-1 rounded-xl bg-white/10" />
+      </div>
+    </article>
+  );
+}
+
 function EventCard({
   question,
   onVote,
@@ -233,6 +271,11 @@ function DraftCard({
   const total = Math.max(1, draft.votesFor + draft.votesAgainst);
   const yesPct = Math.round((draft.votesFor / total) * 100);
   const noPct = 100 - yesPct;
+  const totalReviews = draft.votesFor + draft.votesAgainst;
+  const reviewsRemaining = Math.max(0, 5 - totalReviews);
+  const lead = Math.abs(draft.votesFor - draft.votesAgainst);
+  const leadRemaining = Math.max(0, 2 - lead);
+  const thresholdReached = totalReviews >= 5 && lead >= 2;
   const isClosed = draft.status === "accepted" || draft.status === "rejected";
   const disabled = Boolean(isSubmitting || hasVoted || isClosed);
   const statusLabel =
@@ -283,9 +326,17 @@ function DraftCard({
       </div>
       <VoteBar yesPct={yesPct} noPct={noPct} />
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
-        <span>Bis Entscheidung: min. 5 Reviews & +2 Vorsprung</span>
         <span>
-          Aktuell: {draft.votesFor + draft.votesAgainst}/5 Reviews · Vorsprung {Math.abs(draft.votesFor - draft.votesAgainst)}/2
+          {reviewsRemaining > 0
+            ? `Noch ${reviewsRemaining} Reviews bis mind. 5 (${totalReviews}/5)`
+            : `Mindestens 5 Reviews erreicht (${totalReviews}/5)`}
+        </span>
+        <span>
+          {thresholdReached
+            ? `Schwelle erreicht (${lead}/2)`
+            : leadRemaining > 0
+            ? `Noch ${leadRemaining} Vorsprung bis Entscheidung (${lead}/2)`
+            : `Vorsprung erreicht (${lead}/2)`}
         </span>
       </div>
       <div className="flex gap-3">
@@ -346,15 +397,31 @@ type CurrentUser =
   | { id: string; email: string; displayName: string; role?: "user" | "admin"; defaultRegion?: string | null }
   | null;
 
+type HomeCache = {
+  activeTab: string;
+  activeCategory: string | null;
+  activeRegion: string | null;
+  draftStatusFilter: "all" | "open" | "accepted" | "rejected";
+  showReviewOnly: boolean;
+  questions: Question[];
+  drafts: Draft[];
+  questionsCursor: string | null;
+  draftsCursor: string | null;
+  questionsTotal: number | null;
+  draftsTotal: number | null;
+};
+
+let homeCache: HomeCache | null = null;
+
 export default function Home() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
-  const [activeTab, setActiveTab] = useState<string>("all");
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [activeRegion, setActiveRegion] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>(() => homeCache?.activeTab ?? "all");
+  const [activeCategory, setActiveCategory] = useState<string | null>(() => homeCache?.activeCategory ?? null);
+  const [activeRegion, setActiveRegion] = useState<string | null>(() => homeCache?.activeRegion ?? null);
+  const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
+  const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
+  const [loading, setLoading] = useState(() => !homeCache);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
@@ -367,14 +434,16 @@ export default function Home() {
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [showExtraRegions, setShowExtraRegions] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-  const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
+  const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">(
+    () => homeCache?.draftStatusFilter ?? "open"
+  );
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
-  const [questionsCursor, setQuestionsCursor] = useState<string | null>(null);
-  const [draftsCursor, setDraftsCursor] = useState<string | null>(null);
-  const [questionsTotal, setQuestionsTotal] = useState<number | null>(null);
-  const [draftsTotal, setDraftsTotal] = useState<number | null>(null);
-  const [showReviewOnly, setShowReviewOnly] = useState(false);
+  const [questionsCursor, setQuestionsCursor] = useState<string | null>(() => homeCache?.questionsCursor ?? null);
+  const [draftsCursor, setDraftsCursor] = useState<string | null>(() => homeCache?.draftsCursor ?? null);
+  const [questionsTotal, setQuestionsTotal] = useState<number | null>(() => homeCache?.questionsTotal ?? null);
+  const [draftsTotal, setDraftsTotal] = useState<number | null>(() => homeCache?.draftsTotal ?? null);
+  const [showReviewOnly, setShowReviewOnly] = useState(() => homeCache?.showReviewOnly ?? false);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const draftsEndRef = useRef<HTMLDivElement | null>(null);
   const [loadingMoreQuestions, setLoadingMoreQuestions] = useState(false);
@@ -507,6 +576,34 @@ export default function Home() {
       setLoading(false);
     }
   }, [activeTab, activeCategory, activeRegion]);
+
+  useEffect(() => {
+    homeCache = {
+      activeTab,
+      activeCategory,
+      activeRegion,
+      draftStatusFilter,
+      showReviewOnly,
+      questions,
+      drafts,
+      questionsCursor,
+      draftsCursor,
+      questionsTotal,
+      draftsTotal,
+    };
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    draftStatusFilter,
+    showReviewOnly,
+    questions,
+    drafts,
+    questionsCursor,
+    draftsCursor,
+    questionsTotal,
+    draftsTotal,
+  ]);
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
     if (toastTimer.current) {
@@ -1138,7 +1235,7 @@ export default function Home() {
                   }`}
                   aria-label="Weitere Kategorien"
                 >
-                  <span className="text-lg leading-none">…</span>
+                  <span className="text-lg leading-none">...</span>
                 </button>
               )}
             </div>
@@ -1209,21 +1306,24 @@ export default function Home() {
               </h2>
               <span className="text-sm text-slate-300">Engagement + Freshness + Trust</span>
             </div>
-            {loading && <div className="text-sm text-slate-300">Lade Daten...</div>}
+            {loading && visibleQuestions.length > 0 && (
+              <div className="text-xs text-slate-400">Aktualisiere...</div>
+            )}
             {error && <div className="text-sm text-rose-200">{error}</div>}
-            <div
-              key={`${activeTab}-${activeCategory ?? "all"}`}
-              className="list-enter grid gap-5 md:grid-cols-2"
-            >
-              {visibleQuestions.map((q) => (
-                <EventCard
-                  key={q.id}
-                  question={q}
-                  isSubmitting={submittingId === q.id}
-                  onVote={(choice) => handleVote(q.id, choice)}
-                  onOpenDetails={(href) => navigateWithTransition(href)}
-                />
-              ))}
+            <div key={`${activeTab}-${activeCategory ?? "all"}`} className="list-enter grid gap-5 md:grid-cols-2">
+              {loading && !error && visibleQuestions.length === 0
+                ? Array.from({ length: QUESTIONS_PAGE_SIZE }).map((_, idx) => (
+                    <FeedCardSkeleton key={`q-skel-${idx}`} variant="question" />
+                  ))
+                : visibleQuestions.map((q) => (
+                    <EventCard
+                      key={q.id}
+                      question={q}
+                      isSubmitting={submittingId === q.id}
+                      onVote={(choice) => handleVote(q.id, choice)}
+                      onOpenDetails={(href) => navigateWithTransition(href)}
+                    />
+                  ))}
             </div>
             <div ref={questionsEndRef} className="h-1" />
           </section>
@@ -1278,16 +1378,22 @@ export default function Home() {
             key={`drafts-${activeCategory ?? "all"}`}
             className="list-enter grid gap-5 md:grid-cols-2"
           >
-            {visibleDrafts.map((draft) => (
-              <DraftCard
-                key={draft.id}
-                draft={draft}
-                onVote={(choice) => handleDraftVote(draft.id, choice)}
-                onAdminAction={currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined}
-                isSubmitting={draftSubmittingId === draft.id}
-                hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
-              />
-            ))}
+            {loading && !error && visibleDrafts.length === 0
+              ? Array.from({ length: DRAFTS_PAGE_SIZE }).map((_, idx) => (
+                  <FeedCardSkeleton key={`d-skel-${idx}`} variant="draft" />
+                ))
+              : visibleDrafts.map((draft) => (
+                  <DraftCard
+                    key={draft.id}
+                    draft={draft}
+                    onVote={(choice) => handleDraftVote(draft.id, choice)}
+                    onAdminAction={
+                      currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined
+                    }
+                    isSubmitting={draftSubmittingId === draft.id}
+                    hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
+                  />
+                ))}
           </div>
           <div ref={draftsEndRef} className="h-1" />
         </section>
