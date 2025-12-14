@@ -227,7 +227,7 @@ export default async function QuestionDetail(props: {
         </header>
 
         <section className="mt-6 grid gap-6 sm:mt-8 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
+          <div className="md:col-span-2 flex min-h-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
             <div className="flex items-center justify-between text-sm text-slate-200">
               <span>Community glaubt</span>
               <span className="font-semibold text-white">
@@ -235,7 +235,9 @@ export default async function QuestionDetail(props: {
               </span>
             </div>
             <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
-            <TrendSparkline questionId={id} />
+            <div className="min-h-0 flex-1">
+              <TrendSparkline questionId={id} />
+            </div>
           </div>
 
           <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
