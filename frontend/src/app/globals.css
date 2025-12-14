@@ -130,43 +130,45 @@ body {
   word-break: break-word;
 }
 
-.card-button {
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #e2e8f0;
-  transition: all 200ms ease;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  transform: translateY(0);
-}
+@layer components {
+  .card-button {
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    transition: all 200ms ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    transform: translateY(0);
+  }
 
-.card-button:hover {
-  transform: translateY(-1px);
-}
+  .card-button:hover {
+    transform: translateY(-1px);
+  }
 
-.card-button:active {
-  transform: translateY(1px);
-}
+  .card-button:active {
+    transform: translateY(1px);
+  }
 
-.card-button.yes {
-  background: rgba(52, 211, 153, 0.2);
-  border-color: rgba(52, 211, 153, 0.25);
-  color: #d1fae5;
-}
+  .card-button.yes {
+    background: rgba(52, 211, 153, 0.2);
+    border-color: rgba(52, 211, 153, 0.25);
+    color: #d1fae5;
+  }
 
-.card-button.yes:hover {
-  background: rgba(52, 211, 153, 0.3);
-}
+  .card-button.yes:hover {
+    background: rgba(52, 211, 153, 0.3);
+  }
 
-.card-button.no {
-  background: rgba(248, 113, 113, 0.2);
-  border-color: rgba(248, 113, 113, 0.25);
-  color: #fee2e2;
-}
+  .card-button.no {
+    background: rgba(248, 113, 113, 0.2);
+    border-color: rgba(248, 113, 113, 0.25);
+    color: #fee2e2;
+  }
 
-.card-button.no:hover {
-  background: rgba(248, 113, 113, 0.3);
+  .card-button.no:hover {
+    background: rgba(248, 113, 113, 0.3);
+  }
 }

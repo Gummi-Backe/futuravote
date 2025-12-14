@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Draft } from "@/app/data/mock";
 
 type DraftReviewChoice = "good" | "bad";
+
+const REVIEWED_DRAFT_CHOICES_STORAGE_KEY = "fv_reviewed_draft_choices_v1";
 
 function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   return (
@@ -36,6 +38,20 @@ export function DraftReviewClient({
   const [submitting, setSubmitting] = useState(false);
   const [hasVoted, setHasVoted] = useState(alreadyReviewedInitial);
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<DraftReviewChoice | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(REVIEWED_DRAFT_CHOICES_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return;
+      const value = (parsed as Record<string, unknown>)[draft.id];
+      if (value === "good" || value === "bad") setSelectedChoice(value);
+    } catch {
+      // ignore
+    }
+  }, [draft.id]);
 
   const totalReviews = draft.votesFor + draft.votesAgainst;
   const yesPct = Math.round((draft.votesFor / Math.max(1, totalReviews)) * 100);
@@ -56,6 +72,7 @@ export function DraftReviewClient({
         : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
 
   const disabled = submitting || hasVoted || draft.status === "accepted" || draft.status === "rejected";
+  const hasReviewChoice = selectedChoice === "good" || selectedChoice === "bad";
 
   const thresholdText = useMemo(() => {
     const partA =
@@ -75,6 +92,7 @@ export function DraftReviewClient({
       if (disabled) return;
       setSubmitting(true);
       setMessage(null);
+      setSelectedChoice(choice);
 
       try {
         const res = await fetch("/api/drafts/vote", {
@@ -93,6 +111,16 @@ export function DraftReviewClient({
           setHasVoted(true);
           setMessage("Du hast dieses Draft bereits bewertet.");
           return;
+        }
+
+        try {
+          const currentRaw = localStorage.getItem(REVIEWED_DRAFT_CHOICES_STORAGE_KEY);
+          const current = currentRaw ? (JSON.parse(currentRaw) as unknown) : {};
+          const safeCurrent = current && typeof current === "object" ? (current as Record<string, unknown>) : {};
+          safeCurrent[draft.id] = choice;
+          localStorage.setItem(REVIEWED_DRAFT_CHOICES_STORAGE_KEY, JSON.stringify(safeCurrent));
+        } catch {
+          // ignore
         }
 
         if (json?.draft) {
@@ -150,10 +178,32 @@ export function DraftReviewClient({
       </div>
 
       <div className="flex gap-3">
-        <button type="button" className="card-button yes w-full" disabled={disabled} onClick={() => submit("good")}>
+        <button
+          type="button"
+          className={`card-button yes w-full ${
+            selectedChoice === "good"
+              ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
+              : hasReviewChoice
+                ? "opacity-30 saturate-50"
+                : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
+          } ${submitting ? "opacity-70 cursor-wait" : ""}`}
+          disabled={disabled}
+          onClick={() => submit("good")}
+        >
           Gute Frage
         </button>
-        <button type="button" className="card-button no w-full" disabled={disabled} onClick={() => submit("bad")}>
+        <button
+          type="button"
+          className={`card-button no w-full ${
+            selectedChoice === "bad"
+              ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
+              : hasReviewChoice
+                ? "opacity-30 saturate-50"
+                : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
+          } ${submitting ? "opacity-70 cursor-wait" : ""}`}
+          disabled={disabled}
+          onClick={() => submit("bad")}
+        >
           Ablehnen
         </button>
       </div>
@@ -172,4 +222,3 @@ export function DraftReviewClient({
     </article>
   );
 }
-

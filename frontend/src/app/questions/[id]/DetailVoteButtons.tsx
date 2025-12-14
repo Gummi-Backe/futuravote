@@ -14,6 +14,7 @@ export function DetailVoteButtons({
   const [choice, setChoice] = useState<Choice | null>(initialChoice);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasChoice = choice === "yes" || choice === "no";
 
   const handleVote = async (nextChoice: Choice) => {
     if (choice || submitting) return;
@@ -56,7 +57,11 @@ export function DetailVoteButtons({
         <button
           type="button"
           className={`card-button yes ${
-            choice === "yes" ? "ring-2 ring-emerald-300" : ""
+            choice === "yes"
+              ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
+              : hasChoice
+                ? "opacity-30 saturate-50"
+                : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
           } ${submitting ? "opacity-70 cursor-wait" : ""}`}
           onClick={() => handleVote("yes")}
           disabled={Boolean(choice) || submitting}
@@ -66,7 +71,11 @@ export function DetailVoteButtons({
         <button
           type="button"
           className={`card-button no ${
-            choice === "no" ? "ring-2 ring-rose-300" : ""
+            choice === "no"
+              ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
+              : hasChoice
+                ? "opacity-30 saturate-50"
+                : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
           } ${submitting ? "opacity-70 cursor-wait" : ""}`}
           onClick={() => handleVote("no")}
           disabled={Boolean(choice) || submitting}
@@ -81,4 +90,3 @@ export function DetailVoteButtons({
     </div>
   );
 }
-

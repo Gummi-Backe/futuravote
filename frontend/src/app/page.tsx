@@ -8,6 +8,7 @@ import { categories, type Draft, type Question } from "./data/mock";
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
 const REVIEWED_DRAFTS_STORAGE_KEY = "fv_reviewed_drafts_v1";
+const REVIEWED_DRAFT_CHOICES_STORAGE_KEY = "fv_reviewed_draft_choices_v1";
 
 const feedTabs = [
   { id: "all", label: "Alle", icon: "✨" },
@@ -138,6 +139,7 @@ function EventCard({
   const votedLabel = votedChoice ? (votedChoice === "yes" ? "Abgestimmt: Ja" : "Abgestimmt: Nein") : null;
   const voteLocked = voted;
   const isClosingSoon = question.status === "closingSoon";
+  const hasChoice = votedChoice === "yes" || votedChoice === "no";
 
   return (
     <article
@@ -225,7 +227,11 @@ function EventCard({
           }}
           disabled={isSubmitting || voteLocked}
           className={`card-button yes ${
-            question.userChoice === "yes" ? "ring-2 ring-emerald-200" : "hover:shadow-emerald-400/40"
+            question.userChoice === "yes"
+              ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
+              : hasChoice
+                ? "opacity-30 saturate-50"
+                : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
           } ${isSubmitting ? "opacity-70" : ""}`}
         >
           Ja
@@ -237,7 +243,11 @@ function EventCard({
           }}
           disabled={isSubmitting || voteLocked}
           className={`card-button no ${
-            question.userChoice === "no" ? "ring-2 ring-rose-200" : "hover:shadow-rose-400/40"
+            question.userChoice === "no"
+              ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
+              : hasChoice
+                ? "opacity-30 saturate-50"
+                : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
           } ${isSubmitting ? "opacity-70" : ""}`}
         >
           Nein
@@ -261,12 +271,14 @@ function DraftCard({
   onAdminAction,
   isSubmitting,
   hasVoted,
+  votedChoice,
 }: {
   draft: Draft;
   onVote?: (choice: DraftReviewChoice) => void;
   onAdminAction?: (action: "accept" | "reject" | "delete") => void;
   isSubmitting?: boolean;
   hasVoted?: boolean;
+  votedChoice?: DraftReviewChoice | null;
 }) {
   const total = Math.max(1, draft.votesFor + draft.votesAgainst);
   const yesPct = Math.round((draft.votesFor / total) * 100);
@@ -278,6 +290,7 @@ function DraftCard({
   const thresholdReached = totalReviews >= 5 && lead >= 2;
   const isClosed = draft.status === "accepted" || draft.status === "rejected";
   const disabled = Boolean(isSubmitting || hasVoted || isClosed);
+  const hasReviewChoice = votedChoice === "good" || votedChoice === "bad";
   const statusLabel =
     draft.status === "accepted" ? "Angenommen" : draft.status === "rejected" ? "Abgelehnt" : "Offen";
   const statusClass =
@@ -342,7 +355,13 @@ function DraftCard({
       <div className="flex gap-3">
         <button
           type="button"
-          className="card-button yes w-full"
+          className={`card-button yes w-full ${
+            votedChoice === "good"
+              ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
+              : hasReviewChoice
+                ? "opacity-30 saturate-50"
+                : ""
+          }`}
           disabled={disabled}
           onClick={() => {
             if (!disabled) onVote?.("good");
@@ -352,7 +371,13 @@ function DraftCard({
         </button>
         <button
           type="button"
-          className="card-button no w-full"
+          className={`card-button no w-full ${
+            votedChoice === "bad"
+              ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
+              : hasReviewChoice
+                ? "opacity-30 saturate-50"
+                : ""
+          }`}
           disabled={disabled}
           onClick={() => {
             if (!disabled) onVote?.("bad");
@@ -430,6 +455,8 @@ export default function Home() {
   const categoryTouchStart = useRef<number | null>(null);
   const [draftSubmittingId, setDraftSubmittingId] = useState<string | null>(null);
   const [reviewedDrafts, setReviewedDrafts] = useState<Record<string, boolean>>({});
+  const [reviewedDraftChoices, setReviewedDraftChoices] = useState<Record<string, DraftReviewChoice>>({});
+  const [pendingDraftChoice, setPendingDraftChoice] = useState<Record<string, DraftReviewChoice>>({});
   const [debugMultiReview, setDebugMultiReview] = useState(false);
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [showExtraRegions, setShowExtraRegions] = useState(false);
@@ -655,12 +682,45 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const raw = window.localStorage.getItem(REVIEWED_DRAFT_CHOICES_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return;
+      const next: Record<string, DraftReviewChoice> = {};
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (value === "good" || value === "bad") {
+          next[key] = value;
+        }
+      }
+      setReviewedDraftChoices(next);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const markDraftReviewed = useCallback((draftId: string) => {
     setReviewedDrafts((prev) => {
       const next = { ...prev, [draftId]: true };
       try {
         if (typeof window !== "undefined") {
           window.localStorage.setItem(REVIEWED_DRAFTS_STORAGE_KEY, JSON.stringify(next));
+        }
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const rememberDraftChoice = useCallback((draftId: string, choice: DraftReviewChoice) => {
+    setReviewedDraftChoices((prev) => {
+      const next = { ...prev, [draftId]: choice };
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(REVIEWED_DRAFT_CHOICES_STORAGE_KEY, JSON.stringify(next));
         }
       } catch {
         // ignore
@@ -939,6 +999,7 @@ export default function Home() {
       if (!debugMultiReview && reviewedDrafts[draftId]) return;
 
       setDraftSubmittingId(draftId);
+      setPendingDraftChoice((prev) => ({ ...prev, [draftId]: choice }));
 
       try {
         const res = await fetch("/api/drafts/vote", {
@@ -959,6 +1020,7 @@ export default function Home() {
         if (data?.alreadyVoted) {
           showToast("Du hast diesen Draft bereits bewertet.", "error");
         } else {
+          rememberDraftChoice(draftId, choice);
           showToast("Dein Review wurde gespeichert.", "success");
         }
 
@@ -969,9 +1031,14 @@ export default function Home() {
         await fetchLatest();
       } finally {
         setDraftSubmittingId(null);
+        setPendingDraftChoice((prev) => {
+          const next = { ...prev };
+          delete next[draftId];
+          return next;
+        });
       }
     },
-    [debugMultiReview, fetchLatest, markDraftReviewed, reviewedDrafts, showToast]
+    [debugMultiReview, fetchLatest, markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
   );
 
   const handleAdminDraftAction = useCallback(
@@ -1382,18 +1449,19 @@ export default function Home() {
               ? Array.from({ length: DRAFTS_PAGE_SIZE }).map((_, idx) => (
                   <FeedCardSkeleton key={`d-skel-${idx}`} variant="draft" />
                 ))
-              : visibleDrafts.map((draft) => (
-                  <DraftCard
-                    key={draft.id}
-                    draft={draft}
-                    onVote={(choice) => handleDraftVote(draft.id, choice)}
+               : visibleDrafts.map((draft) => (
+                   <DraftCard
+                     key={draft.id}
+                     draft={draft}
+                     onVote={(choice) => handleDraftVote(draft.id, choice)}
                     onAdminAction={
                       currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined
-                    }
-                    isSubmitting={draftSubmittingId === draft.id}
-                    hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
-                  />
-                ))}
+                     }
+                     isSubmitting={draftSubmittingId === draft.id}
+                     hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
+                     votedChoice={pendingDraftChoice[draft.id] ?? reviewedDraftChoices[draft.id] ?? null}
+                   />
+                 ))}
           </div>
           <div ref={draftsEndRef} className="h-1" />
         </section>
