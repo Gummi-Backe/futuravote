@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { invalidateProfileCaches } from "@/app/lib/profileCache";
 
 type Choice = "yes" | "no";
 
@@ -40,6 +41,7 @@ export function DetailVoteButtons({
         return;
       }
 
+      invalidateProfileCaches();
       setChoice(nextChoice);
     } catch {
       setError("Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");

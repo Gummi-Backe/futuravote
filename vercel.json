@@ -2,5 +2,11 @@
   "version": 2,
   "installCommand": "npm install",
   "buildCommand": "npm run vercel-build",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/question-metrics?daysBack=120",
+      "schedule": "5 0 * * *"
+    }
+  ]
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEventHandler } from "react";
+import { useEffect, useState, type FormEventHandler } from "react";
+import { invalidateProfileCaches } from "@/app/lib/profileCache";
 
 type ProfileRegionFormProps = {
   initialRegion: string | null;
@@ -8,9 +9,15 @@ type ProfileRegionFormProps = {
 
 export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
   const [region, setRegion] = useState(initialRegion ?? "");
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (dirty) return;
+    setRegion(initialRegion ?? "");
+  }, [dirty, initialRegion]);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -32,6 +39,8 @@ export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
 
       const newRegion: string | null = data.user?.defaultRegion ?? null;
       setRegion(newRegion ?? "");
+      setDirty(false);
+      invalidateProfileCaches();
       setMessage(
         newRegion
           ? `Standard-Region "${newRegion}" gespeichert.`
@@ -54,14 +63,17 @@ export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
           id="default-region"
           type="text"
           value={region}
-          onChange={(e) => setRegion(e.target.value)}
+          onChange={(e) => {
+            setDirty(true);
+            setRegion(e.target.value);
+          }}
           placeholder="z. B. Deutschland, Europa oder deine Stadt"
           maxLength={100}
           className="w-full rounded-xl border border-white/20 bg-black/40 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:border-emerald-300/70 focus:outline-none focus:ring-1 focus:ring-emerald-400/60"
         />
         <p className="text-xs text-slate-400">
-          Wenn du hier eine Region einträgst, wird der Feed automatisch darauf gefiltert, sobald du Future-Vote
-          öffnest. Lässt du das Feld leer, werden wie bisher alle Regionen angezeigt.
+          Wenn du hier eine Region einträgst, wird der Feed automatisch darauf gefiltert, sobald du Future-Vote öffnest.
+          Lässt du das Feld leer, werden wie bisher alle Regionen angezeigt.
         </p>
       </div>
       <div className="flex items-center gap-3">
@@ -75,7 +87,10 @@ export function ProfileRegionForm({ initialRegion }: ProfileRegionFormProps) {
         <button
           type="button"
           disabled={saving || !region}
-          onClick={() => setRegion("")}
+          onClick={() => {
+            setDirty(true);
+            setRegion("");
+          }}
           className="rounded-full border border-white/30 px-3 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-300/70 disabled:opacity-60"
         >
           Eingabe löschen

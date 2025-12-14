@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { categories, type PollVisibility } from "@/app/data/mock";
+import { invalidateProfileCaches } from "@/app/lib/profileCache";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -154,6 +155,7 @@ export default function NewDraftPage() {
   const [endTime, setEndTime] = useState<string>("");
   const minEndDate = getTodayDateString();
   const minEndTime = getMinTimeStringForDate(endDate || minEndDate);
+  const isPrivatePoll = visibility === "link_only";
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageCredit, setImageCredit] = useState("");
@@ -198,6 +200,19 @@ export default function NewDraftPage() {
       }
     };
   }, [imagePreviewUrl]);
+
+  useEffect(() => {
+    if (!isPrivatePoll) return;
+    if (reviewMode === "endDate") return;
+
+    const initialDate = endDate || minEndDate;
+    const initialMinTime = getMinTimeStringForDate(initialDate);
+    setEndDate(initialDate);
+    if (!endTime || endTime < initialMinTime) {
+      setEndTime(initialMinTime);
+    }
+    setReviewMode("endDate");
+  }, [endDate, endTime, isPrivatePoll, minEndDate, reviewMode]);
 
   const navigateHome = useCallback(
     (withSuccessFlag: boolean) => {
@@ -373,6 +388,8 @@ export default function NewDraftPage() {
         setError(data?.error ?? "Konnte deine Frage nicht speichern.");
         return;
       }
+
+      invalidateProfileCaches();
 
       const createdDraft = data?.draft as { shareId?: string } | null;
       const createdQuestion = data?.question as { shareId?: string } | null;
@@ -781,7 +798,10 @@ export default function NewDraftPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-100">Review-Zeitraum</label>
+              <label className="text-sm font-medium text-slate-100">
+                {isPrivatePoll ? "Abstimmungszeitraum" : "Review-Zeitraum"}
+              </label>
+              {!isPrivatePoll && (
               <div className="inline-flex rounded-full bg-white/5 p-1 text-xs">
                 <button
                   type="button"
@@ -814,8 +834,9 @@ export default function NewDraftPage() {
                   Endet am Datum
                 </button>
               </div>
+              )}
 
-              {reviewMode === "duration" ? (
+              {!isPrivatePoll && reviewMode === "duration" ? (
                 <>
                   <input
                     id="timeLeft"
@@ -826,9 +847,13 @@ export default function NewDraftPage() {
                     onChange={(e) => setTimeLeftHours(Number(e.target.value) || 72)}
                     className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                   />
+                  {isPrivatePoll ? (
+                    <p className="text-xs text-slate-400">Wähle genau, bis wann die private Umfrage laufen soll.</p>
+                  ) : (
                   <p className="text-xs text-slate-400">
                     Wie lange die Community Zeit hat, die Qualität deiner Frage zu bewerten (Standard: 72 Stunden).
                   </p>
+                  )}
                 </>
               ) : (
                 <>

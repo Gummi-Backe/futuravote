@@ -2,19 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type Metric = "total" | "split" | "yesPct";
+type Metric = "total" | "split" | "yesPct" | "views" | "ranking";
 
 type TrendPoint = {
   date: string; // YYYY-MM-DD
   yes: number;
   no: number;
   total: number;
+  views?: number | null;
+  rankingScore?: number | null;
 };
 
 type TrendResponse = {
   questionId: string;
   days: number;
   startDate: string;
+  source?: "snapshots" | "votes";
   points: TrendPoint[];
 };
 
@@ -90,16 +93,35 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   const totals = useMemo(() => points.map((p) => p.total), [points]);
   const yesSeries = useMemo(() => points.map((p) => p.yes), [points]);
   const noSeries = useMemo(() => points.map((p) => p.no), [points]);
+  const viewsSeries = useMemo(() => {
+    let last = 0;
+    return points.map((p) => {
+      const value = typeof p.views === "number" ? p.views : null;
+      if (value === null) return last;
+      last = value;
+      return value;
+    });
+  }, [points]);
+  const rankingSeries = useMemo(() => {
+    let last = 0;
+    return points.map((p) => {
+      const value = typeof p.rankingScore === "number" ? p.rankingScore : null;
+      if (value === null) return last;
+      last = value;
+      return value;
+    });
+  }, [points]);
   const yesPctSeries = useMemo(
-    () => {
-      let yesAcc = 0;
-      let totalAcc = 0;
-      return points.map((p) => {
-        yesAcc += p.yes;
-        totalAcc += p.total;
-        return totalAcc > 0 ? Math.round((yesAcc / totalAcc) * 100) : 0;
-      });
-    },
+    () =>
+      points.reduce(
+        (acc, p) => {
+          const yesAcc = acc.yesAcc + p.yes;
+          const totalAcc = acc.totalAcc + p.total;
+          const pct = totalAcc > 0 ? Math.round((yesAcc / totalAcc) * 100) : 0;
+          return { series: [...acc.series, pct], yesAcc, totalAcc };
+        },
+        { series: [] as number[], yesAcc: 0, totalAcc: 0 }
+      ).series,
     [points]
   );
 
@@ -107,13 +129,19 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   const yesSum = yesSeries.reduce((acc, v) => acc + v, 0);
   const noSum = noSeries.reduce((acc, v) => acc + v, 0);
   const yesPct = totalSum > 0 ? Math.round((yesSum / Math.max(1, totalSum)) * 100) : 0;
+  const viewsLast = viewsSeries.length > 0 ? viewsSeries[viewsSeries.length - 1] : 0;
+  const rankingLast = rankingSeries.length > 0 ? rankingSeries[rankingSeries.length - 1] : 0;
 
   const headerLabel =
     metric === "total"
       ? `Stimmen (${totalSum})`
       : metric === "split"
         ? `Ja/Nein (${yesSum}/${noSum})`
-        : `Ja-Quote (${clamp(yesPct, 0, 100)}%)`;
+        : metric === "yesPct"
+          ? `Ja-Quote (${clamp(yesPct, 0, 100)}%)`
+          : metric === "views"
+            ? `Views (${viewsLast})`
+            : `Ranking (${rankingLast.toFixed(2)})`;
 
   return (
     <div className="space-y-3">
@@ -165,6 +193,22 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
                 points={polylineForSeries(yesPctSeries)}
               />
             )}
+            {metric === "views" && (
+              <polyline
+                fill="none"
+                stroke="rgba(147, 197, 253, 0.9)"
+                strokeWidth="2"
+                points={polylineForSeries(viewsSeries)}
+              />
+            )}
+            {metric === "ranking" && (
+              <polyline
+                fill="none"
+                stroke="rgba(250, 204, 21, 0.9)"
+                strokeWidth="2"
+                points={polylineForSeries(rankingSeries)}
+              />
+            )}
           </svg>
         )}
       </div>
@@ -190,6 +234,20 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
           className={`${chipBase} ${metric === "yesPct" ? chipActive : chipInactive}`}
         >
           Ja-Quote
+        </button>
+        <button
+          type="button"
+          onClick={() => setMetric("views")}
+          className={`${chipBase} ${metric === "views" ? chipActive : chipInactive}`}
+        >
+          Views
+        </button>
+        <button
+          type="button"
+          onClick={() => setMetric("ranking")}
+          className={`${chipBase} ${metric === "ranking" ? chipActive : chipInactive}`}
+        >
+          Ranking
         </button>
         {[7, 30, 90].map((d) => (
           <button

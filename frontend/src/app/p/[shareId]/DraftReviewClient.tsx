@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Draft } from "@/app/data/mock";
+import { invalidateProfileCaches } from "@/app/lib/profileCache";
 
 type DraftReviewChoice = "good" | "bad";
 
@@ -106,6 +107,8 @@ export function DraftReviewClient({
           setMessage(json?.error ?? "Konnte Review nicht speichern.");
           return;
         }
+
+        invalidateProfileCaches();
 
         if (json?.alreadyVoted) {
           setHasVoted(true);

@@ -28,6 +28,7 @@ export async function GET() {
         role: user.role,
         defaultRegion: user.defaultRegion,
         emailVerified: user.emailVerified,
+        createdAt: user.createdAt ?? null,
       },
     });
   } catch (error) {
@@ -72,6 +73,7 @@ export async function PATCH(request: Request) {
         displayName: updated.displayName,
         role: updated.role,
         defaultRegion: updated.defaultRegion,
+        createdAt: updated.createdAt ?? null,
       },
     });
   } catch (error) {

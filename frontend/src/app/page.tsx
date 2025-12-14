@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type Draft, type Question } from "./data/mock";
+import { invalidateProfileCaches } from "./lib/profileCache";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -743,6 +744,7 @@ export default function Home() {
     } catch {
       // Ignorieren, UI wird trotzdem auf ausgeloggten Zustand gesetzt
     } finally {
+      invalidateProfileCaches();
       setCurrentUser(null);
     }
   }, []);
@@ -981,6 +983,7 @@ export default function Home() {
         setQuestions((prev) =>
           prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
         );
+        invalidateProfileCaches();
         setError(null);
         showToast("Deine Stimme wurde gezählt.", "success");
       } catch {
@@ -1016,6 +1019,7 @@ export default function Home() {
         const updated = data.draft as Draft;
         setDrafts((prev) => prev.map((d) => (d.id === draftId ? updated : d)));
         markDraftReviewed(draftId);
+        invalidateProfileCaches();
 
         if (data?.alreadyVoted) {
           showToast("Du hast diesen Draft bereits bewertet.", "error");

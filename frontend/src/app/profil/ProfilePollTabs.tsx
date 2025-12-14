@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+import { PROFILE_LISTS_CACHE_KEY } from "@/app/lib/profileCache";
 
 type Tab = "drafts" | "private";
 
@@ -28,6 +29,10 @@ type PrivateDraft = {
   createdAt: string | null;
   status: string;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 function formatDate(value: string | null) {
   if (!value) return null;
@@ -67,16 +72,68 @@ function SkeletonRows({ rows = 3 }: { rows?: number }) {
 }
 
 export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
+  const LISTS_CACHE_TTL_MS = 30_000;
+
+  const readListsCache = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.sessionStorage.getItem(PROFILE_LISTS_CACHE_KEY);
+      if (!raw) return null;
+      const parsed: unknown = JSON.parse(raw);
+      if (!isRecord(parsed)) return null;
+      if (typeof parsed.cachedAt !== "number") return null;
+      return parsed as unknown as {
+        cachedAt: number;
+        drafts: MyDraft[] | null;
+        privateQuestions: PrivateQuestion[] | null;
+        privateDrafts: PrivateDraft[] | null;
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const writeListsCache = (value: {
+    drafts: MyDraft[] | null;
+    privateQuestions: PrivateQuestion[] | null;
+    privateDrafts: PrivateDraft[] | null;
+  }) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(PROFILE_LISTS_CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), ...value }));
+    } catch {
+      // ignore
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<Tab>("drafts");
   const [drafts, setDrafts] = useState<MyDraft[] | null>(null);
   const [privateQuestions, setPrivateQuestions] = useState<PrivateQuestion[] | null>(null);
   const [privateDrafts, setPrivateDrafts] = useState<PrivateDraft[] | null>(null);
   const [loading, setLoading] = useState<Tab | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftsUpdatedAt, setDraftsUpdatedAt] = useState<number | null>(null);
+  const [privateUpdatedAt, setPrivateUpdatedAt] = useState<number | null>(null);
+  const inflightRef = useRef<{ drafts: boolean; private: boolean }>({ drafts: false, private: false });
 
   const privateLoaded = privateQuestions !== null && privateDrafts !== null;
+  const draftsRef = useRef<MyDraft[] | null>(null);
+  const privateQuestionsRef = useRef<PrivateQuestion[] | null>(null);
+  const privateDraftsRef = useRef<PrivateDraft[] | null>(null);
 
   useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
+  useEffect(() => {
+    privateQuestionsRef.current = privateQuestions;
+  }, [privateQuestions]);
+  useEffect(() => {
+    privateDraftsRef.current = privateDrafts;
+  }, [privateDrafts]);
+
+  useLayoutEffect(() => {
+    // Wichtig fuer Next/React Hydration:
+    // Keine sessionStorage/window Reads im initialen Render, sonst Hydration mismatch.
     try {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
@@ -84,36 +141,104 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     } catch {
       // ignore
     }
+
+    const cached = readListsCache();
+    if (cached) {
+      setDrafts(cached.drafts ?? null);
+      setPrivateQuestions(cached.privateQuestions ?? null);
+      setPrivateDrafts(cached.privateDrafts ?? null);
+      setDraftsUpdatedAt(cached.cachedAt);
+      setPrivateUpdatedAt(cached.cachedAt);
+    }
   }, []);
 
-  useEffect(() => {
-    const fetchTab = async () => {
-      if (activeTab === "drafts" && drafts !== null) return;
-      if (activeTab === "private" && privateLoaded) return;
-
-      setLoading(activeTab);
+  const fetchDrafts = async (mode: "foreground" | "background") => {
+    if (inflightRef.current.drafts) return;
+    inflightRef.current.drafts = true;
+    if (mode === "foreground") {
+      setLoading("drafts");
       setError(null);
-      try {
-        if (activeTab === "drafts") {
-          const res = await fetch("/api/profil/drafts");
-          const json = (await res.json().catch(() => null)) as any;
-          if (!res.ok) throw new Error(json?.error ?? "Konnte Drafts nicht laden.");
-          setDrafts((json?.drafts ?? []) as MyDraft[]);
-        } else {
-          const res = await fetch("/api/profil/private");
-          const json = (await res.json().catch(() => null)) as any;
-          if (!res.ok) throw new Error(json?.error ?? "Konnte private Umfragen nicht laden.");
-          setPrivateQuestions((json?.privateQuestions ?? []) as PrivateQuestion[]);
-          setPrivateDrafts((json?.privateDrafts ?? []) as PrivateDraft[]);
-        }
-      } catch (e: any) {
-        setError(e?.message ?? "Konnte Daten nicht laden.");
-      } finally {
-        setLoading(null);
-      }
-    };
-    void fetchTab();
-  }, [activeTab, drafts, privateLoaded]);
+    }
+    try {
+      const res = await fetch("/api/profil/drafts", { cache: "no-store" });
+      const json: unknown = await res.json().catch(() => null);
+      const obj = isRecord(json) ? json : {};
+      const msg = typeof obj.error === "string" ? obj.error : "Konnte Drafts nicht laden.";
+      if (!res.ok) throw new Error(msg);
+      const nextDrafts = (Array.isArray(obj.drafts) ? obj.drafts : []) as MyDraft[];
+      setDrafts(nextDrafts);
+      const now = Date.now();
+      setDraftsUpdatedAt(now);
+      writeListsCache({
+        drafts: nextDrafts,
+        privateQuestions: privateQuestionsRef.current,
+        privateDrafts: privateDraftsRef.current,
+      });
+    } catch (e: unknown) {
+      if (mode === "foreground") setError(e instanceof Error ? e.message : "Konnte Daten nicht laden.");
+    } finally {
+      if (mode === "foreground") setLoading(null);
+      inflightRef.current.drafts = false;
+    }
+  };
+
+  const fetchPrivate = async (mode: "foreground" | "background") => {
+    if (inflightRef.current.private) return;
+    inflightRef.current.private = true;
+    if (mode === "foreground") {
+      setLoading("private");
+      setError(null);
+    }
+    try {
+      const res = await fetch("/api/profil/private", { cache: "no-store" });
+      const json: unknown = await res.json().catch(() => null);
+      const obj = isRecord(json) ? json : {};
+      const msg = typeof obj.error === "string" ? obj.error : "Konnte private Umfragen nicht laden.";
+      if (!res.ok) throw new Error(msg);
+      const nextPrivateQuestions = (Array.isArray(obj.privateQuestions) ? obj.privateQuestions : []) as PrivateQuestion[];
+      const nextPrivateDrafts = (Array.isArray(obj.privateDrafts) ? obj.privateDrafts : []) as PrivateDraft[];
+      setPrivateQuestions(nextPrivateQuestions);
+      setPrivateDrafts(nextPrivateDrafts);
+      const now = Date.now();
+      setPrivateUpdatedAt(now);
+      writeListsCache({
+        drafts: draftsRef.current,
+        privateQuestions: nextPrivateQuestions,
+        privateDrafts: nextPrivateDrafts,
+      });
+    } catch (e: unknown) {
+      if (mode === "foreground") setError(e instanceof Error ? e.message : "Konnte Daten nicht laden.");
+    } finally {
+      if (mode === "foreground") setLoading(null);
+      inflightRef.current.private = false;
+    }
+  };
+
+  useEffect(() => {
+    // SWR: beim Tab-Wechsel immer refreshen (cache bleibt sichtbar)
+    if (activeTab === "drafts") {
+      const mode = drafts === null ? "foreground" : "background";
+      void fetchDrafts(mode);
+    } else {
+      const mode = privateLoaded ? "background" : "foreground";
+      void fetchPrivate(mode);
+    }
+    // `drafts`/`privateLoaded` absichtlich nicht in deps, sonst Re-Fetch-Loop nach State-Update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    // Auto-Revalidate nach TTL, solange die Seite offen ist.
+    const tabUpdatedAt = activeTab === "drafts" ? draftsUpdatedAt : privateUpdatedAt;
+    if (!tabUpdatedAt) return;
+    const remaining = Math.max(500, LISTS_CACHE_TTL_MS - (Date.now() - tabUpdatedAt));
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState !== "visible") return;
+      if (activeTab === "drafts") void fetchDrafts("background");
+      else void fetchPrivate("background");
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, draftsUpdatedAt, privateUpdatedAt]);
 
   const setTab = (tab: Tab) => {
     setActiveTab(tab);

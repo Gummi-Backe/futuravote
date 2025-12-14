@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TermsContent } from "../terms/TermsContent";
+import { invalidateProfileCaches } from "@/app/lib/profileCache";
 
 type Mode = "login" | "register";
 
@@ -112,6 +113,7 @@ export default function AuthPage() {
       }
 
       setCurrentUser(data.user ?? null);
+      invalidateProfileCaches();
       if (mode === "login") {
         router.push("/");
       }
