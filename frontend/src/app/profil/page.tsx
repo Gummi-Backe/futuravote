@@ -407,7 +407,10 @@ export default async function ProfilPage() {
                            {created ? <span>{created}</span> : null}
                          </div>
                        </div>
-                       <ShareLinkButton url={url} label="Link kopieren" action="copy" className="shrink-0" />
+                       <div className="flex shrink-0 items-center gap-2">
+                         <ShareLinkButton url={url} label="Teilen" action="share" className="px-3 py-1.5" />
+                         <ShareLinkButton url={url} label="Link kopieren" action="copy" className="px-3 py-1.5" />
+                       </div>
                      </div>
                    );
                  })}
@@ -445,11 +448,14 @@ export default async function ProfilPage() {
                            {created ? <span>{created}</span> : null}
                          </div>
                        </div>
-                       <ShareLinkButton url={url} label="Link kopieren" action="copy" className="shrink-0" />
+                       <div className="flex shrink-0 items-center gap-2">
+                         <ShareLinkButton url={url} label="Teilen" action="share" className="px-3 py-1.5" />
+                         <ShareLinkButton url={url} label="Link kopieren" action="copy" className="px-3 py-1.5" />
+                       </div>
                      </div>
                    );
                  })}
-               </div>
+                </div>
              )}
            </div>
          </section>
