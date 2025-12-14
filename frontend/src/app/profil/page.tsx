@@ -25,7 +25,9 @@ export const dynamic = "force-dynamic";
 export default async function ProfilPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?:
+    | Promise<Record<string, string | string[] | undefined>>
+    | Record<string, string | string[] | undefined>;
 }) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
@@ -252,7 +254,11 @@ export default async function ProfilPage({
     myDrafts = [];
   }
 
-  const tabRaw = searchParams?.tab;
+  const resolvedSearchParams = (await Promise.resolve(searchParams ?? {})) as Record<
+    string,
+    string | string[] | undefined
+  >;
+  const tabRaw = resolvedSearchParams.tab;
   const tabValue = Array.isArray(tabRaw) ? tabRaw[0] : tabRaw;
   const activeTab = tabValue === "private" ? "private" : "drafts";
 
