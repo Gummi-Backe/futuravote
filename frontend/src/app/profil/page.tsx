@@ -408,8 +408,8 @@ export default async function ProfilPage() {
                          </div>
                        </div>
                        <div className="flex shrink-0 items-center gap-2">
-                         <ShareLinkButton url={url} label="Teilen" action="share" className="px-3 py-1.5" />
-                         <ShareLinkButton url={url} label="Link kopieren" action="copy" className="px-3 py-1.5" />
+                         <ShareLinkButton url={url} label="Teilen" action="share" variant="icon" />
+                         <ShareLinkButton url={url} label="Link kopieren" action="copy" variant="icon" />
                        </div>
                      </div>
                    );
@@ -449,8 +449,8 @@ export default async function ProfilPage() {
                          </div>
                        </div>
                        <div className="flex shrink-0 items-center gap-2">
-                         <ShareLinkButton url={url} label="Teilen" action="share" className="px-3 py-1.5" />
-                         <ShareLinkButton url={url} label="Link kopieren" action="copy" className="px-3 py-1.5" />
+                         <ShareLinkButton url={url} label="Teilen" action="share" variant="icon" />
+                         <ShareLinkButton url={url} label="Link kopieren" action="copy" variant="icon" />
                        </div>
                      </div>
                    );
