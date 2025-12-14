@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { Draft } from "@/app/data/mock";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { DraftReviewClient } from "@/app/p/[shareId]/DraftReviewClient";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -91,9 +91,11 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-6 text-slate-100">
       <div className="mx-auto max-w-5xl">
-        <Link href="/profil?tab=drafts" className="text-sm text-slate-200 hover:text-white">
-          &larr; Zurück
-        </Link>
+        <SmartBackButton
+          fallbackHref="/profil?tab=drafts"
+          label="← Zurück zum Profil"
+          className="text-sm text-slate-200 hover:text-white bg-transparent p-0"
+        />
 
         <section className="mt-6 space-y-3">
           <p className="max-w-xl text-sm text-slate-300">
@@ -105,4 +107,3 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
     </main>
   );
 }
-

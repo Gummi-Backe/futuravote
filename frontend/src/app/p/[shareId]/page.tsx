@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import type { Draft, Question } from "@/app/data/mock";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { DetailVoteButtons } from "@/app/questions/[id]/DetailVoteButtons";
 import { TrendSparkline } from "@/app/questions/[id]/TrendSparkline";
 import { DraftReviewClient } from "./DraftReviewClient";
@@ -74,14 +75,17 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
   const ownerId =
     poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
   const isOwner = Boolean(currentUser?.id && ownerId && currentUser.id === ownerId);
+  const backFallbackHref = isOwner ? "/profil?tab=private" : "/";
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-6 text-slate-100">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="text-sm text-slate-200 hover:text-white">
-            ← Zurück
-          </Link>
+          <SmartBackButton
+            fallbackHref={backFallbackHref}
+            label={isOwner ? "← Zurück zum Profil" : "← Zurück"}
+            className="text-sm text-slate-200 hover:text-white bg-transparent p-0"
+          />
         </div>
 
         {isOwner ? (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 import {
   getDraftsForCreatorFromSupabase,
   getQuestionsVotedByUserFromSupabase,
@@ -317,9 +318,11 @@ export default async function ProfilAktivitaetPage({
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 pb-16 pt-10">
-        <Link href="/profil" className="self-start text-sm text-emerald-100 hover:text-emerald-200">
-          &larr; Zurueck zum Profil
-        </Link>
+        <SmartBackButton
+          fallbackHref="/profil"
+          label="← Zurück zum Profil"
+          className="self-start text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
+        />
 
         <header className="mt-2 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <p className="text-xs uppercase tracking-[0.25em] text-emerald-200">Profil-Aktivität</p>
