@@ -49,7 +49,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   const chartRef = useRef<Chart | null>(null);
 
   const chipBase =
-    "inline-flex min-w-fit shrink-0 items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 snap-center transition hover:-translate-y-0.5";
+    "inline-flex min-w-fit shrink-0 items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5";
   const chipInactive = "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40";
   const chipActive = "border-emerald-300/60 bg-emerald-500/20 text-white";
 
@@ -346,7 +346,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
       </div>
 
       <div className="space-y-2">
-        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden py-1 text-sm text-slate-100 snap-x snap-mandatory">
+        <div className="flex flex-wrap gap-2 text-sm text-slate-100">
           <button
             type="button"
             onClick={() => setMetric("total")}
@@ -384,7 +384,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
           </button>
         </div>
 
-        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden py-1 text-sm text-slate-100 snap-x snap-mandatory">
+        <div className="flex flex-wrap gap-2 text-sm text-slate-100">
           {[7, 30, 90].map((d) => (
             <button
               key={d}
