@@ -33,7 +33,7 @@ export default function AdminControls({ questionId, isArchived }: Props) {
         setMessage("Frage wurde gestoppt und aus dem Feed entfernt.");
         router.refresh();
       } else {
-        setMessage("Frage wurde endgueltig geloescht (inkl. Bild).");
+        setMessage("Frage wurde endgültig gelöscht (inkl. Bild).");
         router.push("/");
       }
     } catch {
@@ -47,8 +47,8 @@ export default function AdminControls({ questionId, isArchived }: Props) {
     <div className="space-y-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 text-xs text-slate-100">
       <p className="font-semibold text-amber-100">Admin-Bereich</p>
       <p className="text-[11px] text-amber-100/90">
-        Hier kannst du diese Frage stoppen (aus dem Feed nehmen) oder im Ausnahmefall endgueltig loeschen.
-        Beim endgueltigen Loeschen werden auch zugehoerige Bilder entfernt.
+        Hier kannst du diese Frage stoppen (aus dem Feed nehmen) oder im Ausnahmefall endgültig löschen.
+        Beim endgültigen Löschen werden auch zugehörige Bilder entfernt.
       </p>
       <div className="flex flex-wrap gap-2 pt-1">
         {!isArchived && (
@@ -67,7 +67,7 @@ export default function AdminControls({ questionId, isArchived }: Props) {
           onClick={() => handleAction("delete")}
           className="rounded-full border border-rose-400/70 bg-rose-500/30 px-3 py-1 text-[11px] font-semibold text-rose-50 hover:bg-rose-500/40 disabled:opacity-60"
         >
-          Endgueltig loeschen
+          Endgültig löschen
         </button>
       </div>
       {message && <p className="text-[11px] text-emerald-100">{message}</p>}
@@ -75,4 +75,3 @@ export default function AdminControls({ questionId, isArchived }: Props) {
     </div>
   );
 }
-

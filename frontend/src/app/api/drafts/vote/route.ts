@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
+import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 
 export const revalidate = 0;
 
@@ -39,14 +40,7 @@ export async function POST(request: Request) {
 
   const response = NextResponse.json({ draft, alreadyVoted }, { status: 200 });
 
-  if (!existingSession) {
-    response.cookies.set("fv_session", sessionId, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
-  }
+  response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
 
   return response;
 }

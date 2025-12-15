@@ -31,17 +31,20 @@ function formatDraftTimeLeft(timeLeftHours: number) {
 export function DraftReviewClient({
   initialDraft,
   alreadyReviewedInitial,
+  readOnly = false,
 }: {
   initialDraft: Draft;
   alreadyReviewedInitial: boolean;
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [submitting, setSubmitting] = useState(false);
-  const [hasVoted, setHasVoted] = useState(alreadyReviewedInitial);
+  const [hasVoted, setHasVoted] = useState(alreadyReviewedInitial || readOnly);
   const [message, setMessage] = useState<string | null>(null);
   const [selectedChoice, setSelectedChoice] = useState<DraftReviewChoice | null>(null);
 
   useEffect(() => {
+    if (readOnly) return;
     try {
       const raw = localStorage.getItem(REVIEWED_DRAFT_CHOICES_STORAGE_KEY);
       if (!raw) return;
@@ -72,7 +75,8 @@ export function DraftReviewClient({
         ? "bg-rose-500/15 text-rose-100 border border-rose-400/40"
         : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
 
-  const disabled = submitting || hasVoted || draft.status === "accepted" || draft.status === "rejected";
+  const disabled =
+    readOnly || submitting || hasVoted || draft.status === "accepted" || draft.status === "rejected";
   const hasReviewChoice = selectedChoice === "good" || selectedChoice === "bad";
 
   const thresholdText = useMemo(() => {
@@ -180,36 +184,42 @@ export function DraftReviewClient({
         <span>{thresholdText.partB}</span>
       </div>
 
-      <div className="flex gap-3">
-        <button
-          type="button"
-          className={`card-button yes w-full ${
-            selectedChoice === "good"
-              ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
-              : hasReviewChoice
-                ? "opacity-30 saturate-50"
-                : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
-          } ${submitting ? "opacity-70 cursor-wait" : ""}`}
-          disabled={disabled}
-          onClick={() => submit("good")}
-        >
-          Gute Frage
-        </button>
-        <button
-          type="button"
-          className={`card-button no w-full ${
-            selectedChoice === "bad"
-              ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
-              : hasReviewChoice
-                ? "opacity-30 saturate-50"
-                : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
-          } ${submitting ? "opacity-70 cursor-wait" : ""}`}
-          disabled={disabled}
-          onClick={() => submit("bad")}
-        >
-          Ablehnen
-        </button>
-      </div>
+      {readOnly ? (
+        <p className="text-xs text-slate-400">
+          Du bist der Ersteller. Teile den Link - Bewertungen kommen von anderen.
+        </p>
+      ) : (
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className={`card-button yes w-full ${
+              selectedChoice === "good"
+                ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
+                : hasReviewChoice
+                  ? "opacity-30 saturate-50"
+                  : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
+            } ${submitting ? "opacity-70 cursor-wait" : ""}`}
+            disabled={disabled}
+            onClick={() => submit("good")}
+          >
+            Gute Frage
+          </button>
+          <button
+            type="button"
+            className={`card-button no w-full ${
+              selectedChoice === "bad"
+                ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
+                : hasReviewChoice
+                  ? "opacity-30 saturate-50"
+                  : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
+            } ${submitting ? "opacity-70 cursor-wait" : ""}`}
+            disabled={disabled}
+            onClick={() => submit("bad")}
+          >
+            Ablehnen
+          </button>
+        </div>
+      )}
 
       {message ? (
         <div

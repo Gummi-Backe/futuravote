@@ -8,6 +8,7 @@ import { DetailVoteButtons } from "@/app/questions/[id]/DetailVoteButtons";
 import { TrendSparkline } from "@/app/questions/[id]/TrendSparkline";
 import { DraftReviewClient } from "./DraftReviewClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { ReportButton } from "@/app/components/ReportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -58,9 +59,17 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   );
 }
 
-export default async function SharedPollPage(props: { params: Promise<{ shareId: string }> }) {
+export default async function SharedPollPage(props: {
+  params: Promise<{ shareId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const resolvedParams = await props.params;
   const shareId = resolvedParams.shareId;
+
+  const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
+  const fromParam = resolvedSearchParams?.from;
+  const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
+  const cameFromAdminReports = from === "admin_reports";
 
   const poll = await fetchSharedPoll(shareId);
   if (!poll) notFound();
@@ -68,6 +77,7 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
   const cookieStore = await cookies();
   const userSessionId = cookieStore.get("fv_user")?.value;
   const currentUser = userSessionId ? await getUserBySessionSupabase(userSessionId).catch(() => null) : null;
+  const isAdmin = currentUser?.role === "admin";
 
   const baseUrl = await getBaseUrl();
   const shareUrl = `${baseUrl}/p/${encodeURIComponent(shareId)}`;
@@ -75,7 +85,10 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
   const ownerId =
     poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
   const isOwner = Boolean(currentUser?.id && ownerId && currentUser.id === ownerId);
-  const backFallbackHref = isOwner ? "/profil?tab=private" : "/";
+  const backFallbackHref =
+    isAdmin && cameFromAdminReports ? "/admin/reports" : isOwner ? "/profil?tab=private" : "/";
+  const backLabel =
+    isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : isOwner ? "← Zurück zum Profil" : "← Zurück";
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-6 text-slate-100">
@@ -83,7 +96,7 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SmartBackButton
             fallbackHref={backFallbackHref}
-            label={isOwner ? "← Zurück zum Profil" : "← Zurück"}
+            label={backLabel}
             className="text-sm text-slate-200 hover:text-white bg-transparent p-0"
           />
         </div>
@@ -126,7 +139,16 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
                 Diese Umfrage ist nicht im Feed gelistet. Jeder mit diesem Link kann sie bewerten.
               </p>
             ) : null}
-            <DraftReviewClient initialDraft={poll.draft} alreadyReviewedInitial={poll.alreadyReviewed} />
+            {!isOwner ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <ReportButton kind="draft" itemId={poll.draft.id} itemTitle={poll.draft.title} shareId={shareId} />
+              </div>
+            ) : null}
+            <DraftReviewClient
+              initialDraft={poll.draft}
+              alreadyReviewedInitial={poll.alreadyReviewed}
+              readOnly={isOwner}
+            />
           </section>
         ) : (
           <section className="mt-6 grid gap-6 md:grid-cols-3">
@@ -185,16 +207,31 @@ export default async function SharedPollPage(props: { params: Promise<{ shareId:
                   Diese Umfrage ist nicht im Feed gelistet. Jeder mit diesem Link kann abstimmen.
                 </p>
               ) : null}
+
+              <div className="pt-2">
+                {!isOwner ? (
+                  <ReportButton
+                    kind="question"
+                    itemId={poll.question.id}
+                    itemTitle={poll.question.title}
+                    shareId={shareId}
+                  />
+                ) : null}
+              </div>
             </div>
 
-            <div className="md:col-span-3">
-              <DetailVoteButtons
-                questionId={poll.question.id}
-                initialChoice={
-                  poll.question.userChoice === "yes" || poll.question.userChoice === "no" ? poll.question.userChoice : null
-                }
-              />
-            </div>
+            {!isOwner ? (
+              <div className="md:col-span-3">
+                <DetailVoteButtons
+                  questionId={poll.question.id}
+                  initialChoice={
+                    poll.question.userChoice === "yes" || poll.question.userChoice === "no"
+                      ? poll.question.userChoice
+                      : null
+                  }
+                />
+              </div>
+            ) : null}
           </section>
         )}
       </div>

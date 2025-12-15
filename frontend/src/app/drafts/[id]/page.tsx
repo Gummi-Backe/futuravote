@@ -5,6 +5,7 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { DraftReviewClient } from "@/app/p/[shareId]/DraftReviewClient";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { ReportButton } from "@/app/components/ReportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,9 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
           <p className="max-w-xl text-sm text-slate-300">
             So sieht dein Draft im Review-Bereich aus. Hier kannst du den Status und die aktuellen Stimmen sehen.
           </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <ReportButton kind="draft" itemId={draft.id} itemTitle={draft.title} />
+          </div>
           <DraftReviewClient initialDraft={draft} alreadyReviewedInitial={alreadyReviewed} />
         </section>
       </div>

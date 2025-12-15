@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getPollByShareIdFromSupabase } from "@/app/data/dbSupabase";
+import { getPollByShareIdFromSupabase, incrementViewsForQuestionInSupabase } from "@/app/data/dbSupabase";
+import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 
 export const revalidate = 0;
 
@@ -23,16 +24,17 @@ export async function GET(_: Request, context: Params) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
-  const response = NextResponse.json(poll, { status: 200 });
-  if (!existingSession) {
-    response.cookies.set("fv_session", sessionId, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
+  if (poll.kind === "question") {
+    try {
+      await incrementViewsForQuestionInSupabase(poll.question.id);
+      poll.question = { ...poll.question, views: (poll.question.views ?? 0) + 1 };
+    } catch (err) {
+      console.warn("Failed to increment views (share poll)", err);
+    }
   }
+
+  const response = NextResponse.json(poll, { status: 200 });
+  response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
 
   return response;
 }
-

@@ -7,6 +7,7 @@ import AdminControls from "./AdminControls";
 import { DetailVoteButtons } from "./DetailVoteButtons";
 import { TrendSparkline } from "./TrendSparkline";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+import { ReportButton } from "@/app/components/ReportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -91,9 +92,15 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
 
 export default async function QuestionDetail(props: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const resolvedParams = await props.params;
   const { id } = resolvedParams;
+
+  const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
+  const fromParam = resolvedSearchParams?.from;
+  const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
+  const cameFromAdminReports = from === "admin_reports";
 
   const question = await fetchQuestion(id);
   if (!question) {
@@ -104,6 +111,9 @@ export default async function QuestionDetail(props: {
   const sessionId = cookieStore.get("fv_user")?.value;
   const currentUser = sessionId ? await getUserBySessionSupabase(sessionId) : null;
   const isAdmin = currentUser?.role === "admin";
+
+  const backHref = isAdmin && cameFromAdminReports ? "/admin/reports" : "/";
+  const backLabel = isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : "← Zurück zum Feed";
 
   const yesVotes = question.yesVotes ?? 0;
   const noVotes = question.noVotes ?? 0;
@@ -137,8 +147,8 @@ export default async function QuestionDetail(props: {
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-8 sm:pt-10 lg:px-6">
-        <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
-          &larr; Zurück zum Feed
+        <Link href={backHref} className="text-sm text-emerald-100 hover:text-emerald-200">
+          {backLabel}
         </Link>
 
         <header className="mt-4 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 sm:px-6 sm:py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
@@ -216,6 +226,7 @@ export default async function QuestionDetail(props: {
                 </span>
               ) : null}
               <ShareLinkButton url={shareUrl} label="Teilen" action="share" />
+              <ReportButton kind="question" itemId={id} itemTitle={question.title} shareId={question.shareId ?? null} />
             </div>
           </div>
 

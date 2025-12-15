@@ -16,6 +16,7 @@ alter table if exists public.user_sessions enable row level security;
 alter table if exists public.email_verifications enable row level security;
 alter table if exists public.draft_reviews enable row level security;
 alter table if exists public.password_resets enable row level security;
+alter table if exists public.reports enable row level security;
 alter table if exists public.question_metrics_daily enable row level security;
 
 -- Idempotent: Policies neu anlegen

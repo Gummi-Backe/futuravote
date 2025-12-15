@@ -122,6 +122,85 @@ function generateShareId(): string {
     .replace(/=+$/g, "");
 }
 
+function clampInt(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+function percentileInt(sortedValuesAsc: number[], p: number): number {
+  if (sortedValuesAsc.length === 0) return 0;
+  const pct = Math.min(1, Math.max(0, p));
+  const idx = Math.round((sortedValuesAsc.length - 1) * pct);
+  return sortedValuesAsc[clampInt(idx, 0, sortedValuesAsc.length - 1)] ?? 0;
+}
+
+async function computeDynamicLowVotesThreshold(options: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>;
+  now: Date;
+  category?: string | null;
+  region?: string | null;
+}): Promise<number> {
+  const { supabase, now, category, region } = options;
+
+  const DEFAULT_THRESHOLD = 5;
+  const MIN_THRESHOLD = 5;
+  const MAX_THRESHOLD = 50;
+  const SAMPLE_LIMIT = 800;
+  const MIN_SAMPLE = 30;
+  const PERCENTILE = 0.35;
+
+  try {
+    const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    let query: any = supabase
+      .from("questions")
+      .select("yes_votes,no_votes")
+      .eq("visibility", "public")
+      .not("status", "eq", "archived")
+      .gte("created_at", minCreatedAt);
+
+    if (category) {
+      query = query.eq("category", category);
+    }
+
+    if (region) {
+      if (region === "Global") {
+        query = query.or("region.is.null,region.eq.Global");
+      } else {
+        query = query.eq("region", region);
+      }
+    }
+
+    query = query.order("created_at", { ascending: false }).limit(SAMPLE_LIMIT);
+
+    const { data: rows, error } = await query;
+    if (error) {
+      console.warn("computeDynamicLowVotesThreshold: query failed", error);
+      return DEFAULT_THRESHOLD;
+    }
+
+    const values = ((rows as any[]) ?? [])
+      .map((r) => {
+        const yes = Number(r?.yes_votes ?? 0);
+        const no = Number(r?.no_votes ?? 0);
+        return Math.max(0, Math.max(yes, no));
+      })
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+
+    if (values.length < MIN_SAMPLE) {
+      return DEFAULT_THRESHOLD;
+    }
+
+    const raw = percentileInt(values, PERCENTILE);
+    const threshold = clampInt(Math.round(raw), MIN_THRESHOLD, MAX_THRESHOLD);
+    return threshold;
+  } catch (err) {
+    console.warn("computeDynamicLowVotesThreshold: failed", err);
+    return 5;
+  }
+}
+
 
 type VoteRow = {
   question_id: string;
@@ -416,6 +495,10 @@ export async function getQuestionsPageFromSupabase(options: {
   const cursorMode = Boolean(cursor);
 
   const now = new Date();
+  const lowVotesThreshold =
+    tab === "new"
+      ? await computeDynamicLowVotesThreshold({ supabase, now, category, region })
+      : null;
 
   // Votes der aktuellen Session einmalig laden (fuer userChoice und ggf. "unanswered")
   let sessionVotesMap = new Map<string, VoteChoice>();
@@ -463,8 +546,8 @@ export async function getQuestionsPageFromSupabase(options: {
       const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
       query = query
         .gte("created_at", minCreatedAt)
-        .lte("yes_votes", 5)
-        .lte("no_votes", 5);
+        .lte("yes_votes", lowVotesThreshold ?? 5)
+        .lte("no_votes", lowVotesThreshold ?? 5);
     } else if (tab === "top") {
       // Top heute: Fragen der letzten 24 Stunden, nach Ranking sortiert
       const minCreatedAt = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
@@ -822,24 +905,28 @@ export async function voteOnQuestionInSupabase(
   return getQuestionByIdFromSupabase(id, sessionId);
 }
 
-export async function incrementViewsForAllInSupabase(): Promise<void> {
+export async function incrementViewsForQuestionInSupabase(questionId: string): Promise<void> {
   const supabase = getSupabaseAdminClient();
 
-  const { data: rows, error } = await supabase.from("questions").select("id, views").eq("visibility", "public");
-  if (error) {
-    throw new Error(`Supabase Views-Select fehlgeschlagen: ${error.message}`);
-  }
-  if (!rows || rows.length === 0) return;
+  const { data: row, error } = await supabase
+    .from("questions")
+    .select("views")
+    .eq("id", questionId)
+    .maybeSingle();
 
-  for (const row of rows as { id: string; views: number | null }[]) {
-    const nextViews = (row.views ?? 0) + 1;
-    const { error: updateError } = await supabase
-      .from("questions")
-      .update({ views: nextViews })
-      .eq("id", row.id);
-    if (updateError) {
-      throw new Error(`Supabase Views-Update fehlgeschlagen: ${updateError.message}`);
-    }
+  if (error) {
+    throw new Error(`Supabase Views-Select (single) fehlgeschlagen: ${error.message}`);
+  }
+  if (!row) return;
+
+  const current = (row as any).views ?? 0;
+  const next = Math.max(0, Number(current) || 0) + 1;
+  const { error: updateError } = await supabase
+    .from("questions")
+    .update({ views: next })
+    .eq("id", questionId);
+  if (updateError) {
+    throw new Error(`Supabase Views-Update (single) fehlgeschlagen: ${updateError.message}`);
   }
 }
 

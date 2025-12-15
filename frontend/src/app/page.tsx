@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type Draft, type Question } from "./data/mock";
 import { invalidateProfileCaches } from "./lib/profileCache";
+import { ReportButton } from "./components/ReportButton";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -84,6 +85,22 @@ function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
       />
     </div>
   );
+}
+
+function getQuestionTitleSizeClass(title: string): string {
+  const normalized = title.trim().replace(/\s+/g, " ");
+  const len = normalized.length;
+  if (len > 140) return "text-base";
+  if (len > 95) return "text-lg";
+  return "text-xl";
+}
+
+function getDraftTitleSizeClass(title: string): string {
+  const normalized = title.trim().replace(/\s+/g, " ");
+  const len = normalized.length;
+  if (len > 120) return "text-base";
+  if (len > 85) return "text-[17px]";
+  return "text-lg";
 }
 
 function FeedCardSkeleton({ variant }: { variant: "question" | "draft" }) {
@@ -185,21 +202,39 @@ function EventCard({
 
       <div className="space-y-3">
         <div className="flex gap-4">
-          {question.imageUrl && (
-            <div className="inline-flex max-h-24 max-w-[7rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
-              <img
-                src={question.imageUrl}
-                alt={question.title}
-                className="h-auto w-auto max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
-                loading="lazy"
-              />
-            </div>
-          )}
-          <div className="flex-1">
-            <h3 className="card-title-wrap text-xl font-bold leading-tight text-white">{question.title}</h3>
-            {question.imageCredit && (
-              <p className="mt-1 text-[10px] text-slate-400 line-clamp-1">{question.imageCredit}</p>
+          <div className="flex-shrink-0">
+            {question.imageUrl ? (
+              <div className="inline-flex max-h-24 max-w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+                <img
+                  src={question.imageUrl}
+                  alt={question.title}
+                  className="h-auto w-auto max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
+                />
+              </div>
+            ) : (
+              <div className="flex h-24 w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+                <div
+                  className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/10 to-white/0 text-2xl text-white/60"
+                  style={{ backgroundColor: `${question.categoryColor}22`, color: question.categoryColor }}
+                  aria-hidden="true"
+                >
+                  {question.categoryIcon}
+                </div>
+              </div>
             )}
+            {question.imageCredit && (
+              <p className="mt-1 text-[10px] leading-tight text-slate-400 line-clamp-2">Bild: {question.imageCredit}</p>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3
+              className={`card-title-wrap line-clamp-5 font-bold leading-tight text-white ${getQuestionTitleSizeClass(
+                question.title
+              )}`}
+            >
+              {question.title}
+            </h3>
           </div>
         </div>
         <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200">
@@ -223,7 +258,8 @@ function EventCard({
       <div className="grid grid-cols-2 gap-4">
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.currentTarget.blur();
             if (!voteLocked) onVote?.("yes");
           }}
           disabled={isSubmitting || voteLocked}
@@ -239,7 +275,8 @@ function EventCard({
         </button>
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.currentTarget.blur();
             if (!voteLocked) onVote?.("no");
           }}
           disabled={isSubmitting || voteLocked}
@@ -302,7 +339,7 @@ function DraftCard({
       : "bg-sky-500/15 text-sky-100 border border-sky-400/30";
 
   return (
-    <article className="flex w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30 mx-auto">
+    <article className="flex h-full w-full max-w-xl flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-sky-500/15 transition hover:-translate-y-1 hover:border-sky-200/30 mx-auto">
       <div className="flex items-center justify-between text-xs text-slate-200">
         <span className={`rounded-full px-3 py-1 font-semibold ${statusClass}`}>{statusLabel}</span>
         <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
@@ -310,24 +347,50 @@ function DraftCard({
         </span>
       </div>
       <div className="flex gap-3">
-        {draft.imageUrl && (
-          <div className="inline-flex max-h-20 max-w-[6rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
-            <img
-              src={draft.imageUrl}
-              alt={draft.title}
-              className="h-auto w-auto max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
-              loading="lazy"
-            />
-          </div>
-        )}
-        <div className="flex-1">
-          <h4 className="card-title-wrap text-lg font-semibold leading-snug text-white">{draft.title}</h4>
+        <div className="flex-shrink-0">
+          {draft.imageUrl ? (
+            <div className="inline-flex max-h-20 max-w-[6rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+              <img
+                src={draft.imageUrl}
+                alt={draft.title}
+                className="h-auto w-auto max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
+                loading="lazy"
+              />
+            </div>
+          ) : (
+            <div className="flex h-20 w-[6rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+              <div
+                className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/10 to-white/0 text-xl text-white/60"
+                aria-hidden="true"
+              >
+                FV
+              </div>
+            </div>
+          )}
           {draft.imageCredit && (
-            <p className="mt-1 text-[10px] text-slate-400 line-clamp-1">{draft.imageCredit}</p>
+            <p className="mt-1 text-[10px] leading-tight text-slate-400 line-clamp-2">Bild: {draft.imageCredit}</p>
           )}
         </div>
+        <div className="min-w-0 flex-1">
+          <h4
+            className={`card-title-wrap line-clamp-5 font-semibold leading-snug text-white ${getDraftTitleSizeClass(
+              draft.title
+            )}`}
+          >
+            {draft.title}
+          </h4>
+        </div>
       </div>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
+        <ReportButton
+          kind="draft"
+          itemId={draft.id}
+          itemTitle={draft.title}
+          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-rose-200/40 transition hover:-translate-y-0.5"
+          label="Melden"
+        />
+      </div>
       {draft.description && (
         <p className="text-xs text-slate-200">
           {draft.description}
@@ -364,7 +427,8 @@ function DraftCard({
                 : ""
           }`}
           disabled={disabled}
-          onClick={() => {
+          onClick={(e) => {
+            e.currentTarget.blur();
             if (!disabled) onVote?.("good");
           }}
         >
@@ -380,7 +444,8 @@ function DraftCard({
                 : ""
           }`}
           disabled={disabled}
-          onClick={() => {
+          onClick={(e) => {
+            e.currentTarget.blur();
             if (!disabled) onVote?.("bad");
           }}
         >
@@ -411,7 +476,7 @@ function DraftCard({
             className="flex-1 rounded-full border border-slate-500/60 bg-slate-600/20 px-3 py-1 font-semibold text-slate-100 hover:bg-slate-600/30 disabled:opacity-60"
             onClick={() => onAdminAction("delete")}
           >
-            Admin: Endgueltig loeschen
+            Admin: Endgültig löschen
           </button>
         </div>
       )}
@@ -458,7 +523,6 @@ export default function Home() {
   const [reviewedDrafts, setReviewedDrafts] = useState<Record<string, boolean>>({});
   const [reviewedDraftChoices, setReviewedDraftChoices] = useState<Record<string, DraftReviewChoice>>({});
   const [pendingDraftChoice, setPendingDraftChoice] = useState<Record<string, DraftReviewChoice>>({});
-  const [debugMultiReview, setDebugMultiReview] = useState(false);
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [showExtraRegions, setShowExtraRegions] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -659,18 +723,6 @@ export default function Home() {
   }, [showToast]);
 
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "F1") {
-        event.preventDefault();
-        setDebugMultiReview((prev) => !prev);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-
-  useEffect(() => {
     try {
       if (typeof window === "undefined") return;
       const raw = window.localStorage.getItem(REVIEWED_DRAFTS_STORAGE_KEY);
@@ -791,10 +843,9 @@ export default function Home() {
     if (draftStatusFilter !== "all") {
       result = result.filter((d) => (d.status ?? "open") === draftStatusFilter);
     }
-    return [...result].sort((a, b) => {
-      if (b.votesFor !== a.votesFor) return b.votesFor - a.votesFor;
-      return a.timeLeftHours - b.timeLeftHours;
-    });
+
+    // Reihenfolge so lassen, wie sie vom Server kommt (Cursor-Pagination + Ranking).
+    return result;
   }, [activeCategory, activeRegion, drafts, draftStatusFilter]);
 
   const visibleDrafts = useMemo(
@@ -803,12 +854,12 @@ export default function Home() {
   );
 
   useEffect(() => {
-    setVisibleQuestionCount(Math.min(QUESTIONS_PAGE_SIZE, filteredQuestions.length));
-  }, [filteredQuestions.length]);
+    setVisibleQuestionCount(QUESTIONS_PAGE_SIZE);
+  }, [activeTab, activeCategory, activeRegion]);
 
   useEffect(() => {
-    setVisibleDraftCount(Math.min(DRAFTS_PAGE_SIZE, filteredDrafts.length));
-  }, [filteredDrafts.length]);
+    setVisibleDraftCount(DRAFTS_PAGE_SIZE);
+  }, [activeTab, activeCategory, activeRegion, draftStatusFilter]);
 
   useEffect(() => {
     if (!questionsEndRef.current) return;
@@ -980,9 +1031,7 @@ export default function Home() {
         if (!res.ok) throw new Error("Vote failed");
         const data = await res.json();
         const updated = data.question as Question;
-        setQuestions((prev) =>
-          prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
-        );
+        setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q)));
         invalidateProfileCaches();
         setError(null);
         showToast("Deine Stimme wurde gezählt.", "success");
@@ -999,7 +1048,7 @@ export default function Home() {
 
   const handleDraftVote = useCallback(
     async (draftId: string, choice: DraftReviewChoice) => {
-      if (!debugMultiReview && reviewedDrafts[draftId]) return;
+      if (reviewedDrafts[draftId]) return;
 
       setDraftSubmittingId(draftId);
       setPendingDraftChoice((prev) => ({ ...prev, [draftId]: choice }));
@@ -1042,7 +1091,7 @@ export default function Home() {
         });
       }
     },
-    [debugMultiReview, fetchLatest, markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
+    [fetchLatest, markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
   );
 
   const handleAdminDraftAction = useCallback(
@@ -1080,7 +1129,7 @@ export default function Home() {
           showToast("Draft wurde von dir als Admin gesperrt.", "success");
         } else {
           showToast(
-            "Draft wurde von dir als Admin endgueltig geloescht (inkl. Bild).",
+            "Draft wurde von dir als Admin endgültig gelöscht (inkl. Bild).",
             "success"
           );
         }
@@ -1138,11 +1187,6 @@ export default function Home() {
       className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}
     >
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
-        {debugMultiReview && (
-          <div className="mb-2 rounded-full border border-amber-400/60 bg-amber-500/15 px-4 py-1 text-xs text-amber-100 shadow-sm shadow-amber-500/30">
-            Testmodus aktiv: Mehrfach-Reviews fuer Drafts erlaubt (F1 zum Deaktivieren).
-          </div>
-        )}
         <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-4 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -1177,9 +1221,15 @@ export default function Home() {
                     <span>Eingeloggt als {currentUser.displayName}</span>
                   </button>
                   {currentUser.role === "admin" && (
-                    <span className="rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                    <button
+                      type="button"
+                      onClick={() => navigateWithTransition("/admin/reports")}
+                      className="rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100 transition hover:-translate-y-0.5 hover:border-amber-300/80 hover:bg-amber-500/25"
+                      aria-label="Admin: Meldungen verwalten"
+                      title="Admin: Meldungen verwalten"
+                    >
                       Admin
-                    </span>
+                    </button>
                   )}
                   <button
                     type="button"
@@ -1462,7 +1512,7 @@ export default function Home() {
                       currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined
                      }
                      isSubmitting={draftSubmittingId === draft.id}
-                     hasVoted={Boolean(reviewedDrafts[draft.id]) && !debugMultiReview}
+                      hasVoted={Boolean(reviewedDrafts[draft.id])}
                      votedChoice={pendingDraftChoice[draft.id] ?? reviewedDraftChoices[draft.id] ?? null}
                    />
                  ))}

@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 import {
   getDraftsPageFromSupabase,
   getQuestionsPageFromSupabase,
-  incrementViewsForAllInSupabase,
 } from "@/app/data/dbSupabase";
+import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 
 export const revalidate = 0;
 
@@ -35,8 +35,6 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
-
-  await incrementViewsForAllInSupabase();
 
   const [questionsPage, draftsPage] = await Promise.all([
     includeQuestions
@@ -71,14 +69,7 @@ export async function GET(request: Request) {
     draftsNextCursor: includeDrafts ? draftsPage.nextCursor : null,
   });
 
-  if (!existingSession) {
-    response.cookies.set("fv_session", sessionId, {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
-  }
+  response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
 
   return response;
 }
