@@ -323,13 +323,13 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   }, [datasets, error, labels, loading, metric, totalSum, yMaxValue]);
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold text-white">Trend</span>
         <span className="text-[11px] text-slate-400">{headerLabel}</span>
       </div>
 
-      <div className="flex min-h-[140px] flex-1 flex-col justify-center rounded-xl border border-white/10 bg-black/20 p-3">
+      <div className="flex min-h-[140px] w-full flex-col justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20 p-3">
         {loading ? (
           <div className="flex flex-1 items-center justify-center text-[11px] text-slate-400">Lädt...</div>
         ) : error ? (
@@ -345,8 +345,8 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
         )}
       </div>
 
-      <div className="mt-auto space-y-2">
-        <div className="flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory">
+      <div className="space-y-2">
+        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden py-1 text-sm text-slate-100 snap-x snap-mandatory">
           <button
             type="button"
             onClick={() => setMetric("total")}
@@ -384,7 +384,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
           </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory">
+        <div className="flex min-w-0 gap-2 overflow-x-auto overflow-y-hidden py-1 text-sm text-slate-100 snap-x snap-mandatory">
           {[7, 30, 90].map((d) => (
             <button
               key={d}
