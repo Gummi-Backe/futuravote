@@ -91,8 +91,8 @@ export default async function SharedPollPage(props: {
     isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : isOwner ? "← Zurück zum Profil" : "← Zurück";
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-6 text-slate-100">
-      <div className="mx-auto max-w-5xl">
+    <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
+      <div className="mx-auto w-full max-w-4xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SmartBackButton
             fallbackHref={backFallbackHref}
@@ -102,31 +102,62 @@ export default async function SharedPollPage(props: {
         </div>
 
         {isOwner ? (
-          <section className="mt-4 rounded-3xl border border-emerald-300/30 bg-emerald-500/10 p-4 shadow-xl shadow-emerald-500/15">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <section className="mt-4 rounded-3xl border border-emerald-300/30 bg-emerald-500/10 p-4 shadow-xl shadow-emerald-500/15 sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-emerald-300/40 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-50">
-                    Privat (nur per Link)
-                  </span>
-                </div>
+                <span className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-50">
+                  Privat (nur per Link)
+                </span>
                 <p className="text-sm text-emerald-50/90">
-                  Teile den Link mit Freunden. Nur du siehst diesen Hinweis - alle anderen koennen nur abstimmen.
+                  Teile den Link. Nur du siehst diesen Hinweis - alle anderen koennen nur abstimmen.
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <ShareLinkButton url={shareUrl} label="Teilen" variant="primary" action="share" />
-                <ShareLinkButton url={shareUrl} label="Link kopieren" action="copy" />
-                <a
-                  href={`mailto:?subject=${encodeURIComponent(
-                    "Private Umfrage (Future-Vote)"
-                  )}&body=${encodeURIComponent(
-                    `Hier ist der Link zur Umfrage:\r\n\r\n${shareUrl}\r\n\r\nFalls der Link nicht klickbar ist: bitte die ganze Zeile kopieren und im Browser einfuegen.\r\n`
-                  )}`}
-                  className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-200/40"
-                >
-                  Per E-Mail senden
-                </a>
+
+              <div className="grid grid-cols-3 gap-3 sm:flex sm:flex-wrap sm:justify-end">
+                <div className="flex flex-col items-center gap-1">
+                  <ShareLinkButton
+                    url={shareUrl}
+                    label="Teilen"
+                    variant="icon"
+                    action="share"
+                    className="h-11 w-11 border-emerald-300/60 bg-emerald-500/20 text-white hover:bg-emerald-500/30"
+                  />
+                  <span className="text-[11px] font-semibold text-emerald-50/90">Teilen</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <ShareLinkButton url={shareUrl} label="Link kopieren" variant="icon" action="copy" className="h-11 w-11" />
+                  <span className="text-[11px] font-semibold text-emerald-50/90">Link</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <a
+                    href={`mailto:?subject=${encodeURIComponent(
+                      "Private Umfrage (Future-Vote)"
+                    )}&body=${encodeURIComponent(
+                      `Hier ist der Link zur Umfrage:\r\n\r\n${shareUrl}\r\n\r\nFalls der Link nicht klickbar ist: bitte die ganze Zeile kopieren und im Browser einfuegen.\r\n`
+                    )}`}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-200/40"
+                    aria-label="Per E-Mail senden"
+                    title="Per E-Mail senden"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                      <path
+                        d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                      <path
+                        d="M5.5 7.5 12 12l6.5-4.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </a>
+                  <span className="text-[11px] font-semibold text-emerald-50/90">E-Mail</span>
+                </div>
               </div>
             </div>
           </section>
@@ -151,8 +182,8 @@ export default async function SharedPollPage(props: {
             />
           </section>
         ) : (
-          <section className="mt-6 grid gap-6 md:grid-cols-3">
-            <div className="md:col-span-2 space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
+          <section className="mt-6 grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
               <div className="flex items-start gap-3">
                 {poll.question.imageUrl ? (
                   <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]">
@@ -164,7 +195,7 @@ export default async function SharedPollPage(props: {
                     />
                   </div>
                 ) : null}
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
                     {poll.question.title}
                   </h1>
@@ -215,13 +246,14 @@ export default async function SharedPollPage(props: {
                     itemId={poll.question.id}
                     itemTitle={poll.question.title}
                     shareId={shareId}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-rose-200/40 sm:w-auto"
                   />
                 ) : null}
               </div>
             </div>
 
             {!isOwner ? (
-              <div className="md:col-span-3">
+              <div className="lg:col-span-3">
                 <DetailVoteButtons
                   questionId={poll.question.id}
                   initialChoice={
