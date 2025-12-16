@@ -1258,6 +1258,13 @@ export default function Home() {
                 <button
                   type="button"
                   className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                  onClick={() => navigateWithTransition("/archiv")}
+                >
+                  Archiv
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
                   onClick={() => {
                     setShowReviewOnly((prev) => !prev);
                     if (typeof window !== "undefined") {
