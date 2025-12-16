@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type HelpSection = {
@@ -207,6 +208,26 @@ export function HelpButton() {
             <p>
               Wähle einen Grund aus und gib optional einen kurzen Hinweis. So hilfst du dabei, die Qualität im Feed hoch zu halten.
             </p>
+          </div>
+        ),
+      },
+      {
+        id: "archive",
+        title: "Archiv & Statistiken",
+        body: (
+          <div className="space-y-2 text-sm text-slate-200">
+            <p>
+              Im Archiv findest du beendete Umfragen und einen Überblick über die Plattform.
+            </p>
+            <div>
+              <Link
+                href="/archiv"
+                onClick={close}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-emerald-100 hover:border-emerald-200/40 hover:text-emerald-50"
+              >
+                Archiv öffnen →
+              </Link>
+            </div>
           </div>
         ),
       },
