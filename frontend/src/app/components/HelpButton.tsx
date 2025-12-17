@@ -240,6 +240,7 @@ export function HelpButton() {
       <button
         type="button"
         onClick={toggle}
+        data-fv-help="1"
         className="fixed bottom-5 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white shadow-2xl shadow-emerald-500/10 backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200/40 active:translate-y-0"
         aria-label={open ? "Hilfe schließen" : "Hilfe öffnen"}
         title={open ? "Hilfe schließen" : "Hilfe"}
@@ -248,7 +249,7 @@ export function HelpButton() {
       </button>
 
       {open ? (
-        <div className="overlay-enter fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" onClick={close}>
+        <div data-fv-help="1" className="overlay-enter fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" onClick={close}>
           <div
             className="overlay-panel absolute left-1/2 top-16 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 sm:top-20 sm:p-6"
             onClick={(e) => e.stopPropagation()}

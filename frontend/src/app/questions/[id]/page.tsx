@@ -1,15 +1,75 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
+import type { Metadata } from "next";
 import type { Question } from "@/app/data/mock";
+import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import AdminControls from "./AdminControls";
 import { DetailVoteButtons } from "./DetailVoteButtons";
 import { TrendSparkline } from "./TrendSparkline";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 import { ReportButton } from "@/app/components/ReportButton";
+import { EmbedWidgetButton } from "@/app/components/EmbedWidgetButton";
 
 export const dynamic = "force-dynamic";
+
+function getMetadataBaseUrl() {
+  return process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de";
+}
+
+function clampText(value: string, maxLen: number) {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
+export async function generateMetadata(props: {
+  params: Promise<{ id: string }> | { id: string };
+}): Promise<Metadata> {
+  const resolvedParams = await (props as any).params;
+  const id = (resolvedParams?.id as string) ?? "";
+
+  const metadataBase = new URL(getMetadataBaseUrl());
+  const canonical = `/questions/${encodeURIComponent(id)}`;
+
+  const question = await getQuestionByIdFromSupabase(id).catch(() => null);
+  if (!question || question.visibility === "link_only") {
+    return {
+      metadataBase,
+      title: "Frage nicht gefunden - Future-Vote",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const title = `${question.title} - Future-Vote`;
+  const baseDesc =
+    question.description?.trim() ||
+    `Prognosefrage in ${question.category}${question.region ? ` · ${question.region}` : ""}.`;
+  const description = clampText(baseDesc, 180);
+
+  const imageUrl = question.imageUrl?.trim() || "/opengraph-image";
+
+  return {
+    metadataBase,
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: "article",
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: question.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
 
 async function getBaseUrl() {
   const headerStore = await headers();
@@ -161,6 +221,7 @@ export default async function QuestionDetail(props: {
     question.visibility === "link_only" && question.shareId
       ? `${baseUrl}/p/${encodeURIComponent(question.shareId)}`
       : `${baseUrl}/questions/${encodeURIComponent(id)}`;
+  const widgetUrl = `${baseUrl}/widget/question/${encodeURIComponent(id)}`;
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
@@ -244,6 +305,9 @@ export default async function QuestionDetail(props: {
                 </span>
               ) : null}
               <ShareLinkButton url={shareUrl} label="Teilen" action="share" />
+              {question.visibility === "public" ? (
+                <EmbedWidgetButton widgetUrl={widgetUrl} title={question.title} />
+              ) : null}
               <ReportButton kind="question" itemId={id} itemTitle={question.title} shareId={question.shareId ?? null} />
             </div>
           </div>

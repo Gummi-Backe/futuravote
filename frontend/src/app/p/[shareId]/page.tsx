@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
+import type { Metadata } from "next";
 import type { Draft, Question } from "@/app/data/mock";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
@@ -9,12 +10,76 @@ import { TrendSparkline } from "@/app/questions/[id]/TrendSparkline";
 import { DraftReviewClient } from "./DraftReviewClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { ReportButton } from "@/app/components/ReportButton";
+import { getPollByShareIdFromSupabase } from "@/app/data/dbSupabase";
 
 export const dynamic = "force-dynamic";
 
 type SharedPollResponse =
   | { kind: "question"; question: Question; shareId: string }
   | { kind: "draft"; draft: Draft; shareId: string; alreadyReviewed: boolean };
+
+function getMetadataBaseUrl() {
+  return process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de";
+}
+
+function clampText(value: string, maxLen: number) {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
+export async function generateMetadata(props: {
+  params: Promise<{ shareId: string }> | { shareId: string };
+}): Promise<Metadata> {
+  const resolvedParams = await (props as any).params;
+  const shareId = (resolvedParams?.shareId as string) ?? "";
+
+  const metadataBase = new URL(getMetadataBaseUrl());
+  const canonical = `/p/${encodeURIComponent(shareId)}`;
+
+  const poll = await getPollByShareIdFromSupabase({ shareId }).catch(() => null);
+  if (!poll) {
+    return {
+      metadataBase,
+      title: "Umfrage nicht gefunden - Future-Vote",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const titleBase = poll.kind === "question" ? poll.question.title : poll.draft.title;
+  const title = `${titleBase} - Future-Vote`;
+  const descriptionBase =
+    poll.kind === "question"
+      ? poll.question.description?.trim() ||
+        `Private Umfrage in ${poll.question.category}${poll.question.region ? ` · ${poll.question.region}` : ""}.`
+      : poll.draft.description?.trim() ||
+        `Private Umfrage in ${poll.draft.category}${poll.draft.region ? ` · ${poll.draft.region}` : ""}.`;
+  const description = clampText(descriptionBase, 180);
+
+  const imageUrl =
+    (poll.kind === "question" ? poll.question.imageUrl : poll.draft.imageUrl)?.trim() || "/opengraph-image";
+
+  return {
+    metadataBase,
+    title,
+    description,
+    alternates: { canonical },
+    robots: { index: false, follow: false },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: "website",
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: titleBase }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
 
 async function getBaseUrl() {
   const headerStore = await headers();
