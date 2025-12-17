@@ -4,13 +4,17 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import {
   adminArchiveQuestionInSupabase,
   adminDeleteQuestionInSupabase,
+  adminResolveQuestionInSupabase,
 } from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
 
 type AdminQuestionBody = {
   questionId?: string;
-  action?: "archive" | "delete";
+  action?: "archive" | "delete" | "resolve";
+  resolvedOutcome?: "yes" | "no";
+  resolvedSource?: string;
+  resolvedNote?: string;
 };
 
 export async function POST(request: Request) {
@@ -46,6 +50,16 @@ export async function POST(request: Request) {
     question = await adminArchiveQuestionInSupabase(questionId);
   } else if (action === "delete") {
     question = await adminDeleteQuestionInSupabase(questionId);
+  } else if (action === "resolve") {
+    const outcome = body.resolvedOutcome === "yes" || body.resolvedOutcome === "no" ? body.resolvedOutcome : null;
+    const resolvedSource = (body.resolvedSource ?? "").trim() || null;
+    const resolvedNote = (body.resolvedNote ?? "").trim() || null;
+    question = await adminResolveQuestionInSupabase({
+      id: questionId,
+      outcome,
+      resolvedSource,
+      resolvedNote,
+    });
   } else {
     return NextResponse.json({ error: "Unbekannte Admin-Aktion." }, { status: 400 });
   }

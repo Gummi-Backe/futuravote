@@ -33,6 +33,15 @@ export type Question = {
   rankingScore?: number;
   visibility?: PollVisibility;
   shareId?: string;
+
+  // Aufloesung (Seriositaet-MVP)
+  resolutionCriteria?: string;
+  resolutionSource?: string;
+  resolutionDeadline?: string;
+  resolvedOutcome?: "yes" | "no";
+  resolvedAt?: string;
+  resolvedSource?: string;
+  resolvedNote?: string;
 };
 
 export type Draft = {
@@ -62,6 +71,11 @@ export type Draft = {
   status?: "open" | "accepted" | "rejected";
   visibility?: PollVisibility;
   shareId?: string;
+
+  // Aufloesung (wird beim Promote zur Frage uebernommen)
+  resolutionCriteria?: string;
+  resolutionSource?: string;
+  resolutionDeadline?: string;
 };
 
 export const categories = [

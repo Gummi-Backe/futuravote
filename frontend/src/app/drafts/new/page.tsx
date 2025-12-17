@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type PollVisibility } from "@/app/data/mock";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 
@@ -121,15 +121,15 @@ function uploadImageWithProgress(
       const message =
         json?.error ??
         (xhr.status == 413
-          ? "Die Datei ist zu gross."
+          ? "Die Datei ist zu groß."
           : xhr.status == 415
-          ? "Ungueltiges Bildformat."
+          ? "Ungültiges Bildformat."
           : "Das Bild konnte nicht hochgeladen werden.");
       reject(new Error(message));
     };
 
     xhr.onerror = () => reject(new Error("Netzwerkfehler beim Bild-Upload."));
-    xhr.ontimeout = () => reject(new Error("Zeitueberschreitung beim Bild-Upload."));
+    xhr.ontimeout = () => reject(new Error("Zeitüberschreitung beim Bild-Upload."));
 
     xhr.send(formData);
   });
@@ -149,13 +149,22 @@ export default function NewDraftPage() {
 
   const [visibility, setVisibility] = useState<PollVisibility>("public");
 
+  const [resolutionCriteria, setResolutionCriteria] = useState("");
+  const [resolutionSource, setResolutionSource] = useState("");
+  const [resolutionDeadlineDate, setResolutionDeadlineDate] = useState<string>("");
+  const [resolutionDeadlineTime, setResolutionDeadlineTime] = useState<string>("");
+
   const [reviewMode, setReviewMode] = useState<"duration" | "endDate">("duration");
   const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
   const [endDate, setEndDate] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
   const minEndDate = getTodayDateString();
   const minEndTime = getMinTimeStringForDate(endDate || minEndDate);
+  const minResolutionDate = getTodayDateString();
+  const minResolutionTime = getMinTimeStringForDate(resolutionDeadlineDate || minResolutionDate);
   const isPrivatePoll = visibility === "link_only";
+  const effectiveMinResolutionTime =
+    (resolutionDeadlineDate || minResolutionDate) === minResolutionDate ? minResolutionTime : "00:00";
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageCredit, setImageCredit] = useState("");
@@ -185,6 +194,107 @@ export default function NewDraftPage() {
 
   const previewImageUrl = imagePreviewUrl || imageUrl || "";
 
+  type SimilarMatch = {
+    id: string;
+    title: string;
+    closesAt: string;
+    ended: boolean;
+    status: string | null;
+    score: number;
+  };
+
+  const [similarMatches, setSimilarMatches] = useState<SimilarMatch[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarError, setSimilarError] = useState<string | null>(null);
+  const similarCacheRef = useRef(new Map<string, SimilarMatch[]>());
+  const lastSimilarQueryRef = useRef<string>("");
+  const lastSimilarWordsRef = useRef<string[]>([]);
+
+  const vagueTitleHits = useMemo(() => {
+    const t = title.toLowerCase();
+    const words = [
+      "bald",
+      "besser",
+      "schlechter",
+      "groß",
+      "gross",
+      "wahrscheinlich",
+      "vielleicht",
+      "erfolgreich",
+      "stark",
+      "schwach",
+      "massiv",
+      "deutlich",
+      "spürbar",
+      "spuerbar",
+      "irgendwann",
+      "wird es",
+    ];
+    return words.filter((w) => t.includes(w));
+  }, [title]);
+
+  useEffect(() => {
+    const query = title.trim();
+    if (query.length < 8) {
+      setSimilarMatches([]);
+      setSimilarError(null);
+      setSimilarLoading(false);
+      return;
+    }
+
+    setSimilarError(null);
+
+    const normalizedQuery = query.replace(/\s+/g, " ").trim();
+    const cacheKey = normalizedQuery.toLowerCase();
+    const cached = similarCacheRef.current.get(cacheKey);
+    if (cached) {
+      setSimilarMatches(cached);
+      setSimilarLoading(false);
+      return;
+    }
+
+    const prevQuery = lastSimilarQueryRef.current;
+    const prevWords = lastSimilarWordsRef.current;
+    const currentWords = normalizedQuery.toLowerCase().split(" ").filter(Boolean);
+
+    if (prevQuery) {
+      const lengthDelta = Math.abs(normalizedQuery.length - prevQuery.length);
+      const sameWordCount = currentWords.length === prevWords.length;
+      const endsWithSpace = query.endsWith(" ");
+      const significantChange = lengthDelta >= 4 || !sameWordCount || endsWithSpace;
+      if (!significantChange) {
+        setSimilarLoading(false);
+        return;
+      }
+    }
+
+    setSimilarLoading(true);
+
+    const handle = setTimeout(() => {
+      void fetch(`/api/questions/similar?q=${encodeURIComponent(normalizedQuery)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data?.ok) {
+            setSimilarError(data?.error ?? "Duplikat-Check fehlgeschlagen.");
+            setSimilarMatches([]);
+            return;
+          }
+          const matches = (data?.matches ?? []) as SimilarMatch[];
+          similarCacheRef.current.set(cacheKey, matches);
+          lastSimilarQueryRef.current = normalizedQuery;
+          lastSimilarWordsRef.current = currentWords;
+          setSimilarMatches(matches);
+        })
+        .catch(() => {
+          setSimilarError("Duplikat-Check fehlgeschlagen.");
+          setSimilarMatches([]);
+        })
+        .finally(() => setSimilarLoading(false));
+    }, 900);
+
+    return () => clearTimeout(handle);
+  }, [title]);
+
   useEffect(() => {
     // aktuellen User laden
     setLoadingUser(true);
@@ -213,6 +323,19 @@ export default function NewDraftPage() {
     }
     setReviewMode("endDate");
   }, [endDate, endTime, isPrivatePoll, minEndDate, reviewMode]);
+
+  useEffect(() => {
+    if (resolutionDeadlineDate) return;
+    setResolutionDeadlineDate(endDate || minEndDate);
+  }, [endDate, minEndDate, resolutionDeadlineDate]);
+
+  useEffect(() => {
+    if (resolutionDeadlineTime) return;
+    const baseDate = resolutionDeadlineDate || endDate || minEndDate;
+    const minTime = getMinTimeStringForDate(baseDate);
+    const suggested = endTime && endTime >= minTime ? endTime : minTime;
+    setResolutionDeadlineTime(suggested);
+  }, [endDate, endTime, minEndDate, resolutionDeadlineDate, resolutionDeadlineTime]);
 
   const navigateHome = useCallback(
     (withSuccessFlag: boolean) => {
@@ -304,13 +427,17 @@ export default function NewDraftPage() {
     } else {
       const composedEndDateTime = endDate && endTime ? `${endDate}T${endTime}` : "";
       if (!composedEndDateTime) {
-        setError("Bitte waehle ein Datum und eine Uhrzeit fuer das Ende des Reviews.");
+        setError(
+          isPrivatePoll
+            ? "Bitte wähle Datum und Uhrzeit für das Ende der Umfrage."
+            : "Bitte wähle Datum und Uhrzeit für das Ende des Reviews."
+        );
         return;
       }
       const closesAt = new Date(composedEndDateTime);
       const now = new Date();
       if (Number.isNaN(closesAt.getTime()) || closesAt <= now) {
-        setError("Das gewaehlte Datum liegt in der Vergangenheit. Bitte waehle einen Zeitpunkt in der Zukunft.");
+        setError("Das gewählte Datum liegt in der Vergangenheit. Bitte wähle einen Zeitpunkt in der Zukunft.");
         return;
       }
       finalClosesAt = closesAt.toISOString();
@@ -326,6 +453,37 @@ export default function NewDraftPage() {
         if (!ok) {
           return;
         }
+      }
+    }
+
+    const trimmedResolutionCriteria = resolutionCriteria.trim();
+    const trimmedResolutionSource = resolutionSource.trim();
+    const composedResolutionDeadline =
+      resolutionDeadlineDate && resolutionDeadlineTime
+        ? `${resolutionDeadlineDate}T${resolutionDeadlineTime}`
+        : "";
+    const resolutionDeadline = composedResolutionDeadline
+      ? new Date(composedResolutionDeadline).toISOString()
+      : undefined;
+
+    const shouldSendResolution =
+      visibility === "public" || Boolean(trimmedResolutionCriteria || trimmedResolutionSource);
+    const resolutionCriteriaToSend = shouldSendResolution ? trimmedResolutionCriteria || undefined : undefined;
+    const resolutionSourceToSend = shouldSendResolution ? trimmedResolutionSource || undefined : undefined;
+    const resolutionDeadlineToSend = shouldSendResolution ? resolutionDeadline : undefined;
+
+    if (visibility === "public") {
+      if (!trimmedResolutionCriteria) {
+        setError("Bitte beschreibe, wie die Frage aufgeloest wird (Aufloesungs-Regeln).");
+        return;
+      }
+      if (!trimmedResolutionSource) {
+        setError("Bitte gib eine Quelle an (z. B. offizielle Seite/Institution oder Link).");
+        return;
+      }
+      if (!resolutionDeadline || Number.isNaN(Date.parse(resolutionDeadline))) {
+        setError("Bitte setze eine Aufloesungs-Deadline (Datum/Uhrzeit).");
+        return;
       }
     }
 
@@ -380,6 +538,9 @@ export default function NewDraftPage() {
           imageCredit: trimmedImageCredit || undefined,
           timeLeftHours: finalTimeLeftHours,
           closesAt: finalClosesAt,
+          resolutionCriteria: resolutionCriteriaToSend,
+          resolutionSource: resolutionSourceToSend,
+          resolutionDeadline: resolutionDeadlineToSend,
         }),
       });
 
@@ -588,6 +749,46 @@ export default function NewDraftPage() {
                   className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                   placeholder="Wird X bis Ende 2026 passieren?"
                 />
+                {vagueTitleHits.length > 0 ? (
+                  <div className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-50/90">
+                    <span className="font-semibold">Tipp:</span> Dein Titel wirkt etwas vage ({vagueTitleHits.join(", ")}).
+                    Formuliere messbar und eindeutig, damit die Auflösung später klar ist.
+                  </div>
+                ) : null}
+
+                {similarLoading ? (
+                  <p className="text-xs text-slate-400">Suche nach ähnlichen Fragen...</p>
+                ) : null}
+                {similarError ? (
+                  <p className="text-xs text-rose-300">{similarError}</p>
+                ) : null}
+                {!similarLoading && !similarError && similarMatches.length > 0 ? (
+                  <div className="rounded-2xl border border-amber-300/30 bg-amber-500/10 p-3 text-xs text-amber-50/90">
+                    <p className="mb-2 font-semibold text-amber-50">Achtung: Ähnliche Fragen gefunden</p>
+                    <div className="space-y-2">
+                      {similarMatches.map((m) => (
+                        <div key={m.id} className="flex items-start justify-between gap-3">
+                          <a
+                            href={`/questions/${encodeURIComponent(m.id)}`}
+                            className="min-w-0 flex-1 text-white hover:text-emerald-100"
+                          >
+                            <span className="block truncate font-semibold">{m.title}</span>
+                            <span className="mt-0.5 block text-[11px] text-amber-100/80">
+                              {m.ended ? "Beendet" : "Aktiv"} · Ähnlichkeit {m.score}%
+                            </span>
+                          </a>
+                          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-200">
+                            {m.ended ? "Archiv" : "Feed"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] text-amber-100/80">
+                      Hinweis: Beendete Fragen zeigen nur, dass es das Thema schon gab. Du kannst trotzdem eine neue Frage
+                      stellen, wenn Zeitraum/Details anders sind.
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -605,6 +806,63 @@ export default function NewDraftPage() {
                 <p className="text-xs text-slate-400">
                   Dieser Text dient dazu, das Thema genauer zu erklären. Er wird nicht in der Kachel im Feed angezeigt,
                   sondern in der Detailansicht der Frage.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-sm font-medium text-slate-100">Auflösung</label>
+                  <span
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                      visibility === "public"
+                        ? "border-emerald-300/40 bg-emerald-500/15 text-emerald-50"
+                        : "border-white/10 bg-white/5 text-slate-200"
+                    }`}
+                  >
+                    {visibility === "public" ? "Pflicht für öffentliche Fragen" : "optional"}
+                  </span>
+                </div>
+                <textarea
+                  value={resolutionCriteria}
+                  onChange={(e) => setResolutionCriteria(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  placeholder="Wann gilt Ja/Nein? (klarer, prüfbarer Maßstab)"
+                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="block text-xs text-slate-200">Quelle (Link oder Institution)</span>
+                    <input
+                      type="text"
+                      value={resolutionSource}
+                      onChange={(e) => setResolutionSource(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                      placeholder="z.B. Bundeswahlleiter, Destatis oder URL"
+                    />
+                  </label>
+
+                  <div className="space-y-1">
+                    <span className="block text-xs text-slate-200">Auflösungs-Deadline</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        value={resolutionDeadlineDate}
+                        min={minResolutionDate}
+                        onChange={(e) => setResolutionDeadlineDate(e.target.value)}
+                        className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                      />
+                      <input
+                        type="time"
+                        value={resolutionDeadlineTime}
+                        min={effectiveMinResolutionTime}
+                        onChange={(e) => setResolutionDeadlineTime(e.target.value)}
+                        className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Kurz und eindeutig: Wie wird entschieden, was das echte Ergebnis ist – und wo kann man es nachprüfen?
                 </p>
               </div>
             </div>
@@ -647,7 +905,7 @@ export default function NewDraftPage() {
                       if (!fileType.startsWith("image/") || fileType === "image/svg+xml") {
                         setImageFile(null);
                         setImagePreviewUrl(null);
-                        setImageError("Bitte waehle eine gueltige Bilddatei (z. B. JPG, PNG oder WebP).");
+                        setImageError("Bitte wähle eine gültige Bilddatei (z. B. JPG, PNG oder WebP).");
                         e.currentTarget.value = "";
                         return;
                       }
@@ -655,7 +913,7 @@ export default function NewDraftPage() {
                       if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
                         setImageFile(null);
                         setImagePreviewUrl(null);
-                        setImageError("Die Datei ist zu gross (max. 20 MB). Bitte waehle ein kleineres Bild.");
+                        setImageError("Die Datei ist zu groß (max. 20 MB). Bitte wähle ein kleineres Bild.");
                         e.currentTarget.value = "";
                         return;
                       }
@@ -802,58 +1060,106 @@ export default function NewDraftPage() {
                 {isPrivatePoll ? "Abstimmungszeitraum" : "Review-Zeitraum"}
               </label>
               {!isPrivatePoll && (
-              <div className="inline-flex rounded-full bg-white/5 p-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setReviewMode("duration")}
-                  className={`rounded-full px-3 py-1 transition ${
-                    reviewMode === "duration"
-                      ? "bg-emerald-500/40 text-white"
-                      : "text-slate-200 hover:bg-white/10"
-                  }`}
-                >
-                  Dauer (Stunden)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const initialDate = endDate || minEndDate;
-                    const initialMinTime = getMinTimeStringForDate(initialDate);
-                    setEndDate(initialDate);
-                    if (!endTime || endTime < initialMinTime) {
-                      setEndTime(initialMinTime);
-                    }
-                    setReviewMode("endDate");
-                  }}
-                  className={`rounded-full px-3 py-1 transition ${
-                    reviewMode === "endDate"
-                      ? "bg-emerald-500/40 text-white"
-                      : "text-slate-200 hover:bg-white/10"
-                  }`}
-                >
-                  Endet am Datum
-                </button>
-              </div>
+                <div className="mt-2 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReviewMode("duration")}
+                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      reviewMode === "duration"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Dauer (Stunden)
+                    <span className="mt-0.5 block text-[11px] font-normal text-slate-200/90">
+                      Standard: 72 Stunden
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const initialDate = endDate || minEndDate;
+                      const initialMinTime = getMinTimeStringForDate(initialDate);
+                      setEndDate(initialDate);
+                      if (!endTime || endTime < initialMinTime) {
+                        setEndTime(initialMinTime);
+                      }
+                      setReviewMode("endDate");
+                    }}
+                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      reviewMode === "endDate"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Endet am Datum
+                    <span className="mt-0.5 block text-[11px] font-normal text-slate-200/90">
+                      Fixer Endzeitpunkt (Datum + Uhrzeit)
+                    </span>
+                  </button>
+                </div>
               )}
 
               {!isPrivatePoll && reviewMode === "duration" ? (
                 <>
-                  <input
-                    id="timeLeft"
-                    type="number"
-                    min={1}
-                    max={24 * 365}
-                    value={timeLeftHours}
-                    onChange={(e) => setTimeLeftHours(Number(e.target.value) || 72)}
-                    className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                  />
-                  {isPrivatePoll ? (
-                    <p className="text-xs text-slate-400">Wähle genau, bis wann die private Umfrage laufen soll.</p>
-                  ) : (
-                  <p className="text-xs text-slate-400">
-                    Wie lange die Community Zeit hat, die Qualität deiner Frage zu bewerten (Standard: 72 Stunden).
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      { label: "24h", hours: 24, hint: "1 Tag" },
+                      { label: "48h", hours: 48, hint: "2 Tage" },
+                      { label: "72h", hours: 72, hint: "3 Tage" },
+                      { label: "168h", hours: 168, hint: "7 Tage" },
+                      { label: "336h", hours: 336, hint: "14 Tage" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.hours}
+                        type="button"
+                        onClick={() => setTimeLeftHours(preset.hours)}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${
+                          timeLeftHours === preset.hours
+                            ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                            : "border-white/15 bg-white/5 text-slate-100 hover:border-emerald-200/30"
+                        }`}
+                      >
+                        <span>{preset.label}</span>
+                        <span className="text-[11px] text-slate-300/90">{preset.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTimeLeftHours((prev) => Math.max(1, Math.round((prev || 72) - 1)))}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition hover:-translate-y-0.5 hover:border-emerald-200/30"
+                      aria-label="Eine Stunde weniger"
+                    >
+                      –
+                    </button>
+                    <input
+                      id="timeLeft"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={String(timeLeftHours)}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d]/g, "");
+                        const parsed = raw ? Number.parseInt(raw, 10) : 0;
+                        const clamped = Math.min(24 * 365, Math.max(1, Number.isFinite(parsed) ? parsed : 72));
+                        setTimeLeftHours(clamped);
+                      }}
+                      className="h-10 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTimeLeftHours((prev) => Math.min(24 * 365, Math.round((prev || 72) + 1)))}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition hover:-translate-y-0.5 hover:border-emerald-200/30"
+                      aria-label="Eine Stunde mehr"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Wie lange die Community Zeit hat, deine Frage zu bewerten. (Standard: 72 Stunden)
                   </p>
-                  )}
                 </>
               ) : (
                 <>
@@ -895,8 +1201,9 @@ export default function NewDraftPage() {
                     </div>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Wähle genau, bis wann die Community deine Frage reviewen kann. Intern wird daraus eine Dauer in
-                    Stunden berechnet.
+                    {isPrivatePoll
+                      ? "Wähle genau, bis wann diese private Umfrage laufen soll."
+                      : "Wähle Datum und Uhrzeit, wann der Review endet (z. B. Sonntag, 18:00). Intern wird daraus eine Dauer in Stunden berechnet."}
                   </p>
                 </>
               )}

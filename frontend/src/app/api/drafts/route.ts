@@ -16,6 +16,9 @@ type DraftInput = {
   timeLeftHours?: number;
   closesAt?: string;
   visibility?: PollVisibility;
+  resolutionCriteria?: string;
+  resolutionSource?: string;
+  resolutionDeadline?: string;
 };
 
 export async function POST(request: Request) {
@@ -47,6 +50,11 @@ export async function POST(request: Request) {
   const closesAtRaw = (body.closesAt ?? "").trim();
   const targetClosesAt =
     closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
+  const resolutionCriteria = (body.resolutionCriteria ?? "").trim() || undefined;
+  const resolutionSource = (body.resolutionSource ?? "").trim() || undefined;
+  const resolutionDeadlineRaw = (body.resolutionDeadline ?? "").trim();
+  const resolutionDeadline =
+    resolutionDeadlineRaw && !Number.isNaN(Date.parse(resolutionDeadlineRaw)) ? resolutionDeadlineRaw : undefined;
 
   if (!title) {
     return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
@@ -57,6 +65,37 @@ export async function POST(request: Request) {
 
   const visibility: PollVisibility =
     body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
+
+  if (visibility === "public") {
+    if (!resolutionCriteria) {
+      return NextResponse.json(
+        { error: "Bitte beschreibe, wie die Frage aufgeloest wird (Aufloesungs-Regeln)." },
+        { status: 400 }
+      );
+    }
+    if (!resolutionSource) {
+      return NextResponse.json(
+        { error: "Bitte gib eine Quelle an (z. B. offizielle Seite/Institution oder Link)." },
+        { status: 400 }
+      );
+    }
+    if (!resolutionDeadline) {
+      return NextResponse.json(
+        { error: "Bitte setze eine Aufloesungs-Deadline (Datum/Uhrzeit)." },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (visibility === "link_only") {
+    const anyResolution = Boolean(resolutionCriteria || resolutionSource || resolutionDeadline);
+    if (anyResolution && !resolutionDeadline) {
+      return NextResponse.json(
+        { error: "Wenn du Aufloesungs-Regeln angibst, setze bitte auch eine Aufloesungs-Deadline (Datum/Uhrzeit)." },
+        { status: 400 }
+      );
+    }
+  }
 
   const timeLeftHours =
     typeof body.timeLeftHours === "number" && Number.isFinite(body.timeLeftHours) && body.timeLeftHours > 0
@@ -74,6 +113,9 @@ export async function POST(request: Request) {
       timeLeftHours,
       targetClosesAt,
       creatorId: user.id,
+      resolutionCriteria,
+      resolutionSource,
+      resolutionDeadline,
     });
     return NextResponse.json({ question }, { status: 201 });
   }
@@ -89,6 +131,9 @@ export async function POST(request: Request) {
     targetClosesAt,
     creatorId: user.id,
     visibility,
+    resolutionCriteria,
+    resolutionSource,
+    resolutionDeadline,
   });
   return NextResponse.json({ draft }, { status: 201 });
 }

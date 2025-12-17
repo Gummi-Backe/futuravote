@@ -75,6 +75,19 @@ function formatDeadline(date: string) {
   return `Endet in ${days} Tagen`;
 }
 
+function formatDateTimeLocal(value?: string | null) {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return value;
+  return new Date(ms).toLocaleString("de-DE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   return (
     <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -130,6 +143,11 @@ export default async function QuestionDetail(props: {
     : "unbekannt";
   const statusLabel =
     question.status === "archived" ? "gestoppt" : question.status ?? "aktiv";
+
+  const resolutionDeadlineLabel = formatDateTimeLocal(question.resolutionDeadline) ?? question.resolutionDeadline ?? null;
+  const resolvedAtLabel = formatDateTimeLocal(question.resolvedAt) ?? question.resolvedAt ?? null;
+  const resolvedOutcomeLabel =
+    question.resolvedOutcome === "yes" ? "Ja" : question.resolvedOutcome === "no" ? "Nein" : null;
 
   const votedLabel =
     question.userChoice === "yes"
@@ -232,7 +250,11 @@ export default async function QuestionDetail(props: {
 
           {isAdmin && (
             <div className="mt-4">
-              <AdminControls questionId={id} isArchived={question.status === "archived"} />
+              <AdminControls
+                questionId={id}
+                isArchived={question.status === "archived"}
+                resolvedOutcome={question.resolvedOutcome ?? null}
+              />
             </div>
           )}
         </header>
@@ -291,6 +313,75 @@ export default async function QuestionDetail(props: {
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-white">Auflösung</h3>
+            {resolvedOutcomeLabel ? (
+              <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
+                Entschieden: {resolvedOutcomeLabel}
+              </span>
+            ) : (
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                Ausstehend
+              </span>
+            )}
+          </div>
+
+          {question.resolutionCriteria ? (
+            <p className="mt-3 text-sm text-slate-200 sm:text-base">{question.resolutionCriteria}</p>
+          ) : (
+            <p className="mt-3 text-sm text-slate-400">Noch keine Auflösungs-Regeln hinterlegt.</p>
+          )}
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {question.resolutionSource ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quelle</p>
+                <div className="mt-1">
+                  {/^https?:\/\//i.test(question.resolutionSource) ? (
+                    <a
+                      href={question.resolutionSource}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all font-semibold text-emerald-100 hover:text-emerald-200"
+                    >
+                      {question.resolutionSource}
+                    </a>
+                  ) : (
+                    <span className="font-semibold text-slate-100">{question.resolutionSource}</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {resolutionDeadlineLabel ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Deadline</p>
+                <p className="mt-1 font-semibold text-slate-100">{resolutionDeadlineLabel}</p>
+              </div>
+            ) : null}
+
+            {resolvedAtLabel ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Entschieden am</p>
+                <p className="mt-1 font-semibold text-slate-100">{resolvedAtLabel}</p>
+              </div>
+            ) : null}
+          </div>
+
+          {question.resolvedSource || question.resolvedNote ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ergebnis</p>
+              {question.resolvedSource ? (
+                <p className="mt-1 break-all font-semibold text-slate-100">{question.resolvedSource}</p>
+              ) : null}
+              {question.resolvedNote ? (
+                <p className="mt-2 whitespace-pre-wrap text-slate-200">{question.resolvedNote}</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <DetailVoteButtons

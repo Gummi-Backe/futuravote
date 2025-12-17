@@ -1189,14 +1189,14 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
         <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-4 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
+            <div className="flex min-w-0 items-start gap-3 lg:max-w-[38rem]">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-xl text-emerald-100 shadow-lg shadow-emerald-500/40">
                 FV
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">FUTURE-VOTE</p>
                 <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">Prognosen, schnell abgestimmt.</h1>
-                <p className="mt-1 max-w-3xl text-sm text-slate-200">
+                <p className="mt-1 max-w-md text-sm text-slate-200">
                   Ja/Nein-Kacheln, Community-Review für neue Fragen, Ranking nach Engagement und Freshness.
                 </p>
               </div>
@@ -1241,7 +1241,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                 <button
                   type="button"
                   className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
@@ -1257,14 +1257,21 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                  className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
                   onClick={() => navigateWithTransition("/archiv")}
                 >
                   Archiv
                 </button>
                 <button
                   type="button"
-                  className="rounded-xl border border-white/25 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                  className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
+                  onClick={() => navigateWithTransition("/regeln")}
+                >
+                  Regeln
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
                   onClick={() => {
                     setShowReviewOnly((prev) => !prev);
                     if (typeof window !== "undefined") {

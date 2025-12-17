@@ -28,6 +28,14 @@ type ProfileStats = {
   trustScorePct: number | null;
   trustScoreSample: number;
   topCategories: { category: string; votes: number; yes: number; no: number }[];
+  trackTotal: number;
+  trackCorrect: number;
+  trackIncorrect: number;
+  trackAccuracyPct: number | null;
+  trackByCategory: { category: string; total: number; correct: number; incorrect: number; accuracyPct: number | null }[];
+  pointsTotal: number;
+  pointsTier: "none" | "bronze" | "silver" | "gold";
+  badges: { id: string; label: string; description: string }[];
 };
 
 const PROFILE_CACHE_TTL_MS = 30_000;
@@ -70,6 +78,57 @@ function writeCache(user: UserMe, stats: ProfileStats) {
   } catch {
     // ignore
   }
+}
+
+function normalizeProfileStats(raw: unknown): ProfileStats | null {
+  if (!isRecord(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const topCategories = Array.isArray(obj.topCategories) ? (obj.topCategories as any[]) : [];
+  const trackByCategory = Array.isArray(obj.trackByCategory) ? (obj.trackByCategory as any[]) : [];
+  const badges = Array.isArray(obj.badges) ? (obj.badges as any[]) : [];
+
+  return {
+    draftsTotal: Number(obj.draftsTotal ?? 0) || 0,
+    draftsAccepted: Number(obj.draftsAccepted ?? 0) || 0,
+    draftsRejected: Number(obj.draftsRejected ?? 0) || 0,
+    votesTotal: Number(obj.votesTotal ?? 0) || 0,
+    votesYes: Number(obj.votesYes ?? 0) || 0,
+    votesNo: Number(obj.votesNo ?? 0) || 0,
+    reviewsTotal: Number(obj.reviewsTotal ?? 0) || 0,
+    trustScorePct: typeof obj.trustScorePct === "number" ? obj.trustScorePct : null,
+    trustScoreSample: Number(obj.trustScoreSample ?? 0) || 0,
+    topCategories: topCategories
+      .map((c) => ({
+        category: String((c as any).category ?? ""),
+        votes: Number((c as any).votes ?? 0) || 0,
+        yes: Number((c as any).yes ?? 0) || 0,
+        no: Number((c as any).no ?? 0) || 0,
+      }))
+      .filter((c) => c.category),
+    trackTotal: Number(obj.trackTotal ?? 0) || 0,
+    trackCorrect: Number(obj.trackCorrect ?? 0) || 0,
+    trackIncorrect: Number(obj.trackIncorrect ?? 0) || 0,
+    trackAccuracyPct: typeof obj.trackAccuracyPct === "number" ? obj.trackAccuracyPct : null,
+    trackByCategory: trackByCategory
+      .map((r) => ({
+        category: String((r as any).category ?? ""),
+        total: Number((r as any).total ?? 0) || 0,
+        correct: Number((r as any).correct ?? 0) || 0,
+        incorrect: Number((r as any).incorrect ?? 0) || 0,
+        accuracyPct: typeof (r as any).accuracyPct === "number" ? (r as any).accuracyPct : null,
+      }))
+      .filter((r) => r.category),
+    pointsTotal: Number(obj.pointsTotal ?? 0) || 0,
+    pointsTier:
+      obj.pointsTier === "bronze" || obj.pointsTier === "silver" || obj.pointsTier === "gold" ? obj.pointsTier : "none",
+    badges: badges
+      .map((b) => ({
+        id: String((b as any).id ?? ""),
+        label: String((b as any).label ?? ""),
+        description: String((b as any).description ?? ""),
+      }))
+      .filter((b) => b.id && b.label),
+  };
 }
 
 export function clearProfileCache() {
@@ -116,7 +175,7 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
     const cached = readCache();
     if (cached) {
       setUser(cached.user);
-      setStats(cached.stats);
+      setStats(normalizeProfileStats(cached.stats) ?? cached.stats);
       setUpdatedAt(cached.cachedAt);
       setLoading(false);
       initialModeRef.current = "background";
@@ -156,7 +215,7 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
         const statsObj = isRecord(statsJson) ? statsJson : {};
         const statsError = typeof statsObj.error === "string" ? statsObj.error : "Konnte Statistiken nicht laden.";
         if (!statsRes.ok) throw new Error(statsError);
-        const nextStats = statsObj as unknown as ProfileStats;
+        const nextStats = normalizeProfileStats(statsObj) ?? (statsObj as unknown as ProfileStats);
 
         setUser(nextUser);
         setStats(nextStats);
@@ -210,16 +269,16 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
           <div className="mt-4 space-y-3 text-sm text-slate-100">
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-300">Anzeige-Name</span>
-              <span className="font-semibold text-white">{user?.displayName ?? "…"}</span>
+              <span className="font-semibold text-white">{user?.displayName ?? "â€¦"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-300">E-Mail</span>
-              <span className="truncate font-medium text-slate-50">{user?.email ?? "…"}</span>
+              <span className="truncate font-medium text-slate-50">{user?.email ?? "â€¦"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-300">Rolle</span>
               <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">
-                {user?.role === "admin" ? "Admin" : user ? "User" : "…"}
+                {user?.role === "admin" ? "Admin" : user ? "User" : "â€¦"}
               </span>
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -312,6 +371,70 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
                   Der Vertrauens-Score basiert aktuell nur auf angenommen/abgelehnt bei deinen Vorschlägen (mind. 3
                   Entscheidungen nötig). Reviews zählen nur für dieses Gerät.
                 </p>
+              </div>
+
+              <div className="mt-2 space-y-2 border-t border-white/10 pt-2">
+                <div className="flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20">
+                  <span className="font-medium text-slate-100">Dein Track Record</span>
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-100">
+                    {stats.trackAccuracyPct === null ? "-" : `${stats.trackAccuracyPct}%`}
+                  </span>
+                </div>
+                <p className="px-3 text-[11px] text-slate-400">
+                  {stats.trackTotal <= 0
+                    ? "Noch keine aufgelösten Fragen, bei denen du abgestimmt hast."
+                    : `${stats.trackCorrect} richtig · ${stats.trackIncorrect} falsch (${stats.trackTotal} entschieden)`}
+                </p>
+
+                <div className="px-3 pt-1 text-[11px] text-slate-300">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-slate-100">Punkte</span>
+                    <span className="font-semibold text-slate-200">
+                      {stats.pointsTotal}
+                      {stats.pointsTier !== "none" ? (
+                        <span className="text-slate-400">
+                          {" "}
+                          · {stats.pointsTier === "bronze" ? "Bronze" : stats.pointsTier === "silver" ? "Silber" : "Gold"}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-slate-400">10 Punkte pro richtige Prognose nach Auflösung.</p>
+                </div>
+
+                {stats.badges?.length ? (
+                  <div className="px-3 pt-1">
+                    <p className="mb-1 font-semibold text-slate-100">Badges</p>
+                    <div className="flex flex-wrap gap-2">
+                      {stats.badges.map((b) => (
+                        <span
+                          key={b.id}
+                          title={b.description}
+                          className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100"
+                        >
+                          {b.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {stats.trackByCategory?.length ? (
+                  <div className="px-3 pt-1 text-[11px] text-slate-300">
+                    <p className="mb-1 font-semibold text-slate-100">Top-Kategorien (Trefferquote)</p>
+                    <div className="space-y-1">
+                      {stats.trackByCategory.slice(0, 3).map((row) => (
+                        <div key={row.category} className="flex items-center justify-between gap-3">
+                          <span className="truncate">{row.category}</span>
+                          <span className="font-semibold text-slate-200">
+                            {row.accuracyPct === null ? "-" : `${row.accuracyPct}%`}{" "}
+                            <span className="text-slate-400">·</span> {row.total}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {stats.topCategories.length > 0 ? (

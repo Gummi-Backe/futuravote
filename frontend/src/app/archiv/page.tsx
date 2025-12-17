@@ -1,7 +1,38 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de"),
+  title: "Archiv & Statistiken – Future‑Vote",
+  description:
+    "Transparente Plattform-Statistiken und Archiv beendeter Umfragen – inklusive Ergebnis zum Endzeitpunkt.",
+  alternates: { canonical: "/archiv" },
+  openGraph: {
+    title: "Archiv & Statistiken – Future‑Vote",
+    description:
+      "Transparente Plattform-Statistiken und Archiv beendeter Umfragen – inklusive Ergebnis zum Endzeitpunkt.",
+    url: "/archiv",
+    type: "website",
+    images: [
+      {
+        url: "/archiv/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Future‑Vote Archiv & Statistiken",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Archiv & Statistiken – Future‑Vote",
+    description:
+      "Transparente Plattform-Statistiken und Archiv beendeter Umfragen – inklusive Ergebnis zum Endzeitpunkt.",
+    images: ["/archiv/opengraph-image"],
+  },
+};
 
 type PublicQuestionRow = {
   id: string;
@@ -13,6 +44,7 @@ type PublicQuestionRow = {
   closes_at: string;
   yes_votes: number;
   no_votes: number;
+  resolved_outcome?: "yes" | "no" | null;
 };
 
 type CategoryCount = {
@@ -22,9 +54,41 @@ type CategoryCount = {
   count: number;
 };
 
+function timeUntilLabel(targetIso: string, nowMs: number) {
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(targetIso);
+  if (isDateOnly) {
+    const todayIso = new Date(nowMs).toISOString().slice(0, 10);
+    const todayMs = Date.parse(todayIso);
+    const targetMs = Date.parse(targetIso);
+    if (!Number.isFinite(todayMs) || !Number.isFinite(targetMs)) return null;
+    const diffDays = Math.round((targetMs - todayMs) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return "Endet heute";
+    if (diffDays === 1) return "Endet morgen";
+    return `Endet in ${diffDays} Tagen`;
+  }
+
+  const targetMs = Date.parse(targetIso);
+  if (!Number.isFinite(targetMs)) return null;
+  const diffMs = targetMs - nowMs;
+  if (diffMs <= 0) return "Endet heute";
+  const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
+  if (diffHours < 24) return `Endet in ${diffHours}h`;
+  const diffDays = Math.ceil(diffHours / 24);
+  if (diffDays === 1) return "Endet morgen";
+  return `Endet in ${diffDays} Tagen`;
+}
+
 function formatDateTime(value: string) {
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
   const ms = Date.parse(value);
   if (!Number.isFinite(ms)) return value;
+  if (isDateOnly) {
+    return new Date(ms).toLocaleDateString("de-DE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  }
   return new Date(ms).toLocaleString("de-DE", {
     year: "numeric",
     month: "2-digit",
@@ -47,6 +111,11 @@ function outcomeLabel(yesVotes: number, noVotes: number) {
   };
 }
 
+function getMajorityChoice(yesVotes: number, noVotes: number): "yes" | "no" | null {
+  if (yesVotes === noVotes) return null;
+  return yesVotes > noVotes ? "yes" : "no";
+}
+
 export default async function ArchivPage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
@@ -57,6 +126,8 @@ export default async function ArchivPage(props: {
   const offset = (page - 1) * pageSize;
 
   const nowIso = new Date().toISOString();
+  const nowMs = Date.parse(nowIso);
+  const todayIso = new Date(nowMs).toISOString().slice(0, 10);
   const supabase = getSupabaseAdminClient();
 
   const { count: totalQuestionsRaw, error: totalQuestionsError } = await supabase
@@ -69,14 +140,14 @@ export default async function ArchivPage(props: {
     .from("questions")
     .select("id", { count: "exact", head: true })
     .eq("visibility", "public")
-    .gte("closes_at", nowIso);
+    .gte("closes_at", todayIso);
   const openQuestions = openQuestionsError ? 0 : openQuestionsRaw ?? 0;
 
   const { count: endedQuestionsRaw, error: endedQuestionsError } = await supabase
     .from("questions")
     .select("id", { count: "exact", head: true })
     .eq("visibility", "public")
-    .lt("closes_at", nowIso);
+    .lt("closes_at", todayIso);
   const endedQuestions = endedQuestionsError ? 0 : endedQuestionsRaw ?? 0;
 
   const { count: totalVotesRaw, error: totalVotesError } = await supabase
@@ -85,13 +156,34 @@ export default async function ArchivPage(props: {
     .eq("questions.visibility", "public");
   const totalVotes = totalVotesError ? 0 : totalVotesRaw ?? 0;
 
-  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const since30d = new Date(nowMs - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { count: votes30dRaw, error: votes30dError } = await supabase
     .from("votes")
     .select("question_id, questions!inner(visibility)", { count: "exact", head: true })
     .eq("questions.visibility", "public")
     .gte("created_at", since30d);
   const votes30d = votes30dError ? 0 : votes30dRaw ?? 0;
+
+  const since7d = new Date(nowMs - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const since14d = new Date(nowMs - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { count: votes7dRaw, error: votes7dError } = await supabase
+    .from("votes")
+    .select("question_id, questions!inner(visibility)", { count: "exact", head: true })
+    .eq("questions.visibility", "public")
+    .gte("created_at", since7d);
+  const votes7d = votes7dError ? 0 : votes7dRaw ?? 0;
+
+  const { count: votesPrev7dRaw, error: votesPrev7dError } = await supabase
+    .from("votes")
+    .select("question_id, questions!inner(visibility)", { count: "exact", head: true })
+    .eq("questions.visibility", "public")
+    .gte("created_at", since14d)
+    .lt("created_at", since7d);
+  const votesPrev7d = votesPrev7dError ? 0 : votesPrev7dRaw ?? 0;
+  const votes7dDelta = votes7d - votesPrev7d;
+  const votes7dPct =
+    votesPrev7d > 0 ? Math.round(((votes7d - votesPrev7d) / votesPrev7d) * 100) : votes7d > 0 ? 100 : 0;
 
   const { data: categoryRows } = await supabase
     .from("questions")
@@ -121,22 +213,41 @@ export default async function ArchivPage(props: {
     .from("questions")
     .select("id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes")
     .eq("visibility", "public")
-    .gte("closes_at", nowIso)
+    .gte("closes_at", todayIso)
     .order("closes_at", { ascending: true })
     .limit(3);
   const openSoon = ((openSoonRows as any[]) ?? []) as PublicQuestionRow[];
+  const firstEndsLabel = openSoon.length > 0 ? timeUntilLabel(openSoon[0].closes_at, nowMs) : null;
 
   const { data: endedRows, count: endedTotal } = await supabase
     .from("questions")
-    .select("id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes", {
+    .select("id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes,resolved_outcome", {
       count: "exact",
     })
     .eq("visibility", "public")
-    .lt("closes_at", nowIso)
+    .lt("closes_at", todayIso)
     .order("closes_at", { ascending: false })
     .range(offset, offset + pageSize - 1);
 
   const ended = ((endedRows as any[]) ?? []) as PublicQuestionRow[];
+
+  const { data: resolvedRows } = await supabase
+    .from("questions")
+    .select("yes_votes,no_votes,resolved_outcome")
+    .eq("visibility", "public")
+    .lt("closes_at", todayIso)
+    .not("resolved_outcome", "is", null);
+
+  const resolved = ((resolvedRows as any[]) ?? []) as Pick<PublicQuestionRow, "yes_votes" | "no_votes" | "resolved_outcome">[];
+  const resolvedConsidered = resolved.filter((r) => r.resolved_outcome && getMajorityChoice(r.yes_votes ?? 0, r.no_votes ?? 0));
+  const resolvedTotalConsidered = resolvedConsidered.length;
+  const resolvedCorrect = resolvedConsidered.reduce((acc, r) => {
+    const majority = getMajorityChoice(r.yes_votes ?? 0, r.no_votes ?? 0);
+    if (!majority || !r.resolved_outcome) return acc;
+    return acc + (majority === r.resolved_outcome ? 1 : 0);
+  }, 0);
+  const resolvedAccuracyPct =
+    resolvedTotalConsidered > 0 ? Math.round((resolvedCorrect / resolvedTotalConsidered) * 100) : null;
 
   const prevHref = page > 1 ? `/archiv?page=${page - 1}` : null;
   const nextHref = endedTotal && offset + pageSize < endedTotal ? `/archiv?page=${page + 1}` : null;
@@ -175,17 +286,55 @@ export default async function ArchivPage(props: {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg shadow-black/20">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Stimmen (30T)</p>
             <p className="mt-1 text-2xl font-bold text-white">{votes30d}</p>
-            <p className="mt-1 text-xs text-slate-400">Letzte 30 Tage</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Letzte 7 Tage:{" "}
+              <span className="font-semibold text-slate-200">{votes7d}</span>{" "}
+              <span className={`${votes7dDelta >= 0 ? "text-emerald-200" : "text-rose-200"} font-semibold`}>
+                {votes7dDelta >= 0 ? `+${votes7dDelta}` : String(votes7dDelta)}
+              </span>
+              <span className="text-slate-400"> ({votes7dPct}% vs. Woche davor)</span>
+            </p>
           </div>
         </section>
 
         <section className="mt-4 grid gap-3 lg:grid-cols-3">
           <div className="rounded-3xl border border-white/10 bg-black/20 p-4 shadow-xl shadow-black/20 sm:p-5 lg:col-span-2">
             <h2 className="text-sm font-semibold text-white">Erfolgsquote</h2>
-            <p className="mt-1 text-sm text-slate-300">
-              Kommt, sobald die ersten Fragen entschieden sind. Dann zeigen wir hier transparent:{" "}
-              <span className="font-semibold text-slate-100">X von Y</span> richtig, inklusive Kategorie‑Vergleich.
-            </p>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                {resolvedTotalConsidered > 0 && resolvedAccuracyPct !== null ? (
+                  <p className="text-sm text-slate-300">
+                    Community lag richtig bei{" "}
+                    <span className="font-semibold text-slate-100">
+                      {resolvedCorrect} von {resolvedTotalConsidered}
+                    </span>{" "}
+                    aufgelösten Fragen{" "}
+                    <span className="font-semibold text-slate-100">({resolvedAccuracyPct}%)</span>.
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-300">
+                    <span className="font-semibold text-slate-100">Noch keine aufgelösten Fragen:</span> Sobald du Ergebnisse (Ja/Nein) pro
+                    Frage einträgst, zeigen wir hier transparent <span className="font-semibold text-slate-100">X von Y</span> richtig.
+                  </p>
+                )}
+                {firstEndsLabel ? (
+                  <p className="text-xs text-slate-400">
+                    Erste Frage endet: <span className="font-semibold text-slate-200">{firstEndsLabel}</span>
+                  </p>
+                ) : null}
+              </div>
+              {resolvedTotalConsidered > 0 && resolvedAccuracyPct !== null ? (
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
+                  <span aria-hidden="true">✅</span>
+                  <span>Aktuell: {resolvedAccuracyPct}%</span>
+                </div>
+              ) : (
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                  <span aria-hidden="true">⏳</span>
+                  <span>Ergebnis folgt</span>
+                </div>
+              )}
+            </div>
           </div>
           <div className="rounded-3xl border border-white/10 bg-black/20 p-4 shadow-xl shadow-black/20 sm:p-5">
             <h2 className="text-sm font-semibold text-white">Aktivste Kategorien</h2>
@@ -238,11 +387,13 @@ export default async function ArchivPage(props: {
                     <Link
                       key={q.id}
                       href={`/questions/${encodeURIComponent(q.id)}`}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 hover:border-emerald-200/30"
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 hover:border-emerald-200/30"
                     >
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="card-title-wrap block text-sm font-semibold text-white">{q.title}</span>
-                        <span className="mt-0.5 block text-[11px] text-slate-400">Endet: {formatDateTime(q.closes_at)}</span>
+                        <span className="mt-0.5 block text-[11px] text-slate-400">
+                          {timeUntilLabel(q.closes_at, nowMs) ?? "Endet"} · {formatDateTime(q.closes_at)}
+                        </span>
                       </span>
                       <span
                         className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold"

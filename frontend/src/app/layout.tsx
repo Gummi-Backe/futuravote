@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import { NavigationTracker } from "@/app/components/NavigationTracker";
 import { HelpButton } from "@/app/components/HelpButton";
+import { SiteFooter } from "@/app/components/SiteFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
           <HelpButton />
         </Suspense>
         {children}
+        <SiteFooter />
       </body>
     </html>
   );

@@ -44,6 +44,13 @@ type QuestionRow = {
   created_at: string | null;
   visibility: PollVisibility | null;
   share_id: string | null;
+  resolution_criteria: string | null;
+  resolution_source: string | null;
+  resolution_deadline: string | null;
+  resolved_outcome: "yes" | "no" | null;
+  resolved_at: string | null;
+  resolved_source: string | null;
+  resolved_note: string | null;
 };
 
 type QuestionsRankCursor = {
@@ -226,6 +233,9 @@ type DraftRow = {
   created_at: string | null;
   visibility: PollVisibility | null;
   share_id: string | null;
+  resolution_criteria: string | null;
+  resolution_source: string | null;
+  resolution_deadline: string | null;
 };
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
@@ -350,6 +360,13 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     userChoice: sessionChoice,
     visibility: (row.visibility ?? "public") as PollVisibility,
     shareId: row.share_id ?? undefined,
+    resolutionCriteria: row.resolution_criteria ?? undefined,
+    resolutionSource: row.resolution_source ?? undefined,
+    resolutionDeadline: row.resolution_deadline ?? undefined,
+    resolvedOutcome: row.resolved_outcome ?? undefined,
+    resolvedAt: row.resolved_at ?? undefined,
+    resolvedSource: row.resolved_source ?? undefined,
+    resolvedNote: row.resolved_note ?? undefined,
   };
 }
 
@@ -962,6 +979,9 @@ function mapDraftRow(row: DraftRow): Draft {
     status: (row.status ?? "open") as Draft["status"],
     visibility: (row.visibility ?? "public") as PollVisibility,
     shareId: row.share_id ?? undefined,
+    resolutionCriteria: row.resolution_criteria ?? undefined,
+    resolutionSource: row.resolution_source ?? undefined,
+    resolutionDeadline: row.resolution_deadline ?? undefined,
   };
 }
 
@@ -1103,6 +1123,9 @@ export async function createDraftInSupabase(input: {
   targetClosesAt?: string;
   creatorId?: string;
   visibility?: PollVisibility;
+  resolutionCriteria?: string;
+  resolutionSource?: string;
+  resolutionDeadline?: string;
 }): Promise<Draft> {
   const supabase = getSupabaseAdminClient();
   const id = randomUUID();
@@ -1131,6 +1154,9 @@ export async function createDraftInSupabase(input: {
       status: "open",
       visibility,
       share_id: shareId,
+      resolution_criteria: input.resolutionCriteria ?? null,
+      resolution_source: input.resolutionSource ?? null,
+      resolution_deadline: input.resolutionDeadline ?? null,
     })
     .select("*")
     .maybeSingle();
@@ -1155,6 +1181,9 @@ export async function createLinkOnlyQuestionInSupabase(input: {
   timeLeftHours?: number;
   targetClosesAt?: string;
   creatorId?: string;
+  resolutionCriteria?: string;
+  resolutionSource?: string;
+  resolutionDeadline?: string;
 }): Promise<QuestionWithVotes> {
   const supabase = getSupabaseAdminClient();
 
@@ -1199,6 +1228,9 @@ export async function createLinkOnlyQuestionInSupabase(input: {
       ranking_score: 0,
       visibility: "link_only",
       share_id: shareId,
+      resolution_criteria: input.resolutionCriteria ?? null,
+      resolution_source: input.resolutionSource ?? null,
+      resolution_deadline: input.resolutionDeadline ?? null,
     })
     .select("*")
     .maybeSingle();
@@ -1259,6 +1291,9 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
           status: "new",
           visibility: (row.visibility ?? "public") as PollVisibility,
           share_id: row.share_id ?? null,
+          resolution_criteria: row.resolution_criteria ?? null,
+          resolution_source: row.resolution_source ?? null,
+          resolution_deadline: row.resolution_deadline ?? null,
         },
         { onConflict: "id" }
       );
@@ -1500,4 +1535,32 @@ export async function adminDeleteQuestionInSupabase(id: string): Promise<Questio
   }
 
   return mapQuestion(questionRow);
+}
+
+export async function adminResolveQuestionInSupabase(input: {
+  id: string;
+  outcome: "yes" | "no" | null;
+  resolvedSource?: string | null;
+  resolvedNote?: string | null;
+}): Promise<QuestionWithVotes | null> {
+  const supabase = getSupabaseAdminClient();
+
+  const { data: updatedRow, error } = await supabase
+    .from("questions")
+    .update({
+      resolved_outcome: input.outcome,
+      resolved_at: input.outcome ? new Date().toISOString() : null,
+      resolved_source: input.resolvedSource ?? null,
+      resolved_note: input.resolvedNote ?? null,
+    })
+    .eq("id", input.id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase adminResolveQuestion fehlgeschlagen: ${error.message}`);
+  }
+  if (!updatedRow) return null;
+
+  return mapQuestion(updatedRow as QuestionRow);
 }
