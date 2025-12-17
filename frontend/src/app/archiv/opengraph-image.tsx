@@ -39,7 +39,7 @@ export default function Image() {
             FV
           </div>
           <div style={{ fontSize: 20, fontWeight: 700, color: "rgba(226,232,240,0.95)" }}>
-            Future‑Vote
+            Future-Vote
           </div>
         </div>
 
@@ -48,7 +48,7 @@ export default function Image() {
             Archiv &amp; Statistiken
           </div>
           <div style={{ fontSize: 26, lineHeight: 1.25, color: "rgba(226,232,240,0.85)", maxWidth: 900 }}>
-            Transparente Plattform‑Metriken und beendete Umfragen – inklusive Ergebnis zum Endzeitpunkt.
+            Transparente Plattform-Metriken und beendete Umfragen – inklusive Ergebnis zum Endzeitpunkt.
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
             <div
@@ -84,13 +84,10 @@ export default function Image() {
           <div style={{ fontSize: 16, color: "rgba(148,163,184,0.9)" }}>
             Öffentliche Fragen · Stimmen · Kategorien · Erfolgsquote
           </div>
-          <div style={{ fontSize: 16, color: "rgba(148,163,184,0.9)" }}>
-            Teilen‑Vorschau (OpenGraph)
-          </div>
+          <div style={{ fontSize: 16, color: "rgba(148,163,184,0.9)" }}>Teilen-Vorschau (OpenGraph)</div>
         </div>
       </div>
     ),
     size
   );
 }
-
