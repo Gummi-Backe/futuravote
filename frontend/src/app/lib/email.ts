@@ -103,3 +103,61 @@ export async function sendPasswordResetEmail(options: {
     html,
   });
 }
+
+export async function sendPrivatePollResultEmail(options: {
+  to: string;
+  displayName: string;
+  title: string;
+  pollUrl: string;
+  closesAtLabel: string;
+  yesVotes: number;
+  noVotes: number;
+}): Promise<void> {
+  const transport = getTransporter();
+
+  const totalVotes = Math.max(0, (options.yesVotes ?? 0) + (options.noVotes ?? 0));
+  const yesPct = totalVotes > 0 ? Math.round((options.yesVotes / totalVotes) * 100) : 0;
+  const noPct = totalVotes > 0 ? 100 - yesPct : 0;
+
+  const subject = `Private Umfrage beendet: ${options.title}`;
+
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    `deine private Umfrage ist beendet (${options.closesAtLabel}).`,
+    "",
+    `Ergebnis: Ja ${options.yesVotes} (${yesPct}%) · Nein ${options.noVotes} (${noPct}%) · Stimmen gesamt ${totalVotes}`,
+    "",
+    "Hier kannst du die Umfrage ansehen:",
+    options.pollUrl,
+    "",
+    "Hinweis: Das Ergebnis basiert auf den abgegebenen Stimmen.",
+  ].join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>deine private Umfrage ist beendet (<strong>${options.closesAtLabel}</strong>).</p>
+    <p>
+      <strong>Ergebnis:</strong>
+      Ja ${options.yesVotes} (${yesPct}%) &middot; Nein ${options.noVotes} (${noPct}%) &middot;
+      Stimmen gesamt ${totalVotes}
+    </p>
+    <p>
+      <a href="${options.pollUrl}">Umfrage öffnen</a>
+    </p>
+    <p style="color:#94a3b8;font-size:12px">Hinweis: Das Ergebnis basiert auf den abgegebenen Stimmen.</p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Private Umfrage Ergebnis:", { to: options.to, pollUrl: options.pollUrl, subject });
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}
