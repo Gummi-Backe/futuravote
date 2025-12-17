@@ -335,17 +335,17 @@ export default async function QuestionDetail(props: {
             <p className="mt-3 text-sm text-slate-400">Noch keine Auflösungs-Regeln hinterlegt.</p>
           )}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {question.resolutionSource ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quelle</p>
-                <div className="mt-1">
+                <div className="mt-1 min-w-0">
                   {/^https?:\/\//i.test(question.resolutionSource) ? (
                     <a
                       href={question.resolutionSource}
                       target="_blank"
                       rel="noreferrer"
-                      className="break-all font-semibold text-emerald-100 hover:text-emerald-200"
+                      className="block max-w-full break-all [overflow-wrap:anywhere] font-semibold text-emerald-100 hover:text-emerald-200"
                     >
                       {question.resolutionSource}
                     </a>
@@ -357,14 +357,14 @@ export default async function QuestionDetail(props: {
             ) : null}
 
             {resolutionDeadlineLabel ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Deadline</p>
                 <p className="mt-1 font-semibold text-slate-100">{resolutionDeadlineLabel}</p>
               </div>
             ) : null}
 
             {resolvedAtLabel ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Entschieden am</p>
                 <p className="mt-1 font-semibold text-slate-100">{resolvedAtLabel}</p>
               </div>
@@ -372,13 +372,17 @@ export default async function QuestionDetail(props: {
           </div>
 
           {question.resolvedSource || question.resolvedNote ? (
-            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
+            <div className="mt-4 min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ergebnis</p>
               {question.resolvedSource ? (
-                <p className="mt-1 break-all font-semibold text-slate-100">{question.resolvedSource}</p>
+                <p className="mt-1 break-all [overflow-wrap:anywhere] font-semibold text-slate-100">
+                  {question.resolvedSource}
+                </p>
               ) : null}
               {question.resolvedNote ? (
-                <p className="mt-2 whitespace-pre-wrap text-slate-200">{question.resolvedNote}</p>
+                <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-slate-200">
+                  {question.resolvedNote}
+                </p>
               ) : null}
             </div>
           ) : null}
