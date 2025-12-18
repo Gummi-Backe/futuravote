@@ -147,19 +147,19 @@ export function FirstStepsOverlay() {
           ))}
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               href="/regeln"
               onClick={close}
-              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40"
+              className="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40 sm:w-auto"
             >
               Regeln ansehen
             </Link>
             <Link
               href="/archiv"
               onClick={close}
-              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40"
+              className="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40 sm:w-auto"
             >
               Archiv öffnen
             </Link>
@@ -167,7 +167,7 @@ export function FirstStepsOverlay() {
           <button
             type="button"
             onClick={close}
-            className="inline-flex items-center justify-center rounded-full border border-emerald-200/25 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25"
+            className="inline-flex w-full items-center justify-center rounded-full border border-emerald-200/25 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25 sm:w-auto"
           >
             Los geht’s
           </button>
@@ -176,4 +176,3 @@ export function FirstStepsOverlay() {
     </div>
   );
 }
-

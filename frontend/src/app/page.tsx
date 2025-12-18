@@ -177,8 +177,8 @@ function EventCard({
         isClosingSoon ? "border-amber-300/60 shadow-amber-400/30" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 text-sm font-semibold text-slate-100">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3 text-sm font-semibold text-slate-100">
           <span
             className="flex h-10 w-10 items-center justify-center rounded-full text-lg"
             style={{ backgroundColor: `${question.categoryColor}22`, color: question.categoryColor }}
@@ -190,7 +190,7 @@ function EventCard({
             <span className="text-sm text-slate-200">{question.summary}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {badge && (
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>
               {badge.label}
@@ -266,7 +266,7 @@ function EventCard({
             </h3>
           </div>
         </div>
-        <div className="flex items-center justify-between rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200">
+        <div className="flex flex-col gap-2 rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200 sm:flex-row sm:items-center sm:justify-between">
           <span
             className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${
               isClosingSoon
@@ -277,7 +277,7 @@ function EventCard({
             <span className="text-base">⏳</span>
             <span suppressHydrationWarning>{formatDeadline(question.closesAt)}</span>
           </span>
-          <span className="text-slate-200">
+          <span className="min-w-0 break-words [overflow-wrap:anywhere] text-slate-200 sm:text-right">
             Ja {question.yesVotes} ({question.yesPct}%) · Nein {question.noVotes} ({question.noPct}%)
           </span>
         </div>
