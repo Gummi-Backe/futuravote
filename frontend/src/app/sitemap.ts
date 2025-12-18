@@ -19,11 +19,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/datenschutz`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
 
-  const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("questions")
-    .select("id, created_at, visibility")
-    .eq("visibility", "public");
+  // Wichtig: Sitemap wird beim Build prerendert. In Preview/CI kann Supabase evtl. nicht konfiguriert sein.
+  // Dann liefern wir eine statische Sitemap, statt den Build zu brechen.
+  let supabase: ReturnType<typeof getSupabaseAdminClient>;
+  try {
+    supabase = getSupabaseAdminClient();
+  } catch (error) {
+    console.warn("sitemap: supabase not configured, falling back to static routes", error);
+    return staticRoutes;
+  }
+
+  const { data, error } = await supabase.from("questions").select("id, created_at, visibility").eq("visibility", "public");
 
   if (error) {
     console.warn("sitemap: failed to load questions", error);
@@ -47,4 +53,3 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [...staticRoutes, ...questionRoutes];
 }
-
