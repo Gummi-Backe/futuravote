@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import { NavigationTracker } from "@/app/components/NavigationTracker";
 import { HelpButton } from "@/app/components/HelpButton";
+import { AhaMicrocopyToast } from "@/app/components/AhaMicrocopyToast";
 import { SiteFooter } from "@/app/components/SiteFooter";
 
 const geistSans = Geist({
@@ -51,6 +52,9 @@ export default function RootLayout({
         </Suspense>
         <Suspense fallback={null}>
           <HelpButton />
+        </Suspense>
+        <Suspense fallback={null}>
+          <AhaMicrocopyToast />
         </Suspense>
         {children}
         <SiteFooter />

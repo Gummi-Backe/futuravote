@@ -321,6 +321,7 @@ export default async function SharedPollPage(props: {
               <div className="lg:col-span-3">
                 <DetailVoteButtons
                   questionId={poll.question.id}
+                  closesAt={poll.question.closesAt}
                   initialChoice={
                     poll.question.userChoice === "yes" || poll.question.userChoice === "no"
                       ? poll.question.userChoice

@@ -454,6 +454,7 @@ export default async function QuestionDetail(props: {
 
         <DetailVoteButtons
           questionId={id}
+          closesAt={question.closesAt}
           initialChoice={
             question.userChoice === "yes" || question.userChoice === "no"
               ? question.userChoice

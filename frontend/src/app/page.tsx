@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type Draft, type Question } from "./data/mock";
 import { invalidateProfileCaches } from "./lib/profileCache";
+import { triggerAhaMicrocopy } from "./lib/ahaMicrocopy";
 import { ReportButton } from "./components/ReportButton";
 
 const QUESTIONS_PAGE_SIZE = 8;
@@ -1034,6 +1035,7 @@ export default function Home() {
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q)));
         invalidateProfileCaches();
         setError(null);
+        triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
         showToast("Deine Stimme wurde gezählt.", "success");
       } catch {
         setError("Vote fehlgeschlagen. Bitte versuche es erneut.");

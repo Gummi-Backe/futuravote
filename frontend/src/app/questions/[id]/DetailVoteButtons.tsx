@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
+import { triggerAhaMicrocopy } from "@/app/lib/ahaMicrocopy";
 
 type Choice = "yes" | "no";
 
 export function DetailVoteButtons({
   questionId,
   initialChoice,
+  closesAt,
 }: {
   questionId: string;
   initialChoice: Choice | null;
+  closesAt?: string | null;
 }) {
   const [choice, setChoice] = useState<Choice | null>(initialChoice);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +46,7 @@ export function DetailVoteButtons({
 
       invalidateProfileCaches();
       setChoice(nextChoice);
+      triggerAhaMicrocopy({ closesAt: closesAt ?? null });
     } catch {
       setError("Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
     } finally {
