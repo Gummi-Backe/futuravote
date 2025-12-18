@@ -21,8 +21,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de"),
   title: "Future-Vote",
   description: "Future-Vote - Kachelbasierte Plattform für Zukunftsprognosen und Abstimmungen",
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.svg",
+    icon: [{ url: "/icons/icon-192.png", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png", type: "image/png" }],
+    shortcut: [{ url: "/icons/icon-192.png", type: "image/png" }],
   },
   openGraph: {
     title: "Future-Vote",
