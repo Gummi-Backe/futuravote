@@ -26,11 +26,7 @@ export function AhaMicrocopyToast() {
     return () => window.removeEventListener("fv:aha", onAha);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const t = window.setTimeout(() => setOpen(false), 10000);
-    return () => window.clearTimeout(t);
-  }, [open]);
+  // Kein Auto-Close: Nutzer soll in Ruhe lesen koennen.
 
   const closesAtLabel = useMemo(() => formatClosesAt(payload.closesAt), [payload.closesAt]);
 
