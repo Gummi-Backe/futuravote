@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 import { PROFILE_LISTS_CACHE_KEY } from "@/app/lib/profileCache";
 
-type Tab = "drafts" | "private";
+type Tab = "drafts" | "private" | "favorites";
 
 type MyDraft = {
   id: string;
@@ -28,6 +28,19 @@ type PrivateDraft = {
   shareId: string;
   createdAt: string | null;
   status: string;
+};
+
+type FavoriteQuestion = {
+  id: string;
+  title: string;
+  category: string | null;
+  categoryIcon: string | null;
+  categoryColor: string | null;
+  region: string | null;
+  closesAt: string | null;
+  status: string | null;
+  resolvedOutcome: string | null;
+  resolvedAt: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -87,6 +100,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
         drafts: MyDraft[] | null;
         privateQuestions: PrivateQuestion[] | null;
         privateDrafts: PrivateDraft[] | null;
+        favorites: FavoriteQuestion[] | null;
       };
     } catch {
       return null;
@@ -97,6 +111,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     drafts: MyDraft[] | null;
     privateQuestions: PrivateQuestion[] | null;
     privateDrafts: PrivateDraft[] | null;
+    favorites: FavoriteQuestion[] | null;
   }) => {
     if (typeof window === "undefined") return;
     try {
@@ -110,16 +125,24 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
   const [drafts, setDrafts] = useState<MyDraft[] | null>(null);
   const [privateQuestions, setPrivateQuestions] = useState<PrivateQuestion[] | null>(null);
   const [privateDrafts, setPrivateDrafts] = useState<PrivateDraft[] | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteQuestion[] | null>(null);
   const [loading, setLoading] = useState<Tab | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftsUpdatedAt, setDraftsUpdatedAt] = useState<number | null>(null);
   const [privateUpdatedAt, setPrivateUpdatedAt] = useState<number | null>(null);
-  const inflightRef = useRef<{ drafts: boolean; private: boolean }>({ drafts: false, private: false });
+  const [favoritesUpdatedAt, setFavoritesUpdatedAt] = useState<number | null>(null);
+  const inflightRef = useRef<{ drafts: boolean; private: boolean; favorites: boolean }>({
+    drafts: false,
+    private: false,
+    favorites: false,
+  });
 
   const privateLoaded = privateQuestions !== null && privateDrafts !== null;
+  const favoritesLoaded = favorites !== null;
   const draftsRef = useRef<MyDraft[] | null>(null);
   const privateQuestionsRef = useRef<PrivateQuestion[] | null>(null);
   const privateDraftsRef = useRef<PrivateDraft[] | null>(null);
+  const favoritesRef = useRef<FavoriteQuestion[] | null>(null);
 
   useEffect(() => {
     draftsRef.current = drafts;
@@ -130,6 +153,9 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
   useEffect(() => {
     privateDraftsRef.current = privateDrafts;
   }, [privateDrafts]);
+  useEffect(() => {
+    favoritesRef.current = favorites;
+  }, [favorites]);
 
   useLayoutEffect(() => {
     // Wichtig fuer Next/React Hydration:
@@ -137,7 +163,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     try {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
-      if (tab === "private" || tab === "drafts") setActiveTab(tab);
+      if (tab === "private" || tab === "drafts" || tab === "favorites") setActiveTab(tab);
     } catch {
       // ignore
     }
@@ -147,8 +173,10 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
       setDrafts(cached.drafts ?? null);
       setPrivateQuestions(cached.privateQuestions ?? null);
       setPrivateDrafts(cached.privateDrafts ?? null);
+      setFavorites(cached.favorites ?? null);
       setDraftsUpdatedAt(cached.cachedAt);
       setPrivateUpdatedAt(cached.cachedAt);
+      setFavoritesUpdatedAt(cached.cachedAt);
     }
   }, []);
 
@@ -173,6 +201,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
         drafts: nextDrafts,
         privateQuestions: privateQuestionsRef.current,
         privateDrafts: privateDraftsRef.current,
+        favorites: favoritesRef.current,
       });
     } catch (e: unknown) {
       if (mode === "foreground") setError(e instanceof Error ? e.message : "Konnte Daten nicht laden.");
@@ -205,6 +234,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
         drafts: draftsRef.current,
         privateQuestions: nextPrivateQuestions,
         privateDrafts: nextPrivateDrafts,
+        favorites: favoritesRef.current,
       });
     } catch (e: unknown) {
       if (mode === "foreground") setError(e instanceof Error ? e.message : "Konnte Daten nicht laden.");
@@ -214,14 +244,48 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     }
   };
 
+  const fetchFavorites = async (mode: "foreground" | "background") => {
+    if (inflightRef.current.favorites) return;
+    inflightRef.current.favorites = true;
+    if (mode === "foreground") {
+      setLoading("favorites");
+      setError(null);
+    }
+    try {
+      const res = await fetch("/api/profil/favorites", { cache: "no-store" });
+      const json: unknown = await res.json().catch(() => null);
+      const obj = isRecord(json) ? json : {};
+      const msg = typeof obj.error === "string" ? obj.error : "Konnte Favoriten nicht laden.";
+      if (!res.ok) throw new Error(msg);
+      const nextFavorites = (Array.isArray(obj.favorites) ? obj.favorites : []) as FavoriteQuestion[];
+      setFavorites(nextFavorites);
+      const now = Date.now();
+      setFavoritesUpdatedAt(now);
+      writeListsCache({
+        drafts: draftsRef.current,
+        privateQuestions: privateQuestionsRef.current,
+        privateDrafts: privateDraftsRef.current,
+        favorites: nextFavorites,
+      });
+    } catch (e: unknown) {
+      if (mode === "foreground") setError(e instanceof Error ? e.message : "Konnte Daten nicht laden.");
+    } finally {
+      if (mode === "foreground") setLoading(null);
+      inflightRef.current.favorites = false;
+    }
+  };
+
   useEffect(() => {
     // SWR: beim Tab-Wechsel immer refreshen (cache bleibt sichtbar)
     if (activeTab === "drafts") {
       const mode = drafts === null ? "foreground" : "background";
       void fetchDrafts(mode);
-    } else {
+    } else if (activeTab === "private") {
       const mode = privateLoaded ? "background" : "foreground";
       void fetchPrivate(mode);
+    } else {
+      const mode = favoritesLoaded ? "background" : "foreground";
+      void fetchFavorites(mode);
     }
     // `drafts`/`privateLoaded` absichtlich nicht in deps, sonst Re-Fetch-Loop nach State-Update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,15 +294,17 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
   useEffect(() => {
     // Auto-Revalidate nach TTL, solange die Seite offen ist.
     const tabUpdatedAt = activeTab === "drafts" ? draftsUpdatedAt : privateUpdatedAt;
-    if (!tabUpdatedAt) return;
-    const remaining = Math.max(500, LISTS_CACHE_TTL_MS - (Date.now() - tabUpdatedAt));
+    const effectiveUpdatedAt = activeTab === "favorites" ? favoritesUpdatedAt : tabUpdatedAt;
+    if (!effectiveUpdatedAt) return;
+    const remaining = Math.max(500, LISTS_CACHE_TTL_MS - (Date.now() - effectiveUpdatedAt));
     const timer = window.setTimeout(() => {
       if (document.visibilityState !== "visible") return;
       if (activeTab === "drafts") void fetchDrafts("background");
-      else void fetchPrivate("background");
+      else if (activeTab === "private") void fetchPrivate("background");
+      else void fetchFavorites("background");
     }, remaining);
     return () => window.clearTimeout(timer);
-  }, [activeTab, draftsUpdatedAt, privateUpdatedAt]);
+  }, [activeTab, draftsUpdatedAt, privateUpdatedAt, favoritesUpdatedAt]);
 
   const setTab = (tab: Tab) => {
     setActiveTab(tab);
@@ -256,6 +322,30 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     const d = privateDrafts?.length ?? 0;
     return q + d;
   }, [privateDrafts?.length, privateQuestions?.length]);
+
+  const handleRemoveFavorite = async (questionId: string) => {
+    try {
+      const res = await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId, action: "remove" }),
+      });
+      const json: unknown = await res.json().catch(() => null);
+      const obj = isRecord(json) ? json : {};
+      if (!res.ok) throw new Error(typeof obj.error === "string" ? obj.error : "Konnte Favorit nicht entfernen.");
+      setFavorites((prev) => (prev ? prev.filter((q) => q.id !== questionId) : prev));
+      const now = Date.now();
+      setFavoritesUpdatedAt(now);
+      writeListsCache({
+        drafts: draftsRef.current,
+        privateQuestions: privateQuestionsRef.current,
+        privateDrafts: privateDraftsRef.current,
+        favorites: (favoritesRef.current ?? []).filter((q) => q.id !== questionId),
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Konnte Favorit nicht entfernen.");
+    }
+  };
 
   return (
     <div className="mt-5 space-y-3 rounded-2xl bg-black/30 px-3 py-3 text-xs text-slate-300">
@@ -283,6 +373,17 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
             }`}
           >
             Privat (Link){privateLoaded && privateCount > 0 ? ` (${privateCount})` : ""}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("favorites")}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5 ${
+              activeTab === "favorites"
+                ? "border-emerald-200/40 bg-emerald-500/15 text-emerald-50 shadow-lg shadow-emerald-500/20"
+                : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/30"
+            }`}
+          >
+            Favoriten{favoritesLoaded && favorites && favorites.length > 0 ? ` (${favorites.length})` : ""}
           </button>
         </div>
       </div>
@@ -324,7 +425,8 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
           )}
         </>
       ) : (
-        <>
+        activeTab === "private" ? (
+          <>
           <p className="text-[11px] text-slate-400">
             Diese Umfragen erscheinen nicht im Feed. Du kannst den Link kopieren und teilen.
           </p>
@@ -386,7 +488,58 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
               })}
             </div>
           )}
-        </>
+          </>
+        ) : (
+          <>
+            <p className="text-[11px] text-slate-400">Hier siehst du Fragen, die du als Favorit markiert hast.</p>
+            {loading === "favorites" || favorites === null ? (
+              <SkeletonRows rows={3} />
+            ) : favorites.length === 0 ? (
+              <p className="text-[11px] text-slate-400">Noch keine Favoriten gespeichert.</p>
+            ) : (
+              <div className="space-y-2">
+                {favorites.map((q) => {
+                  const url = `${baseUrl}/questions/${encodeURIComponent(q.id)}`;
+                  const created = formatDate(q.closesAt);
+                  return (
+                    <div
+                      key={q.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 shadow-sm shadow-black/20"
+                    >
+                      <div className="min-w-0">
+                        <Link href={`/questions/${encodeURIComponent(q.id)}`} className="block truncate text-slate-100 hover:text-white">
+                          {q.title}
+                        </Link>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                          {q.category ? (
+                            <span className="rounded-full border border-emerald-300/25 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-50">
+                              {q.categoryIcon ? `${q.categoryIcon} ` : ""}{q.category}
+                            </span>
+                          ) : null}
+                          {q.region ? <span>{q.region}</span> : null}
+                          {created ? <span>Endet: {created}</span> : null}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <ShareLinkButton url={url} label="Teilen" action="share" variant="icon" />
+                        <ShareLinkButton url={url} label="Link kopieren" action="copy" variant="icon" />
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFavorite(q.id)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/40 bg-amber-500/10 text-amber-100 shadow-sm shadow-amber-500/10 transition hover:-translate-y-0.5 hover:border-amber-200/60"
+                          title="Aus Favoriten entfernen"
+                          aria-label="Aus Favoriten entfernen"
+                        >
+                          <span className="text-[18px] leading-none">★</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )
       )}
     </div>
   );

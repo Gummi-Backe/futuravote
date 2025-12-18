@@ -33,6 +33,7 @@ create or replace function public.refresh_question_metrics_daily(days_back integ
 returns jsonb
 language plpgsql
 security definer
+set search_path = pg_catalog, public
 as $$
 declare
   start_date date := ((now() at time zone 'UTC')::date - greatest(1, coalesce(days_back, 120)));
@@ -89,4 +90,3 @@ revoke all on function public.refresh_question_metrics_daily(integer) from publi
 grant execute on function public.refresh_question_metrics_daily(integer) to service_role;
 
 commit;
-

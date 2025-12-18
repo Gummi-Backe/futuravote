@@ -5,6 +5,7 @@ import {
   getUserByEmailSupabase,
   getUserPasswordHashByEmailSupabase,
 } from "@/app/data/dbSupabaseUsers";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -37,6 +38,13 @@ export async function POST(request: Request) {
     const sessionId = await createUserSessionSupabase(user.id);
     const response = NextResponse.json({
       user: { id: user.id, email: user.email, displayName: user.displayName },
+    });
+
+    await logAnalyticsEventServer({
+      event: "login",
+      sessionId,
+      userId: user.id,
+      path: "/auth",
     });
 
     // Persistente Login-Session: Cookie bleibt auch nach Browser-Neustart erhalten,

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -36,6 +37,15 @@ export async function POST(request: Request) {
   const { draft, alreadyVoted } = await voteOnDraftInSupabase(draftId, choice, sessionId);
   if (!draft) {
     return NextResponse.json({ error: "Draft nicht gefunden." }, { status: 404 });
+  }
+
+  if (!alreadyVoted) {
+    await logAnalyticsEventServer({
+      event: "review_draft",
+      sessionId,
+      path: "/",
+      meta: { draftId, choice },
+    });
   }
 
   const response = NextResponse.json({ draft, alreadyVoted }, { status: 200 });

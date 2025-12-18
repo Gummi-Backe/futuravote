@@ -7,6 +7,7 @@ import { categories, type Draft, type Question } from "./data/mock";
 import { invalidateProfileCaches } from "./lib/profileCache";
 import { triggerAhaMicrocopy } from "./lib/ahaMicrocopy";
 import { ReportButton } from "./components/ReportButton";
+import { FirstStepsOverlay } from "./components/FirstStepsOverlay";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -146,11 +147,19 @@ function EventCard({
   question,
   onVote,
   isSubmitting,
+  showFavorite,
+  isFavorited,
+  onToggleFavorite,
+  isFavoriteSubmitting,
   }: {
   question: Question;
   onVote?: (choice: "yes" | "no") => void;
   isSubmitting?: boolean;
   onOpenDetails?: (href: string) => void;
+  showFavorite?: boolean;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
+  isFavoriteSubmitting?: boolean;
 }) {
   const badge = statusBadge(question.status);
   const votedChoice = question.userChoice;
@@ -197,6 +206,25 @@ function EventCard({
               <span className="h-2 w-2 animate-pulse rounded-full bg-rose-300" />
               Hot
             </span>
+          )}
+          {showFavorite && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.currentTarget.blur();
+                onToggleFavorite?.();
+              }}
+              disabled={Boolean(isFavoriteSubmitting)}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition hover:-translate-y-0.5 ${
+                isFavorited
+                  ? "border-amber-200/60 bg-amber-500/15 text-amber-100 shadow-lg shadow-amber-500/20"
+                  : "border-white/15 bg-white/5 text-slate-100 hover:border-emerald-200/30"
+              } ${isFavoriteSubmitting ? "opacity-70" : ""}`}
+              title={isFavorited ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}
+              aria-label={isFavorited ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}
+            >
+              <span className="text-[18px] leading-none">★</span>
+            </button>
           )}
         </div>
       </div>
@@ -493,6 +521,7 @@ type HomeCache = {
   activeTab: string;
   activeCategory: string | null;
   activeRegion: string | null;
+  searchQuery: string;
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
   questions: Question[];
@@ -501,6 +530,8 @@ type HomeCache = {
   draftsCursor: string | null;
   questionsTotal: number | null;
   draftsTotal: number | null;
+  favoriteQuestions: Record<string, boolean>;
+  favoritesUpdatedAt: number | null;
 };
 
 let homeCache: HomeCache | null = null;
@@ -511,6 +542,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<string>(() => homeCache?.activeTab ?? "all");
   const [activeCategory, setActiveCategory] = useState<string | null>(() => homeCache?.activeCategory ?? null);
   const [activeRegion, setActiveRegion] = useState<string | null>(() => homeCache?.activeRegion ?? null);
+  const [searchInput, setSearchInput] = useState<string>(() => homeCache?.searchQuery ?? "");
+  const [searchQuery, setSearchQuery] = useState<string>(() => homeCache?.searchQuery ?? "");
   const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
   const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
   const [loading, setLoading] = useState(() => !homeCache);
@@ -537,6 +570,11 @@ export default function Home() {
   const [questionsTotal, setQuestionsTotal] = useState<number | null>(() => homeCache?.questionsTotal ?? null);
   const [draftsTotal, setDraftsTotal] = useState<number | null>(() => homeCache?.draftsTotal ?? null);
   const [showReviewOnly, setShowReviewOnly] = useState(() => homeCache?.showReviewOnly ?? false);
+  const [favoriteQuestions, setFavoriteQuestions] = useState<Record<string, boolean>>(
+    () => homeCache?.favoriteQuestions ?? {}
+  );
+  const [favoritesUpdatedAt, setFavoritesUpdatedAt] = useState<number | null>(() => homeCache?.favoritesUpdatedAt ?? null);
+  const [favoriteSubmittingId, setFavoriteSubmittingId] = useState<string | null>(null);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const draftsEndRef = useRef<HTMLDivElement | null>(null);
   const [loadingMoreQuestions, setLoadingMoreQuestions] = useState(false);
@@ -628,11 +666,14 @@ export default function Home() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
+      const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
+      const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
+      params.set("pageSize", String(pageSize));
       params.set("include", "both");
       params.set("tab", activeTab);
       if (activeCategory) params.set("category", activeCategory);
       if (activeRegion) params.set("region", activeRegion);
+      if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
 
       const res = await fetch(`/api/questions?${params.toString()}`);
       if (!res.ok) throw new Error("API Response not ok");
@@ -668,13 +709,14 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, activeCategory, activeRegion]);
+  }, [activeTab, activeCategory, activeRegion, searchQuery]);
 
   useEffect(() => {
     homeCache = {
       activeTab,
       activeCategory,
       activeRegion,
+      searchQuery,
       draftStatusFilter,
       showReviewOnly,
       questions,
@@ -683,11 +725,14 @@ export default function Home() {
       draftsCursor,
       questionsTotal,
       draftsTotal,
+      favoriteQuestions,
+      favoritesUpdatedAt,
     };
   }, [
     activeTab,
     activeCategory,
     activeRegion,
+    searchQuery,
     draftStatusFilter,
     showReviewOnly,
     questions,
@@ -696,6 +741,8 @@ export default function Home() {
     draftsCursor,
     questionsTotal,
     draftsTotal,
+    favoriteQuestions,
+    favoritesUpdatedAt,
   ]);
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
@@ -712,6 +759,86 @@ export default function Home() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [fetchLatest]);
+
+  useEffect(() => {
+    const FAVORITES_CACHE_TTL_MS = 30_000;
+    if (!currentUser?.id) {
+      setFavoriteQuestions({});
+      setFavoritesUpdatedAt(null);
+      return;
+    }
+
+    const now = Date.now();
+    if (favoritesUpdatedAt && now - favoritesUpdatedAt < FAVORITES_CACHE_TTL_MS) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/favorites", { cache: "no-store" });
+        const json: any = await res.json().catch(() => null);
+        if (!res.ok) return;
+        const ids: unknown = json?.favoriteIds;
+        const list = Array.isArray(ids) ? ids : [];
+        const next: Record<string, boolean> = {};
+        for (const id of list) {
+          if (typeof id === "string" && id) next[id] = true;
+        }
+        if (cancelled) return;
+        setFavoriteQuestions(next);
+        setFavoritesUpdatedAt(Date.now());
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, favoritesUpdatedAt]);
+
+  const handleToggleFavorite = useCallback(
+    async (questionId: string) => {
+      if (!currentUser?.id) {
+        showToast("Bitte einloggen, um Favoriten zu nutzen.", "error");
+        return;
+      }
+      if (favoriteSubmittingId) return;
+      setFavoriteSubmittingId(questionId);
+      try {
+        const res = await fetch("/api/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionId, action: "toggle" }),
+        });
+        const data: any = await res.json().catch(() => null);
+        if (!res.ok) {
+          showToast(data?.error ?? "Konnte Favorit nicht speichern.", "error");
+          return;
+        }
+        const favorited = Boolean(data?.favorited);
+        setFavoriteQuestions((prev) => {
+          const next = { ...(prev ?? {}) };
+          if (favorited) next[questionId] = true;
+          else delete next[questionId];
+          return next;
+        });
+        setFavoritesUpdatedAt(Date.now());
+        invalidateProfileCaches();
+        showToast(favorited ? "Zu Favoriten hinzugefügt." : "Aus Favoriten entfernt.", "success");
+      } catch {
+        showToast("Konnte Favorit nicht speichern (Netzwerkfehler).", "error");
+      } finally {
+        setFavoriteSubmittingId(null);
+      }
+    },
+    [currentUser?.id, favoriteSubmittingId, showToast]
+  );
+
+  useEffect(() => {
+    const next = searchInput.trim();
+    if (next === searchQuery) return;
+    const t = window.setTimeout(() => setSearchQuery(next), 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput, searchQuery]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -856,11 +983,11 @@ export default function Home() {
 
   useEffect(() => {
     setVisibleQuestionCount(QUESTIONS_PAGE_SIZE);
-  }, [activeTab, activeCategory, activeRegion]);
+  }, [activeTab, activeCategory, activeRegion, searchQuery]);
 
   useEffect(() => {
     setVisibleDraftCount(DRAFTS_PAGE_SIZE);
-  }, [activeTab, activeCategory, activeRegion, draftStatusFilter]);
+  }, [activeTab, activeCategory, activeRegion, draftStatusFilter, searchQuery]);
 
   useEffect(() => {
     if (!questionsEndRef.current) return;
@@ -890,12 +1017,15 @@ export default function Home() {
       void (async () => {
         try {
           const params = new URLSearchParams();
-          params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
+          const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
+          const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
+          params.set("pageSize", String(pageSize));
           params.set("include", "questions");
           if (questionsCursor) params.set("questionsCursor", questionsCursor);
           params.set("tab", activeTab);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
+          if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
 
           const res = await fetch(`/api/questions?${params.toString()}`);
           if (!res.ok) return;
@@ -934,6 +1064,7 @@ export default function Home() {
     questionsTotal,
     visibleQuestionCount,
     loadingMoreQuestions,
+    searchQuery,
   ]);
 
   useEffect(() => {
@@ -963,12 +1094,15 @@ export default function Home() {
       void (async () => {
         try {
           const params = new URLSearchParams();
-          params.set("pageSize", String(Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE)));
+          const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
+          const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
+          params.set("pageSize", String(pageSize));
           params.set("include", "drafts");
           if (draftsCursor) params.set("draftsCursor", draftsCursor);
           params.set("tab", activeTab);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
+          if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
 
           const res = await fetch(`/api/questions?${params.toString()}`);
           if (!res.ok) return;
@@ -1007,6 +1141,7 @@ export default function Home() {
     draftsTotal,
     visibleDraftCount,
     loadingMoreDrafts,
+    searchQuery,
   ]);
 
   const handleVote = useCallback(
@@ -1188,9 +1323,10 @@ export default function Home() {
       suppressHydrationWarning
       className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}
     >
+      <FirstStepsOverlay />
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
         <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-4 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex min-w-0 items-start gap-3 lg:max-w-[38rem]">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-xl text-emerald-100 shadow-lg shadow-emerald-500/40">
                 FV
@@ -1198,8 +1334,14 @@ export default function Home() {
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">FUTURE-VOTE</p>
                 <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">Prognosen, schnell abgestimmt.</h1>
-                <p className="mt-1 max-w-md text-sm text-slate-200">
-                  Ja/Nein-Kacheln, Community-Review für neue Fragen, Ranking nach Engagement und Freshness.
+                <p className="mt-1 hidden max-w-md text-sm text-slate-200">
+                  Ja/Nein-Kacheln · Community-Review für neue Fragen · Ranking nach Engagement &amp; Frische.
+                </p>
+                <p className="mt-2 hidden max-w-md text-xs font-semibold text-emerald-100/90">
+                  Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
+                </p>
+                <p className="mt-1 max-w-2xl text-sm font-semibold text-emerald-100/90">
+                  {"Abstimmen \u2192 Deadline \u2192 Aufl\u00f6sung mit Quellen \u2192 Archiv \u2192 deine Trefferquote."}
                 </p>
               </div>
             </div>
@@ -1243,7 +1385,18 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+              {!currentUser && (
+                <button
+                  type="button"
+                  onClick={() => navigateWithTransition("/auth")}
+                  className="rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                  title="Einloggen oder registrieren"
+                >
+                  Login / Register
+                </button>
+              )}
+
+              <div className="hidden">
                 <button
                   type="button"
                   className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
@@ -1263,6 +1416,13 @@ export default function Home() {
                   onClick={() => navigateWithTransition("/archiv")}
                 >
                   Archiv
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
+                  onClick={() => navigateWithTransition("/rangliste")}
+                >
+                  Rangliste
                 </button>
                 <button
                   type="button"
@@ -1296,7 +1456,91 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
+              onClick={() => {
+                if (!currentUser) {
+                  navigateWithTransition("/auth");
+                } else {
+                  navigateWithTransition("/drafts/new");
+                }
+              }}
+              title="Neue Frage vorschlagen (geht zuerst ins Review)"
+            >
+              Frage stellen
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
+              onClick={() => navigateWithTransition("/archiv")}
+              title="Archiv & Statistiken"
+            >
+              Archiv
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
+              onClick={() => navigateWithTransition("/rangliste")}
+              title="Rangliste: Wer lag oft richtig?"
+            >
+              Rangliste
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
+              onClick={() => navigateWithTransition("/regeln")}
+              title="Regeln & Auflösung"
+            >
+              Regeln
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
+              onClick={() => {
+                setShowReviewOnly((prev) => !prev);
+                if (typeof window !== "undefined") {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+              title="Review: Community bewertet neue Fragen"
+            >
+              {showReviewOnly ? "Zur\u00fcck zum Feed" : "Review"}
+            </button>
+          </div>
+
           <div className="sticky top-3 z-20 -mx-4 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 backdrop-blur md:static md:-mx-0 md:border-0 md:bg-transparent md:p-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[220px]">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-300/70" aria-hidden="true">
+                  ⌕
+                </span>
+                <input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Titel suchen…"
+                  className="w-full rounded-full border border-white/10 bg-white/5 py-2 pl-9 pr-10 text-sm text-white placeholder:text-slate-400 shadow-sm shadow-black/20 outline-none transition focus:border-emerald-200/40"
+                  aria-label="Titel suchen"
+                />
+                {searchInput.trim().length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-200/40 hover:text-white"
+                    aria-label="Suche löschen"
+                    title="Suche löschen"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
+              {searchQuery.trim().length >= 2 ? (
+                <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
+                  Suche aktiv
+                </span>
+              ) : null}
+            </div>
             <div
               className="flex gap-2 overflow-x-auto overflow-y-visible py-1 pb-2 text-sm text-slate-100 snap-x snap-mandatory"
               onTouchStart={handleTabTouchStart}
@@ -1316,8 +1560,8 @@ export default function Home() {
                     onClick={() => setActiveTab(tab.id)}
                     className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
                       activeTab === tab.id
-                        ? "bg-white/20 border border-white/30 text-white hover:border-emerald-300/60 hover:-translate-y-0.5"
-                        : "bg-white/10 border border-white/15 text-slate-200 hover:border-emerald-300/40 hover:-translate-y-0.5"
+                        ? "border border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
+                        : "border border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
                     }`}
                   >
                     <span>{tab.icon}</span>
@@ -1457,6 +1701,10 @@ export default function Home() {
                       key={q.id}
                       question={q}
                       isSubmitting={submittingId === q.id}
+                      showFavorite={Boolean(currentUser)}
+                      isFavorited={Boolean(favoriteQuestions[q.id])}
+                      isFavoriteSubmitting={favoriteSubmittingId === q.id}
+                      onToggleFavorite={() => void handleToggleFavorite(q.id)}
                       onVote={(choice) => handleVote(q.id, choice)}
                       onOpenDetails={(href) => navigateWithTransition(href)}
                     />

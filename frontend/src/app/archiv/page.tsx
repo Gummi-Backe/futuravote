@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
+import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +113,11 @@ function outcomeLabel(yesVotes: number, noVotes: number) {
   };
 }
 
+function pct(part: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.round((part / total) * 100);
+}
+
 function getMajorityChoice(yesVotes: number, noVotes: number): "yes" | "no" | null {
   if (yesVotes === noVotes) return null;
   return yesVotes > noVotes ? "yes" : "no";
@@ -129,6 +136,7 @@ export default async function ArchivPage(props: {
   const nowMs = Date.parse(nowIso);
   const todayIso = new Date(nowMs).toISOString().slice(0, 10);
   const supabase = getSupabaseAdminClient();
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de";
 
   const { count: totalQuestionsRaw, error: totalQuestionsError } = await supabase
     .from("questions")
@@ -417,13 +425,38 @@ export default async function ArchivPage(props: {
             </div>
           ) : (
             <div className="mt-4 space-y-3">
+              {(() => {
+                const resolved = ended.filter((q) => q.resolved_outcome === "yes" || q.resolved_outcome === "no");
+                if (resolved.length === 0) return null;
+                const best = resolved.reduce((acc, cur) => {
+                  const accTotal = Math.max(0, (acc.yes_votes ?? 0) + (acc.no_votes ?? 0));
+                  const curTotal = Math.max(0, (cur.yes_votes ?? 0) + (cur.no_votes ?? 0));
+                  return curTotal > accTotal ? cur : acc;
+                }, resolved[0]);
+
+                return (
+                  <ResolvedSuccessCard
+                    title={best.title}
+                    url={`${baseUrl}/questions/${encodeURIComponent(best.id)}`}
+                    resolvedOutcome={best.resolved_outcome as "yes" | "no"}
+                    yesVotes={best.yes_votes ?? 0}
+                    noVotes={best.no_votes ?? 0}
+                  />
+                );
+              })()}
+
               {ended.map((q) => {
                 const outcome = outcomeLabel(q.yes_votes ?? 0, q.no_votes ?? 0);
                 const total = Math.max(0, (q.yes_votes ?? 0) + (q.no_votes ?? 0));
+                const shareTextParts = [
+                  `Ergebnis: ${q.resolved_outcome === "yes" ? "Ja" : q.resolved_outcome === "no" ? "Nein" : "ausstehend"}.`,
+                  `Community: ${pct(q.yes_votes ?? 0, total)}% Ja · ${pct(q.no_votes ?? 0, total)}% Nein (${total} Stimmen).`,
+                ];
+                const shareText = `${q.title}\n${shareTextParts.join(" ")}`;
                 return (
                   <article key={q.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span
                             className="inline-flex items-center gap-2 rounded-full px-3 py-1 font-semibold"
@@ -446,16 +479,27 @@ export default async function ArchivPage(props: {
                           Stimmen: {total} · Ja {q.yes_votes ?? 0} · Nein {q.no_votes ?? 0}
                         </p>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end sm:justify-start">
                         <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${outcome.className}`}>
                           {outcome.label}
                         </span>
-                        <Link
-                          href={`/questions/${encodeURIComponent(q.id)}`}
-                          className="text-xs font-semibold text-emerald-100 hover:text-emerald-200"
-                        >
-                          Details ansehen →
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          {q.resolved_outcome === "yes" || q.resolved_outcome === "no" ? (
+                            <ShareLinkButton
+                              url={`${baseUrl}/questions/${encodeURIComponent(q.id)}`}
+                              variant="icon"
+                              label="Ergebnis teilen"
+                              shareTitle="Future‑Vote Ergebnis"
+                              shareText={shareText}
+                            />
+                          ) : null}
+                          <Link
+                            href={`/questions/${encodeURIComponent(q.id)}`}
+                            className="whitespace-nowrap text-xs font-semibold text-emerald-100 hover:text-emerald-200"
+                          >
+                            Details ansehen →
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </article>

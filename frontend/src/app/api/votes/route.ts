@@ -8,6 +8,7 @@ import {
 } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 const RATE_LIMIT_MS = 5000;
 const lastVoteBySession = new Map<string, number>();
@@ -53,6 +54,15 @@ export async function POST(request: Request) {
 
   const updated = await voteOnQuestionInSupabase(questionId, normalizedChoice, sessionId, userId);
   lastVoteBySession.set(sessionId, now);
+
+  await logAnalyticsEventServer({
+    event: "vote_question",
+    sessionId,
+    userId,
+    path: `/questions/${questionId}`,
+    meta: { choice: normalizedChoice },
+  });
+
   const response = NextResponse.json({ question: updated });
   response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
   return response;

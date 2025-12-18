@@ -71,6 +71,9 @@ export function HelpButton() {
               oder <span className="font-semibold text-white">Nein</span> abstimmen, neue Fragen vorschlagen und sehen, wie die Community
               denkt.
             </p>
+            <p className="rounded-2xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100">
+              Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
+            </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs font-semibold text-slate-100">1) Feed entdecken</p>
@@ -212,6 +215,27 @@ export function HelpButton() {
         ),
       },
       {
+        id: "leaderboard",
+        title: "Rangliste",
+        body: (
+          <div className="space-y-2 text-sm text-slate-200">
+            <p>
+              In der <span className="font-semibold text-white">Rangliste</span> siehst du, wer bei bereits{" "}
+              <span className="font-semibold text-white">aufgelösten</span> Fragen oft richtig lag (Trefferquote &amp; Anzahl).
+            </p>
+            <div>
+              <Link
+                href="/rangliste"
+                onClick={close}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-emerald-100 hover:border-emerald-200/40 hover:text-emerald-50"
+              >
+                Rangliste öffnen →
+              </Link>
+            </div>
+          </div>
+        ),
+      },
+      {
         id: "archive",
         title: "Archiv & Statistiken",
         body: (
@@ -249,9 +273,13 @@ export function HelpButton() {
       </button>
 
       {open ? (
-        <div data-fv-help="1" className="overlay-enter fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" onClick={close}>
+        <div
+          data-fv-help="1"
+          className="overlay-enter fixed inset-0 z-50 overflow-y-auto bg-black/55 backdrop-blur-sm"
+          onClick={close}
+        >
           <div
-            className="overlay-panel absolute left-1/2 top-16 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 sm:top-20 sm:p-6"
+            className="overlay-panel absolute left-1/2 top-16 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 max-h-[calc(100svh-8rem)] overflow-y-auto overscroll-contain sm:top-20 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -268,7 +296,7 @@ export function HelpButton() {
               </button>
             </div>
 
-            <div className="mt-4 max-h-[calc(100vh-10rem)] space-y-3 overflow-y-auto pr-1">
+            <div className="mt-4 space-y-3 pr-1">
               {sections.map((s) => (
                 <details
                   key={s.id}

@@ -506,10 +506,67 @@ export async function getQuestionsPageFromSupabase(options: {
   tab?: string;
   category?: string | null;
   region?: string | null;
+  query?: string | null;
 }): Promise<{ items: QuestionWithVotes[]; total: number; nextCursor: string | null }> {
-  const { sessionId, limit, offset, cursor, tab, category, region } = options;
+  const { sessionId, limit, offset, cursor, tab, category, region, query: titleQuery } = options;
   const supabase = getSupabaseAdminClient();
   const cursorMode = Boolean(cursor);
+
+  const stopwords = new Set([
+    "der",
+    "die",
+    "das",
+    "den",
+    "dem",
+    "des",
+    "ein",
+    "eine",
+    "einen",
+    "einem",
+    "einer",
+    "und",
+    "oder",
+    "zum",
+    "zur",
+    "zu",
+    "im",
+    "in",
+    "am",
+    "an",
+    "auf",
+    "für",
+    "fuer",
+    "fur",
+    "mit",
+    "von",
+    "bei",
+    "ist",
+    "sind",
+    "wird",
+    "werden",
+    "dass",
+  ]);
+
+  const normalizeForSearch = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/\p{M}+/gu, "")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+
+  const rawSearch = typeof titleQuery === "string" ? titleQuery : "";
+  const normalizedSearch = normalizeForSearch(rawSearch);
+  const searchTokens = Array.from(
+    new Set(
+      normalizedSearch
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2 && !stopwords.has(t))
+        .slice(0, 8)
+    )
+  );
+  const searchMode = searchTokens.length > 0;
 
   const now = new Date();
   const lowVotesThreshold =
@@ -587,8 +644,27 @@ export async function getQuestionsPageFromSupabase(options: {
     return query;
   };
 
+  const scoreTitle = (title: string) => {
+    const t = normalizeForSearch(title);
+    let score = 0;
+    let matched = 0;
+    for (const token of searchTokens) {
+      const idx = t.indexOf(token);
+      if (idx === -1) continue;
+      matched += 1;
+      score += 10;
+      if (idx === 0) score += 6;
+      if (t.includes(` ${token} `)) score += 5;
+    }
+    if (matched === 0) return 0;
+    if (normalizedSearch && t.includes(normalizedSearch)) score += 12;
+    return score;
+  };
+
+  const effectiveCursorMode = cursorMode && !searchMode;
+
   let totalCount: number | null = null;
-  if (cursorMode) {
+  if (effectiveCursorMode) {
     const countQuery = applyFilters(supabase.from("questions").select("id", { count: "exact", head: true }));
     const { error: countError, count } = await countQuery;
     if (countError) {
@@ -597,7 +673,7 @@ export async function getQuestionsPageFromSupabase(options: {
     totalCount = count ?? 0;
   }
 
-  let query = cursorMode
+  let query = effectiveCursorMode
     ? supabase.from("questions").select("*")
     : supabase.from("questions").select("*", { count: "exact" });
 
@@ -636,7 +712,10 @@ export async function getQuestionsPageFromSupabase(options: {
     }
   }
 
-  if (cursorMode) {
+  if (searchMode) {
+    const fetchLimit = Math.min(400, Math.max(120, limit * 20));
+    query = query.range(0, fetchLimit - 1);
+  } else if (effectiveCursorMode) {
     query = query.limit(limit + 1);
   } else {
     query = query.range(offset, offset + limit - 1);
@@ -649,12 +728,32 @@ export async function getQuestionsPageFromSupabase(options: {
 
   const typedRows = (rows as QuestionRow[]) ?? [];
   if (typedRows.length === 0) {
-    return { items: [], total: cursorMode ? totalCount ?? 0 : count ?? 0, nextCursor: null };
+    return { items: [], total: effectiveCursorMode ? totalCount ?? 0 : count ?? 0, nextCursor: null };
   }
 
-  const total = cursorMode ? totalCount ?? typedRows.length : count ?? typedRows.length;
-  const hasMore = cursorMode ? typedRows.length > limit : offset + typedRows.length < total;
-  const pageRows = cursorMode && typedRows.length > limit ? typedRows.slice(0, limit) : typedRows;
+  if (searchMode) {
+    const scored = typedRows
+      .map((row) => ({ row, score: scoreTitle(row.title ?? "") }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const br = Number((b.row as any).ranking_score ?? 0);
+        const ar = Number((a.row as any).ranking_score ?? 0);
+        if (br !== ar) return br - ar;
+        const bc = String((b.row as any).created_at ?? "");
+        const ac = String((a.row as any).created_at ?? "");
+        if (bc !== ac) return bc < ac ? -1 : 1;
+        return String((b.row as any).id ?? "").localeCompare(String((a.row as any).id ?? ""), "de");
+      });
+
+    const picked = scored.slice(0, limit).map((x) => x.row);
+    const items = picked.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+    return { items, total: scored.length, nextCursor: null };
+  }
+
+  const total = effectiveCursorMode ? totalCount ?? typedRows.length : count ?? typedRows.length;
+  const hasMore = effectiveCursorMode ? typedRows.length > limit : offset + typedRows.length < total;
+  const pageRows = effectiveCursorMode && typedRows.length > limit ? typedRows.slice(0, limit) : typedRows;
 
   const items = pageRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
 
@@ -1029,13 +1128,71 @@ export async function getDraftsPageFromSupabase(options: {
   category?: string | null;
   region?: string | null;
   status?: "all" | "open" | "accepted" | "rejected";
+  query?: string | null;
 }): Promise<{ items: Draft[]; total: number; nextCursor: string | null }> {
-  const { limit, offset, cursor, category, region, status } = options;
+  const { limit, offset, cursor, category, region, status, query: titleQuery } = options;
   const supabase = getSupabaseAdminClient();
   const cursorMode = Boolean(cursor);
 
+  const stopwords = new Set([
+    "der",
+    "die",
+    "das",
+    "den",
+    "dem",
+    "des",
+    "ein",
+    "eine",
+    "einen",
+    "einem",
+    "einer",
+    "und",
+    "oder",
+    "zum",
+    "zur",
+    "zu",
+    "im",
+    "in",
+    "am",
+    "an",
+    "auf",
+    "für",
+    "fuer",
+    "fur",
+    "mit",
+    "von",
+    "bei",
+    "ist",
+    "sind",
+    "wird",
+    "werden",
+    "dass",
+  ]);
+
+  const normalizeForSearch = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/\p{M}+/gu, "")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+
+  const rawSearch = typeof titleQuery === "string" ? titleQuery : "";
+  const normalizedSearch = normalizeForSearch(rawSearch);
+  const searchTokens = Array.from(
+    new Set(
+      normalizedSearch
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2 && !stopwords.has(t))
+        .slice(0, 8)
+    )
+  );
+  const searchMode = searchTokens.length > 0;
+
   const applyFilters = (query: any) => {
     query = query.eq("visibility", "public");
+
     if (status && status !== "all") {
       query = query.eq("status", status);
     }
@@ -1055,8 +1212,27 @@ export async function getDraftsPageFromSupabase(options: {
     return query;
   };
 
+  const scoreTitle = (title: string) => {
+    const t = normalizeForSearch(title);
+    let score = 0;
+    let matched = 0;
+    for (const token of searchTokens) {
+      const idx = t.indexOf(token);
+      if (idx === -1) continue;
+      matched += 1;
+      score += 10;
+      if (idx === 0) score += 6;
+      if (t.includes(` ${token} `)) score += 5;
+    }
+    if (matched === 0) return 0;
+    if (normalizedSearch && t.includes(normalizedSearch)) score += 12;
+    return score;
+  };
+
+  const effectiveCursorMode = cursorMode && !searchMode;
+
   let totalCount: number | null = null;
-  if (cursorMode) {
+  if (effectiveCursorMode) {
     const countQuery = applyFilters(supabase.from("drafts").select("id", { count: "exact", head: true }));
     const { error: countError, count } = await countQuery;
     if (countError) {
@@ -1065,7 +1241,7 @@ export async function getDraftsPageFromSupabase(options: {
     totalCount = count ?? 0;
   }
 
-  let query = cursorMode ? supabase.from("drafts").select("*") : supabase.from("drafts").select("*", { count: "exact" });
+  let query = effectiveCursorMode ? supabase.from("drafts").select("*") : supabase.from("drafts").select("*", { count: "exact" });
   query = applyFilters(query);
 
   query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
@@ -1078,7 +1254,10 @@ export async function getDraftsPageFromSupabase(options: {
     );
   }
 
-  if (cursorMode) {
+  if (searchMode) {
+    const fetchLimit = Math.min(400, Math.max(120, limit * 20));
+    query = query.range(0, fetchLimit - 1);
+  } else if (effectiveCursorMode) {
     query = query.limit(limit + 1);
   } else {
     query = query.range(offset, offset + limit - 1);
@@ -1091,12 +1270,29 @@ export async function getDraftsPageFromSupabase(options: {
 
   const rows = (data as DraftRow[]) ?? [];
   if (rows.length === 0) {
-    return { items: [], total: cursorMode ? totalCount ?? 0 : count ?? 0, nextCursor: null };
+    return { items: [], total: effectiveCursorMode ? totalCount ?? 0 : count ?? 0, nextCursor: null };
   }
 
-  const total = cursorMode ? totalCount ?? rows.length : count ?? rows.length;
-  const hasMore = cursorMode ? rows.length > limit : offset + rows.length < total;
-  const pageRows = cursorMode && rows.length > limit ? rows.slice(0, limit) : rows;
+  if (searchMode) {
+    const scored = rows
+      .map((row) => ({ row, score: scoreTitle(row.title ?? "") }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const bc = String((b.row as any).created_at ?? "");
+        const ac = String((a.row as any).created_at ?? "");
+        if (bc !== ac) return bc < ac ? -1 : 1;
+        return String((b.row as any).id ?? "").localeCompare(String((a.row as any).id ?? ""), "de");
+      });
+
+    const picked = scored.slice(0, limit).map((x) => x.row);
+    const items = picked.map(mapDraftRow);
+    return { items, total: scored.length, nextCursor: null };
+  }
+
+  const total = effectiveCursorMode ? totalCount ?? rows.length : count ?? rows.length;
+  const hasMore = effectiveCursorMode ? rows.length > limit : offset + rows.length < total;
+  const pageRows = effectiveCursorMode && rows.length > limit ? rows.slice(0, limit) : rows;
   const items = pageRows.map(mapDraftRow);
 
   const lastRow = pageRows[pageRows.length - 1];

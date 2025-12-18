@@ -16,6 +16,9 @@ export async function GET(request: Request) {
   const tab = searchParams.get("tab") ?? undefined;
   const category = searchParams.get("category");
   const region = searchParams.get("region");
+  const qRaw = searchParams.get("q");
+  const q =
+    typeof qRaw === "string" && qRaw.trim().length >= 2 ? qRaw.trim().slice(0, 80) : null;
 
   const include = (searchParams.get("include") as IncludeMode | null) ?? "both";
   const includeQuestions = include !== "drafts";
@@ -46,6 +49,7 @@ export async function GET(request: Request) {
           tab,
           category,
           region,
+          query: q,
         })
       : Promise.resolve({ items: [], total: 0, nextCursor: null }),
     includeDrafts
@@ -56,6 +60,7 @@ export async function GET(request: Request) {
           category,
           region,
           status: "open",
+          query: q,
         })
       : Promise.resolve({ items: [], total: 0, nextCursor: null }),
   ]);

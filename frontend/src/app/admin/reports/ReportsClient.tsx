@@ -147,6 +147,12 @@ export default function ReportsClient() {
             Nutzer können Fragen und Drafts melden (auch private Link-Umfragen). Hier bearbeitest du die Queue.
           </p>
         </div>
+        <Link
+          href="/admin/analytics"
+          className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:-translate-y-0.5 hover:border-emerald-200/30"
+        >
+          Analytics
+        </Link>
         <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
           ← Zurück zum Feed
         </Link>

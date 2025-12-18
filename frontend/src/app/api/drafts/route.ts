@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/data/dbSupabase";
 import type { PollVisibility } from "@/app/data/mock";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -117,6 +118,13 @@ export async function POST(request: Request) {
       resolutionSource,
       resolutionDeadline,
     });
+    await logAnalyticsEventServer({
+      event: "create_private_poll",
+      sessionId,
+      userId: user.id,
+      path: "/drafts/new",
+      meta: { visibility: "link_only" },
+    });
     return NextResponse.json({ question }, { status: 201 });
   }
 
@@ -134,6 +142,13 @@ export async function POST(request: Request) {
     resolutionCriteria,
     resolutionSource,
     resolutionDeadline,
+  });
+  await logAnalyticsEventServer({
+    event: "create_draft",
+    sessionId,
+    userId: user.id,
+    path: "/drafts/new",
+    meta: { visibility },
   });
   return NextResponse.json({ draft }, { status: 201 });
 }

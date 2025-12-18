@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { trackShare } from "@/app/lib/analytics";
 
 export function ShareLinkButton({
   url,
@@ -8,12 +9,16 @@ export function ShareLinkButton({
   className = "",
   variant = "chip",
   action = "share",
+  shareTitle,
+  shareText,
 }: {
   url: string;
   label?: string;
   className?: string;
   variant?: "chip" | "primary" | "icon";
   action?: "share" | "copy";
+  shareTitle?: string;
+  shareText?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -27,7 +32,8 @@ export function ShareLinkButton({
     if (action === "share") {
       try {
         if (typeof navigator !== "undefined" && "share" in navigator && typeof (navigator as any).share === "function") {
-          await (navigator as any).share({ url });
+          await (navigator as any).share({ url, title: shareTitle, text: shareText });
+          trackShare("share", url, "native");
           return;
         }
       } catch {
@@ -38,10 +44,12 @@ export function ShareLinkButton({
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
+      trackShare("copy", url, "clipboard");
     } catch {
       window.prompt("Link kopieren:", url);
+      trackShare("copy", url, "prompt");
     }
-  }, [action, url]);
+  }, [action, shareText, shareTitle, url]);
 
   const base =
     variant === "primary"

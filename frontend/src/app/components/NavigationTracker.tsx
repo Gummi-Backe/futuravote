@@ -2,6 +2,7 @@
 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { trackEvent } from "@/app/lib/analytics";
 
 const NAV_STACK_KEY = "fv_nav_stack_v1";
 const MAX_STACK = 20;
@@ -36,6 +37,8 @@ export function NavigationTracker() {
     } catch {
       // ignore
     }
+
+    trackEvent("page_view", { url });
   }, [pathname, searchParams]);
 
   return null;
@@ -51,4 +54,3 @@ export function canGoBackInternally(): boolean {
     return false;
   }
 }
-

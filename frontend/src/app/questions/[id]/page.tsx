@@ -11,6 +11,8 @@ import { TrendSparkline } from "./TrendSparkline";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 import { ReportButton } from "@/app/components/ReportButton";
 import { EmbedWidgetButton } from "@/app/components/EmbedWidgetButton";
+import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
+import { CommentsSection } from "./CommentsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -323,6 +325,19 @@ export default async function QuestionDetail(props: {
           )}
         </header>
 
+        {question.resolvedOutcome === "yes" || question.resolvedOutcome === "no" ? (
+          <div className="mt-6 sm:mt-8">
+            <ResolvedSuccessCard
+              title={question.title}
+              url={shareUrl}
+              resolvedOutcome={question.resolvedOutcome}
+              yesVotes={yesVotes}
+              noVotes={noVotes}
+              userChoice={question.userChoice === "yes" || question.userChoice === "no" ? question.userChoice : null}
+            />
+          </div>
+        ) : null}
+
         <section className="mt-6 grid gap-6 sm:mt-8 md:grid-cols-3">
           <div className="md:col-span-2 flex min-h-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
             <div className="flex items-center justify-between text-sm text-slate-200">
@@ -461,6 +476,8 @@ export default async function QuestionDetail(props: {
               : null
           }
         />
+
+        <CommentsSection questionId={id} isLoggedIn={Boolean(currentUser)} canPost={Boolean(currentUser?.emailVerified)} />
       </div>
     </main>
   );
