@@ -530,7 +530,19 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
                           title="Aus Favoriten entfernen"
                           aria-label="Aus Favoriten entfernen"
                         >
-                          <span className="text-[18px] leading-none">★</span>
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M12 2l3.09 6.63 7.19.61-5.46 4.73L18.18 21 12 17.27 5.82 21l1.64-7.03L2 9.24l7.19-.61L12 2z" />
+                          </svg>
                         </button>
                       </div>
                     </div>

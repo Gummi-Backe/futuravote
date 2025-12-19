@@ -9,6 +9,29 @@ type Body = {
   size?: "1024x1024" | "1024x1536" | "1536x1024";
 };
 
+type ImageModel = "dall-e-3" | "dall-e-2" | "gpt-image-1";
+
+function getImageModel(): ImageModel {
+  const raw = process.env.OPENAI_IMAGE_MODEL?.trim();
+  if (raw === "dall-e-3" || raw === "dall-e-2" || raw === "gpt-image-1") return raw;
+  // Default: DALL·E 3 works for most accounts without org verification (unlike gpt-image-1).
+  return "dall-e-3";
+}
+
+function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
+  const chosen = size === "1024x1536" || size === "1536x1024" ? size : "1024x1024";
+
+  // DALL·E sizes differ; map our UI options to the closest supported size.
+  if (model === "dall-e-3") {
+    if (chosen === "1536x1024") return "1792x1024";
+    if (chosen === "1024x1536") return "1024x1792";
+    return "1024x1024";
+  }
+
+  // gpt-image-1 and dall-e-2 accept 1024x1024; dall-e-2 also accepts 512/256, but we keep it simple.
+  return chosen;
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
@@ -38,7 +61,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OPENAI_API_KEY ist nicht gesetzt." }, { status: 500 });
   }
 
-  const size: Body["size"] = body.size === "1024x1536" || body.size === "1536x1024" ? body.size : "1024x1024";
+  const model = getImageModel();
+  const size = mapSizeForModel(model, body.size);
 
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
@@ -47,9 +71,10 @@ export async function POST(request: Request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-image-1",
+      model,
       prompt,
       size,
+      ...(model === "dall-e-3" ? { quality: "standard" } : null),
     }),
   });
 

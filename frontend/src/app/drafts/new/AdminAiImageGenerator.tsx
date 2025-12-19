@@ -39,11 +39,15 @@ export function AdminAiImageGenerator({
 }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [promptTouched, setPromptTouched] = useState(false);
+  const [lastAutoPrompt, setLastAutoPrompt] = useState("");
   const [size, setSize] = useState<"1024x1024" | "1024x1536" | "1536x1024">("1024x1024");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [b64, setB64] = useState<string | null>(null);
   const [mime, setMime] = useState<string>("image/png");
+
+  const autoPrompt = useMemo(() => defaultPrompt({ title, description }), [description, title]);
 
   const previewDataUrl = useMemo(() => {
     if (!b64) return null;
@@ -52,9 +56,24 @@ export function AdminAiImageGenerator({
 
   useEffect(() => {
     if (!isAdmin) return;
-    if (prompt.trim()) return;
-    setPrompt(defaultPrompt({ title, description }));
-  }, [description, isAdmin, prompt, title]);
+    // Auto-fill prompt until the user edits it manually.
+    if (promptTouched) return;
+    if (prompt.trim() && prompt !== lastAutoPrompt) return;
+    setPrompt(autoPrompt);
+    setLastAutoPrompt(autoPrompt);
+  }, [autoPrompt, isAdmin, lastAutoPrompt, prompt, promptTouched]);
+
+  const toggleOpen = useCallback(() => {
+    setOpen((v) => !v);
+    if (!open) {
+      // When opening: ensure the current title/description are already included (unless user edited prompt).
+      if (!promptTouched || !prompt.trim() || prompt === lastAutoPrompt) {
+        setPrompt(autoPrompt);
+        setLastAutoPrompt(autoPrompt);
+        setPromptTouched(false);
+      }
+    }
+  }, [autoPrompt, lastAutoPrompt, open, prompt, promptTouched]);
 
   const generate = useCallback(async () => {
     setLoading(true);
@@ -100,7 +119,7 @@ export function AdminAiImageGenerator({
         <button
           type="button"
           disabled={disabled}
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggleOpen}
           className="rounded-full border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:-translate-y-0.5 hover:border-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {open ? "Schließen" : "Öffnen"}
@@ -113,7 +132,10 @@ export function AdminAiImageGenerator({
             <label className="text-xs font-medium text-slate-200">Prompt</label>
             <textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPromptTouched(true);
+                setPrompt(e.target.value);
+              }}
               rows={6}
               className="w-full resize-none rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
               placeholder="Beschreibe das gewünschte Bild."
@@ -174,4 +196,3 @@ export function AdminAiImageGenerator({
     </div>
   );
 }
-

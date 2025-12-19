@@ -225,6 +225,7 @@ function buildPrompt(opts: {
     "WICHTIG:",
     "- Titel: klare Ja/Nein-Frage, eindeutig, max. 140 Zeichen.",
     "- Beschreibung: 3-5 Saetze Kontext (DE), kurz halten, keine echten Zeilenumbrueche.",
+    "- Schreibe Deutsch mit Umlauten: ä, ö, ü, ß. Verwende NICHT ae/oe/ue/ss als Ersatz.",
     "- resolutionCriteria: konkret, woran 'Ja'/'Nein' festgemacht wird.",
     "- sources: 2-4 URLs als Nachweis (offizielle Stellen/Institutionen/serioese Medien).",
     "- pollEndAt: bis wann abgestimmt werden kann (nahe am Ereignis/Stichtag).",
@@ -257,7 +258,11 @@ async function callPerplexity(opts: { apiKey: string; model: string; prompt: str
       temperature: 0.2,
       max_tokens: opts.maxTokens,
       messages: [
-        { role: "system", content: "Du antwortest strikt als JSON." },
+        {
+          role: "system",
+          content:
+            "Du antwortest strikt als JSON. Schreibe Deutsch mit Umlauten (ä, ö, ü, ß) und nutze keine ae/oe/ue/ss-Ersatzschreibweise.",
+        },
         { role: "user", content: opts.prompt },
       ],
     }),
