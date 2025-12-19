@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
-import { sendPrivatePollResultEmail } from "@/app/lib/email";
+import { sendPrivatePollEndingSoonEmail } from "@/app/lib/email";
 
 export const revalidate = 0;
 
@@ -27,22 +27,21 @@ function formatDateGerman(dateIso?: string | null) {
   return new Date(ms).toLocaleDateString("de-DE", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-async function canSendPrivatePollResultEmail(supabase: ReturnType<typeof getSupabaseAdminClient>, userId: string) {
+async function canSendEndingSoonEmail(supabase: ReturnType<typeof getSupabaseAdminClient>, userId: string) {
   try {
     const { data, error } = await supabase
       .from("notification_preferences")
-      .select("all_emails_enabled, private_poll_results")
+      .select("all_emails_enabled, private_poll_ending_soon")
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
     const allEnabled = (data as any)?.all_emails_enabled;
-    const resultsEnabled = (data as any)?.private_poll_results;
+    const endingSoonEnabled = (data as any)?.private_poll_ending_soon;
     if (typeof allEnabled === "boolean" && !allEnabled) return false;
-    if (typeof resultsEnabled === "boolean" && !resultsEnabled) return false;
+    if (typeof endingSoonEnabled === "boolean" && !endingSoonEnabled) return false;
     return true;
   } catch {
-    // Falls das Setup noch nicht ausgefuehrt wurde, verhalten wir uns wie bisher (senden erlaubt).
-    return true;
+    return false; // default: aus (damit es keine unerwarteten E-Mails gibt)
   }
 }
 
@@ -60,39 +59,47 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdminClient();
 
-  const todayUtcIso = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const todayUtcIso = today.toISOString().slice(0, 10);
+  const tomorrow = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowUtcIso = tomorrow.toISOString().slice(0, 10);
   const siteUrl = getSiteUrl(request.url);
 
-  // 1) Kandidaten: private (link_only) Questions, beendet (closes_at < heute), mit creator & share id.
+  // Kandidaten: private (link_only) Questions, die "morgen" enden (UTC, date-level), mit creator & share id.
   const { data: questions, error: qErr } = await supabase
     .from("questions")
-    .select("id, title, closes_at, yes_votes, no_votes, creator_id, share_id, visibility")
+    .select("id, title, closes_at, creator_id, share_id, visibility")
     .eq("visibility", "link_only")
-    .lt("closes_at", todayUtcIso)
+    .eq("closes_at", tomorrowUtcIso)
     .not("creator_id", "is", null)
     .not("share_id", "is", null)
     .limit(limit);
 
   if (qErr) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Konnte private Umfragen nicht laden. Fehlt das Feld `visibility` oder stimmen Policies nicht?",
-        details: qErr.message,
-      },
+      { ok: false, error: "Konnte private Umfragen nicht laden.", details: qErr.message },
       { status: 500 }
     );
   }
 
   const rows = (questions ?? []) as any[];
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, skipped: 0, checked: 0, note: "Keine faelligen privaten Umfragen." });
+    return NextResponse.json({
+      ok: true,
+      sent: 0,
+      skipped: 0,
+      checked: 0,
+      todayUtc: todayUtcIso,
+      tomorrowUtc: tomorrowUtcIso,
+      note: "Keine faelligen Erinnerungen.",
+    });
   }
 
-  // 2) Bereits versendet? (idempotent)
+  // Bereits erinnert? (idempotent)
   const ids = rows.map((r) => String(r.id));
   const { data: sentRows, error: sentErr } = await supabase
-    .from("private_poll_result_emails")
+    .from("private_poll_reminder_emails")
     .select("question_id")
     .in("question_id", ids);
 
@@ -101,7 +108,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error:
-          "Outbox-Tabelle fehlt oder ist nicht erreichbar. Fuehre `supabase/private_poll_result_emails.sql` in Supabase aus.",
+          "Outbox-Tabelle fehlt oder ist nicht erreichbar. Fuehre `supabase/private_poll_reminder_emails.sql` in Supabase aus.",
         details: sentErr.message,
       },
       { status: 500 }
@@ -112,7 +119,6 @@ export async function GET(request: Request) {
   const pending = rows.filter((r) => !alreadySent.has(String(r.id)));
 
   let sent = 0;
-  let suppressed = 0;
   let skipped = 0;
 
   for (const row of pending) {
@@ -120,6 +126,13 @@ export async function GET(request: Request) {
     const creatorId = String(row.creator_id);
     const shareId = String(row.share_id);
     const title = String(row.title ?? "");
+    const closesAt = String(row.closes_at ?? "");
+
+    const allowed = await canSendEndingSoonEmail(supabase, creatorId);
+    if (!allowed) {
+      skipped += 1;
+      continue;
+    }
 
     const { data: userRow, error: userErr } = await supabase
       .from("users")
@@ -134,59 +147,32 @@ export async function GET(request: Request) {
 
     const to = String((userRow as any).email);
     const displayName = String((userRow as any).display_name ?? "");
-    const closesAt = String(row.closes_at ?? "");
-
     const pollUrl = `${siteUrl}/p/${encodeURIComponent(shareId)}`;
-    const yesVotes = Number(row.yes_votes ?? 0) || 0;
-    const noVotes = Number(row.no_votes ?? 0) || 0;
 
     try {
-      const allowed = await canSendPrivatePollResultEmail(supabase, creatorId);
-      if (!allowed) {
-        const { error: insertErr } = await supabase.from("private_poll_result_emails").insert({
-          question_id: questionId,
-          creator_id: creatorId,
-          to_email: to,
-          share_id: shareId,
-          closes_at: closesAt || null,
-          yes_votes: yesVotes,
-          no_votes: noVotes,
-        });
-        if (insertErr) {
-          console.warn("private_poll_result_emails insert failed (suppressed)", insertErr);
-        }
-        suppressed += 1;
-        continue;
-      }
-
-      await sendPrivatePollResultEmail({
+      await sendPrivatePollEndingSoonEmail({
         to,
         displayName,
         title,
         pollUrl,
         closesAtLabel: `Ende: ${formatDateGerman(closesAt)}`,
-        yesVotes,
-        noVotes,
       });
 
-      const { error: insertErr } = await supabase.from("private_poll_result_emails").insert({
+      const { error: insertErr } = await supabase.from("private_poll_reminder_emails").insert({
         question_id: questionId,
         creator_id: creatorId,
         to_email: to,
         share_id: shareId,
         closes_at: closesAt || null,
-        yes_votes: yesVotes,
-        no_votes: noVotes,
       });
 
       if (insertErr) {
-        // Wenn parallel schon eingetragen wurde, ignorieren.
-        console.warn("private_poll_result_emails insert failed", insertErr);
+        console.warn("private_poll_reminder_emails insert failed", insertErr);
       }
 
       sent += 1;
     } catch (err) {
-      console.error("Failed to send private poll result email", { questionId }, err);
+      console.error("Failed to send private poll ending-soon email", { questionId }, err);
       skipped += 1;
     }
   }
@@ -196,8 +182,9 @@ export async function GET(request: Request) {
     checked: rows.length,
     pending: pending.length,
     sent,
-    suppressed,
     skipped,
     todayUtc: todayUtcIso,
+    tomorrowUtc: tomorrowUtcIso,
   });
 }
+

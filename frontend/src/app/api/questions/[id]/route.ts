@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getQuestionByIdFromSupabase, incrementViewsForQuestionInSupabase } from "@/app/data/dbSupabase";
+import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 
 export const revalidate = 0;
@@ -23,14 +23,7 @@ export async function GET(_: Request, context: Params) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
-  try {
-    await incrementViewsForQuestionInSupabase(id);
-  } catch (err) {
-    console.warn("Failed to increment views", err);
-  }
-  const questionWithView = { ...question, views: (question.views ?? 0) + 1 };
-
-  const response = NextResponse.json({ question: questionWithView });
+  const response = NextResponse.json({ question });
   response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
   return response;
 }

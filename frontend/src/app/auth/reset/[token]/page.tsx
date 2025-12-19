@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export default function PasswordResetTokenPage() {
   const router = useRouter();
@@ -64,13 +65,11 @@ export default function PasswordResetTokenPage() {
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-16 pt-10">
-        <button
-          type="button"
-          onClick={() => router.push("/auth")}
+        <SmartBackButton
+          fallbackHref="/auth"
+          label="← Zurück"
           className="self-start text-sm text-emerald-100 hover:text-emerald-200"
-        >
-          &larr; Zurueck zu Login
-        </button>
+        />
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Neues Passwort setzen</h1>

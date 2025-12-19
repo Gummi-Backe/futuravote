@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import type { Metadata } from "next";
-import type { Question } from "@/app/data/mock";
+import type { QuestionWithVotes } from "@/app/data/dbSupabase";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import AdminControls from "./AdminControls";
@@ -13,6 +13,8 @@ import { ReportButton } from "@/app/components/ReportButton";
 import { EmbedWidgetButton } from "@/app/components/EmbedWidgetButton";
 import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
 import { CommentsSection } from "./CommentsSection";
+import { QuestionViewTracker } from "@/app/components/QuestionViewTracker";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -73,33 +75,9 @@ export async function generateMetadata(props: {
   };
 }
 
-async function getBaseUrl() {
-  const headerStore = await headers();
-  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
-  const protocol =
-    headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
-  const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
-  if (process.env.NODE_ENV !== "production" && envBaseUrl) {
-    return envBaseUrl;
-  }
-  if (host) return `${protocol}://${host}`;
-  return envBaseUrl ?? "http://localhost:3000";
-}
-
-async function fetchQuestion(id: string): Promise<Question | null> {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore.get("fv_session")?.value;
-  const baseUrl = await getBaseUrl();
-
+async function fetchQuestion(id: string, sessionId?: string | null): Promise<QuestionWithVotes | null> {
   try {
-    const res = await fetch(`${baseUrl}/api/questions/${id}`, {
-      cache: "no-store",
-      headers: cookieHeader ? { cookie: `fv_session=${cookieHeader}` } : undefined,
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) return null;
-    const data = await res.json();
-    return (data?.question as Question) ?? null;
+    return await getQuestionByIdFromSupabase(id, sessionId ?? undefined);
   } catch {
     return null;
   }
@@ -177,18 +155,22 @@ export default async function QuestionDetail(props: {
   const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
   const cameFromAdminReports = from === "admin_reports";
 
-  const question = await fetchQuestion(id);
-  if (!question) {
-    notFound();
-  }
-
   const cookieStore = await cookies();
+  const fvSessionId = cookieStore.get("fv_session")?.value ?? null;
   const sessionId = cookieStore.get("fv_user")?.value;
   const currentUser = sessionId ? await getUserBySessionSupabase(sessionId) : null;
   const isAdmin = currentUser?.role === "admin";
 
+  const question = await fetchQuestion(id, fvSessionId);
+  if (!question) {
+    notFound();
+  }
+  if (question.visibility === "link_only") {
+    notFound();
+  }
+
   const backHref = isAdmin && cameFromAdminReports ? "/admin/reports" : "/";
-  const backLabel = isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : "← Zurück zum Feed";
+  const backLabel = isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : "← Zurück";
 
   const yesVotes = question.yesVotes ?? 0;
   const noVotes = question.noVotes ?? 0;
@@ -218,19 +200,21 @@ export default async function QuestionDetail(props: {
         ? "Du hast Nein gestimmt"
         : null;
 
-  const baseUrl = await getBaseUrl();
-  const shareUrl =
-    question.visibility === "link_only" && question.shareId
-      ? `${baseUrl}/p/${encodeURIComponent(question.shareId)}`
-      : `${baseUrl}/questions/${encodeURIComponent(id)}`;
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+    (process.env.NODE_ENV === "production" ? "https://www.future-vote.de" : "http://localhost:3000");
+  const shareUrl = `${baseUrl}/questions/${encodeURIComponent(id)}`;
   const widgetUrl = `${baseUrl}/widget/question/${encodeURIComponent(id)}`;
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-8 sm:pt-10 lg:px-6">
-        <Link href={backHref} className="text-sm text-emerald-100 hover:text-emerald-200">
-          {backLabel}
-        </Link>
+        <QuestionViewTracker questionId={id} />
+        <SmartBackButton
+          fallbackHref={backHref}
+          label={backLabel}
+          className="text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
+        />
 
         <header className="mt-4 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 sm:px-6 sm:py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -301,15 +285,8 @@ export default async function QuestionDetail(props: {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {question.visibility === "link_only" ? (
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100">
-                  Privat (nur per Link)
-                </span>
-              ) : null}
               <ShareLinkButton url={shareUrl} label="Teilen" action="share" />
-              {question.visibility === "public" ? (
-                <EmbedWidgetButton widgetUrl={widgetUrl} title={question.title} />
-              ) : null}
+              <EmbedWidgetButton widgetUrl={widgetUrl} title={question.title} />
               <ReportButton kind="question" itemId={id} itemTitle={question.title} shareId={question.shareId ?? null} />
             </div>
           </div>

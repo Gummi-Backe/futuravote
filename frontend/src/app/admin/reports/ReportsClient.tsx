@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
 
@@ -153,9 +154,11 @@ export default function ReportsClient() {
         >
           Analytics
         </Link>
-        <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
-          ← Zurück zum Feed
-        </Link>
+        <SmartBackButton
+          fallbackHref="/"
+          label="← Zurück"
+          className="text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">

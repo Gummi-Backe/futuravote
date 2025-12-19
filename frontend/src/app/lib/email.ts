@@ -161,3 +161,45 @@ export async function sendPrivatePollResultEmail(options: {
     html,
   });
 }
+
+export async function sendPrivatePollEndingSoonEmail(options: {
+  to: string;
+  displayName: string;
+  title: string;
+  pollUrl: string;
+  closesAtLabel: string;
+}): Promise<void> {
+  const transport = getTransporter();
+
+  const subject = `Private Umfrage endet bald: ${options.title}`;
+
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    `deine private Umfrage endet bald (${options.closesAtLabel}).`,
+    "Wenn du noch Stimmen einsammeln willst, teile den Link jetzt noch einmal.",
+    "",
+    "Hier kannst du die Umfrage ansehen:",
+    options.pollUrl,
+  ].join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>deine private Umfrage endet bald (<strong>${options.closesAtLabel}</strong>).</p>
+    <p style="color:#cbd5e1">Wenn du noch Stimmen einsammeln willst, teile den Link jetzt noch einmal.</p>
+    <p><a href="${options.pollUrl}">Umfrage öffnen</a></p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Private Umfrage Erinnerung (endet bald):", { to: options.to, pollUrl: options.pollUrl, subject });
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}

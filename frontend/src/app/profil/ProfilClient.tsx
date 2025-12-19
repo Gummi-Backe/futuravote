@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ProfileRegionForm } from "./ProfileRegionForm";
 import { ProfilePollTabs } from "./ProfilePollTabs";
 import { PROFILE_SUMMARY_CACHE_KEY } from "@/app/lib/profileCache";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { EmailNotificationSettings } from "./EmailNotificationSettings";
 
 type UserMe = {
   id: string;
@@ -252,9 +254,11 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-16 pt-10">
-        <Link href="/" className="self-start text-sm text-emerald-100 hover:text-emerald-200">
-          &larr; Zurück zum Feed
-        </Link>
+        <SmartBackButton
+          fallbackHref="/"
+          label="← Zurück"
+          className="self-start text-sm text-emerald-100 hover:text-emerald-200"
+        />
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Dein Profil</h1>
@@ -463,6 +467,8 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
           <p className="mt-1 text-[11px] text-slate-400">
             Hinweis: Die Zahlen basieren auf Daten, die seit Einführung der Supabase-DB gesammelt werden.
           </p>
+
+          <EmailNotificationSettings />
 
           <ProfilePollTabs baseUrl={baseUrl} />
         </section>

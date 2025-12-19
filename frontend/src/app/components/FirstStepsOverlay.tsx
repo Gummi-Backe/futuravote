@@ -105,7 +105,7 @@ export function FirstStepsOverlay() {
   return (
     <div className="overlay-enter fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" onClick={close}>
       <div
-        className="overlay-panel absolute left-1/2 top-12 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 sm:top-16 sm:p-6"
+        className="overlay-panel absolute left-1/2 top-8 flex max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 sm:top-16 sm:max-h-[calc(100vh-8rem)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -138,13 +138,15 @@ export function FirstStepsOverlay() {
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {steps.map((s) => (
-            <div key={s.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm font-semibold text-white">{s.title}</p>
-              <p className="mt-1 text-sm text-slate-200">{s.body}</p>
-            </div>
-          ))}
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {steps.map((s) => (
+              <div key={s.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-semibold text-white">{s.title}</p>
+                <p className="mt-1 text-sm text-slate-200">{s.body}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

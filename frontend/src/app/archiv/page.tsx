@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -263,9 +264,11 @@ export default async function ArchivPage(props: {
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
       <div className="mx-auto w-full max-w-4xl px-4 pb-12 pt-8 sm:px-6 sm:pt-10">
-        <Link href="/" className="text-sm text-emerald-100 hover:text-emerald-200">
-          ← Zurück zum Feed
-        </Link>
+        <SmartBackButton
+          fallbackHref="/"
+          label="← Zurück"
+          className="text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
+        />
 
         <header className="mt-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
           <h1 className="text-2xl font-semibold text-white">Archiv & Statistiken</h1>

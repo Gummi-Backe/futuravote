@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/question-metrics?daysBack=120",
       "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/private-poll-results",
+      "schedule": "15 0 * * *"
+    },
+    {
+      "path": "/api/cron/private-poll-reminders",
+      "schedule": "0 8 * * *"
     }
   ]
 }

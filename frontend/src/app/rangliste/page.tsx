@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { categories } from "@/app/data/mock";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export const revalidate = 30;
 
@@ -175,9 +176,11 @@ export default async function RanglistePage({
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white">
-              <span aria-hidden="true">←</span> Zurück
-            </Link>
+            <SmartBackButton
+              fallbackHref="/"
+              label="← Zurück"
+              className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-transparent p-0"
+            />
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">Rangliste</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-200">
               Hier zählen nur <span className="font-semibold text-white">entschiedene</span> (aufgelöste) öffentliche Fragen.
@@ -316,4 +319,3 @@ export default async function RanglistePage({
     </main>
   );
 }
-
