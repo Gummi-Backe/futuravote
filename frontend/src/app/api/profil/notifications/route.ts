@@ -9,12 +9,16 @@ type NotificationPrefs = {
   allEmailsEnabled: boolean;
   privatePollResults: boolean;
   privatePollEndingSoon: boolean;
+  creatorPublicQuestionEnded: boolean;
+  creatorPublicQuestionResolved: boolean;
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
   allEmailsEnabled: true,
   privatePollResults: true,
   privatePollEndingSoon: false,
+  creatorPublicQuestionEnded: true,
+  creatorPublicQuestionResolved: true,
 };
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -40,7 +44,9 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from("notification_preferences")
-      .select("all_emails_enabled, private_poll_results, private_poll_ending_soon")
+      .select(
+        "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved"
+      )
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -52,6 +58,14 @@ export async function GET() {
       privatePollEndingSoon: normalizeBoolean(
         (data as any)?.private_poll_ending_soon,
         DEFAULT_PREFS.privatePollEndingSoon
+      ),
+      creatorPublicQuestionEnded: normalizeBoolean(
+        (data as any)?.creator_public_question_ended,
+        DEFAULT_PREFS.creatorPublicQuestionEnded
+      ),
+      creatorPublicQuestionResolved: normalizeBoolean(
+        (data as any)?.creator_public_question_resolved,
+        DEFAULT_PREFS.creatorPublicQuestionResolved
       ),
     };
 
@@ -78,6 +92,11 @@ export async function PUT(request: Request) {
     allEmailsEnabled: normalizeBoolean(body.allEmailsEnabled, DEFAULT_PREFS.allEmailsEnabled),
     privatePollResults: normalizeBoolean(body.privatePollResults, DEFAULT_PREFS.privatePollResults),
     privatePollEndingSoon: normalizeBoolean(body.privatePollEndingSoon, DEFAULT_PREFS.privatePollEndingSoon),
+    creatorPublicQuestionEnded: normalizeBoolean(body.creatorPublicQuestionEnded, DEFAULT_PREFS.creatorPublicQuestionEnded),
+    creatorPublicQuestionResolved: normalizeBoolean(
+      body.creatorPublicQuestionResolved,
+      DEFAULT_PREFS.creatorPublicQuestionResolved
+    ),
   };
 
   const supabase = getSupabaseAdminClient();
@@ -89,6 +108,8 @@ export async function PUT(request: Request) {
         all_emails_enabled: next.allEmailsEnabled,
         private_poll_results: next.privatePollResults,
         private_poll_ending_soon: next.privatePollEndingSoon,
+        creator_public_question_ended: next.creatorPublicQuestionEnded,
+        creator_public_question_resolved: next.creatorPublicQuestionResolved,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" }
@@ -101,4 +122,3 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: e?.message ?? "Konnte Einstellungen nicht speichern." }, { status: 500 });
   }
 }
-

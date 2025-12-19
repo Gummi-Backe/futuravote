@@ -15,6 +15,8 @@ create table if not exists public.notification_preferences (
   all_emails_enabled boolean not null default true,
   private_poll_results boolean not null default true,
   private_poll_ending_soon boolean not null default false,
+  creator_public_question_ended boolean not null default true,
+  creator_public_question_resolved boolean not null default true,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
@@ -25,4 +27,3 @@ create index if not exists notification_preferences_updated_at_idx
 alter table public.notification_preferences enable row level security;
 
 commit;
-

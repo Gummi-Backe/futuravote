@@ -1334,14 +1334,8 @@ export default function Home() {
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">FUTURE-VOTE</p>
                 <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">Prognosen, schnell abgestimmt.</h1>
-                <p className="mt-1 hidden max-w-md text-sm text-slate-200">
-                  Ja/Nein-Kacheln · Community-Review für neue Fragen · Ranking nach Engagement &amp; Frische.
-                </p>
-                <p className="mt-2 hidden max-w-md text-xs font-semibold text-emerald-100/90">
-                  Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
-                </p>
                 <p className="mt-1 max-w-2xl text-sm font-semibold text-emerald-100/90">
-                  {"Abstimmen \u2192 Deadline \u2192 Aufl\u00f6sung mit Quellen \u2192 Archiv \u2192 deine Trefferquote."}
+                  Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
                 </p>
               </div>
             </div>
@@ -1367,10 +1361,10 @@ export default function Home() {
                   {currentUser.role === "admin" && (
                     <button
                       type="button"
-                      onClick={() => navigateWithTransition("/admin/reports")}
+                      onClick={() => navigateWithTransition("/admin")}
                       className="rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100 transition hover:-translate-y-0.5 hover:border-amber-300/80 hover:bg-amber-500/25"
-                      aria-label="Admin: Meldungen verwalten"
-                      title="Admin: Meldungen verwalten"
+                      aria-label="Admin-Menü"
+                      title="Admin-Menü"
                     >
                       Admin
                     </button>

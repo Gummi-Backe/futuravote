@@ -203,3 +203,101 @@ export async function sendPrivatePollEndingSoonEmail(options: {
     html,
   });
 }
+
+export async function sendCreatorPublicQuestionEndedEmail(options: {
+  to: string;
+  displayName: string;
+  title: string;
+  questionUrl: string;
+  closesAtLabel: string;
+}): Promise<void> {
+  const transport = getTransporter();
+
+  const subject = `Deine Frage ist beendet: ${options.title}`;
+
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    `deine öffentliche Frage ist beendet (${options.closesAtLabel}).`,
+    "Die Abstimmung ist geschlossen. Das endgültige Ergebnis (Ja/Nein) wird später mit Quelle aufgelöst.",
+    "",
+    "Hier kannst du deine Frage ansehen:",
+    options.questionUrl,
+  ].join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>deine öffentliche Frage ist beendet (<strong>${options.closesAtLabel}</strong>).</p>
+    <p style="color:#cbd5e1">Die Abstimmung ist geschlossen. Das endgültige Ergebnis (Ja/Nein) wird später mit Quelle aufgelöst.</p>
+    <p><a href="${options.questionUrl}">Frage öffnen</a></p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Creator Question Ended:", { to: options.to, questionUrl: options.questionUrl, subject });
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendCreatorPublicQuestionResolvedEmail(options: {
+  to: string;
+  displayName: string;
+  title: string;
+  questionUrl: string;
+  resolvedOutcomeLabel: string;
+  resolvedSource?: string | null;
+}): Promise<void> {
+  const transport = getTransporter();
+
+  const subject = `Frage aufgelöst (${options.resolvedOutcomeLabel}): ${options.title}`;
+
+  const sourceLine = options.resolvedSource ? `Quelle: ${options.resolvedSource}` : "";
+
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    `deine Frage wurde aufgelöst: Ergebnis = ${options.resolvedOutcomeLabel}.`,
+    sourceLine,
+    "",
+    "Hier kannst du die Frage ansehen:",
+    options.questionUrl,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>deine Frage wurde aufgelöst: <strong>Ergebnis = ${options.resolvedOutcomeLabel}</strong>.</p>
+    ${
+      options.resolvedSource
+        ? `<p style="color:#cbd5e1;font-size:12px">Quelle: <a href="${options.resolvedSource}">${options.resolvedSource}</a></p>`
+        : ""
+    }
+    <p><a href="${options.questionUrl}">Frage öffnen</a></p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Creator Question Resolved:", {
+      to: options.to,
+      questionUrl: options.questionUrl,
+      subject,
+      resolvedSource: options.resolvedSource ?? null,
+    });
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}

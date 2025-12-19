@@ -88,6 +88,9 @@ export default function AnalyticsClient() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/admin" className="text-sm text-emerald-100 hover:text-emerald-200">
+            Admin
+          </Link>
           <Link href="/admin/reports" className="text-sm text-emerald-100 hover:text-emerald-200">
             ← Meldungen
           </Link>
@@ -165,4 +168,3 @@ export default function AnalyticsClient() {
     </section>
   );
 }
-

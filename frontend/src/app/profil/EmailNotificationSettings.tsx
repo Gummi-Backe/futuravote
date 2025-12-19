@@ -7,12 +7,16 @@ type NotificationPrefs = {
   allEmailsEnabled: boolean;
   privatePollResults: boolean;
   privatePollEndingSoon: boolean;
+  creatorPublicQuestionEnded: boolean;
+  creatorPublicQuestionResolved: boolean;
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
   allEmailsEnabled: true,
   privatePollResults: true,
   privatePollEndingSoon: false,
+  creatorPublicQuestionEnded: true,
+  creatorPublicQuestionResolved: true,
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -176,9 +180,38 @@ export function EmailNotificationSettings() {
               onChange={(e) => setAndSave({ privatePollEndingSoon: e.target.checked })}
             />
           </label>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="min-w-0">
+              <div className="font-medium text-slate-100">Deine öffentliche Frage endet</div>
+              <div className="text-[11px] text-slate-400">
+                Hinweis an dich als Ersteller, wenn die Abstimmung vorbei ist (Enddatum erreicht).
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={prefs.creatorPublicQuestionEnded}
+              disabled={masterOff}
+              onChange={(e) => setAndSave({ creatorPublicQuestionEnded: e.target.checked })}
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="min-w-0">
+              <div className="font-medium text-slate-100">Deine öffentliche Frage wurde aufgelöst</div>
+              <div className="text-[11px] text-slate-400">
+                Du bekommst eine Mail, sobald das Ergebnis (Ja/Nein) mit Quelle eingetragen wurde.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={prefs.creatorPublicQuestionResolved}
+              disabled={masterOff}
+              onChange={(e) => setAndSave({ creatorPublicQuestionResolved: e.target.checked })}
+            />
+          </label>
         </div>
       </div>
     </section>
   );
 }
-

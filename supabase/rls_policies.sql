@@ -19,6 +19,8 @@ alter table if exists public.password_resets enable row level security;
 alter table if exists public.notification_preferences enable row level security;
 alter table if exists public.private_poll_result_emails enable row level security;
 alter table if exists public.private_poll_reminder_emails enable row level security;
+alter table if exists public.creator_question_ended_emails enable row level security;
+alter table if exists public.creator_question_resolved_emails enable row level security;
 alter table if exists public.favorites enable row level security;
 alter table if exists public.question_comments enable row level security;
 alter table if exists public.analytics_events enable row level security;
