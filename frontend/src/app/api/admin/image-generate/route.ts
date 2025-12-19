@@ -50,7 +50,6 @@ export async function POST(request: Request) {
       model: "gpt-image-1",
       prompt,
       size,
-      response_format: "b64_json",
     }),
   });
 
@@ -65,11 +64,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  const b64 = json?.data?.[0]?.b64_json;
-  if (typeof b64 !== "string" || !b64.trim()) {
-    return NextResponse.json({ error: "OpenAI hat kein Bild geliefert." }, { status: 502 });
+  const first = json?.data?.[0];
+  const b64 = first?.b64_json;
+  if (typeof b64 === "string" && b64.trim()) {
+    return NextResponse.json({ ok: true, mime: "image/png", b64 });
   }
 
-  return NextResponse.json({ ok: true, mime: "image/png", b64 });
-}
+  const url = first?.url;
+  if (typeof url === "string" && url.trim()) {
+    try {
+      const imgRes = await fetch(url);
+      if (!imgRes.ok) {
+        return NextResponse.json({ error: "OpenAI Bild-URL konnte nicht geladen werden." }, { status: 502 });
+      }
+      const contentType = imgRes.headers.get("content-type") || "image/png";
+      const arrayBuffer = await imgRes.arrayBuffer();
+      const b64FromUrl = Buffer.from(arrayBuffer).toString("base64");
+      return NextResponse.json({ ok: true, mime: contentType, b64: b64FromUrl });
+    } catch {
+      return NextResponse.json({ error: "OpenAI Bild-URL konnte nicht geladen werden." }, { status: 502 });
+    }
+  }
 
+  return NextResponse.json({ error: "OpenAI hat kein Bild geliefert." }, { status: 502 });
+}
