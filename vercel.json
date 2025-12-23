@@ -17,6 +17,10 @@
       "schedule": "25 0 * * *"
     },
     {
+      "path": "/api/cron/resolution-suggestions",
+      "schedule": "35 0 * * *"
+    },
+    {
       "path": "/api/cron/private-poll-reminders",
       "schedule": "0 8 * * *"
     }

@@ -6,16 +6,37 @@ import { useState } from "react";
 type Props = {
   questionId: string;
   isArchived: boolean;
+  answerMode: "binary" | "options";
+  isResolvable: boolean;
   resolvedOutcome: "yes" | "no" | null;
+  resolvedOptionId: string | null;
+  options: { id: string; label: string }[];
 };
 
-export default function AdminControls({ questionId, isArchived, resolvedOutcome }: Props) {
+type ResolveSuggestion = {
+  suggestedOutcome?: "yes" | "no" | "unknown";
+  suggestedOptionId?: string;
+  confidence?: number;
+  note?: string;
+  sources?: string[];
+};
+
+export default function AdminControls({
+  questionId,
+  isArchived,
+  answerMode,
+  isResolvable,
+  resolvedOutcome,
+  resolvedOptionId,
+  options,
+}: Props) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [resolveOutcome, setResolveOutcome] = useState<"yes" | "no" | null>(resolvedOutcome);
+  const [resolveOptionId, setResolveOptionId] = useState<string | null>(resolvedOptionId);
   const [resolveSource, setResolveSource] = useState("");
   const [resolveNote, setResolveNote] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -23,9 +44,16 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
   const [aiSources, setAiSources] = useState<string[]>([]);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
 
+  const hasResolved = Boolean(resolvedOutcome || resolvedOptionId);
+
   const handleAction = async (
     action: "archive" | "delete" | "resolve",
-    payload?: { resolvedOutcome?: "yes" | "no"; resolvedSource?: string; resolvedNote?: string }
+    payload?: {
+      resolvedOutcome?: "yes" | "no";
+      resolvedOptionId?: string;
+      resolvedSource?: string;
+      resolvedNote?: string;
+    }
   ) => {
     setIsSubmitting(true);
     setMessage(null);
@@ -79,17 +107,21 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
         return;
       }
 
-      const suggestion = data?.suggestion as
-        | { suggestedOutcome?: "yes" | "no" | "unknown"; confidence?: number; note?: string; sources?: string[] }
-        | undefined;
+      const suggestion = data?.suggestion as ResolveSuggestion | undefined;
 
       const suggestedOutcome = suggestion?.suggestedOutcome;
+      const suggestedOptionId = typeof suggestion?.suggestedOptionId === "string" ? suggestion.suggestedOptionId : null;
       const confidence = typeof suggestion?.confidence === "number" ? suggestion.confidence : null;
       const note = typeof suggestion?.note === "string" ? suggestion.note : "";
-      const sources = Array.isArray(suggestion?.sources) ? suggestion!.sources!.filter(Boolean) : [];
+      const sources = Array.isArray(suggestion?.sources) ? suggestion.sources.filter(Boolean) : [];
 
-      if (suggestedOutcome === "yes" || suggestedOutcome === "no") {
+      if (answerMode === "binary" && (suggestedOutcome === "yes" || suggestedOutcome === "no")) {
         setResolveOutcome(suggestedOutcome);
+        setResolveOptionId(null);
+      }
+      if (answerMode === "options" && suggestedOptionId) {
+        setResolveOptionId(suggestedOptionId);
+        setResolveOutcome(null);
       }
 
       setAiConfidence(confidence);
@@ -124,10 +156,16 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
 
       <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
         <p className="mb-2 text-[11px] font-semibold text-amber-100">Auflösung / Ergebnis</p>
+        {!isResolvable ? (
+          <p className="mb-2 text-[11px] text-amber-100/90">
+            Diese Frage ist als Meinungs-Umfrage markiert und kann nicht aufgelöst werden.
+          </p>
+        ) : null}
+
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
-            disabled={aiLoading || isSubmitting}
+            disabled={aiLoading || isSubmitting || !isResolvable}
             onClick={handleAiSuggest}
             className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40 disabled:opacity-60"
           >
@@ -162,40 +200,87 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => setResolveOutcome("yes")}
-            className={`rounded-full border px-3 py-1 text-[11px] font-semibold disabled:opacity-60 ${
-              resolveOutcome === "yes"
-                ? "border-emerald-300/70 bg-emerald-500/25 text-emerald-50"
-                : "border-white/15 bg-white/5 text-slate-100 hover:border-emerald-300/40"
-            }`}
-          >
-            Ergebnis: Ja
-          </button>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => setResolveOutcome("no")}
-            className={`rounded-full border px-3 py-1 text-[11px] font-semibold disabled:opacity-60 ${
-              resolveOutcome === "no"
-                ? "border-rose-300/70 bg-rose-500/25 text-rose-50"
-                : "border-white/15 bg-white/5 text-slate-100 hover:border-rose-300/40"
-            }`}
-          >
-            Ergebnis: Nein
-          </button>
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => setResolveOutcome(null)}
-            className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-white/25 disabled:opacity-60"
-          >
-            Zurücksetzen
-          </button>
-        </div>
+        {answerMode === "binary" ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={isSubmitting || !isResolvable}
+              onClick={() => {
+                setResolveOutcome("yes");
+                setResolveOptionId(null);
+              }}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold disabled:opacity-60 ${
+                resolveOutcome === "yes"
+                  ? "border-emerald-300/70 bg-emerald-500/25 text-emerald-50"
+                  : "border-white/15 bg-white/5 text-slate-100 hover:border-emerald-300/40"
+              }`}
+            >
+              Ergebnis: Ja
+            </button>
+            <button
+              type="button"
+              disabled={isSubmitting || !isResolvable}
+              onClick={() => {
+                setResolveOutcome("no");
+                setResolveOptionId(null);
+              }}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold disabled:opacity-60 ${
+                resolveOutcome === "no"
+                  ? "border-rose-300/70 bg-rose-500/25 text-rose-50"
+                  : "border-white/15 bg-white/5 text-slate-100 hover:border-rose-300/40"
+              }`}
+            >
+              Ergebnis: Nein
+            </button>
+            <button
+              type="button"
+              disabled={isSubmitting || !isResolvable}
+              onClick={() => {
+                setResolveOutcome(null);
+                setResolveOptionId(null);
+              }}
+              className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-white/25 disabled:opacity-60"
+            >
+              Zurücksetzen
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {options.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={isSubmitting || !isResolvable}
+                  onClick={() => {
+                    setResolveOptionId(opt.id);
+                    setResolveOutcome(null);
+                  }}
+                  className={`rounded-2xl border px-3 py-2 text-left text-[11px] font-semibold disabled:opacity-60 ${
+                    resolveOptionId === opt.id
+                      ? "border-emerald-300/70 bg-emerald-500/25 text-emerald-50"
+                      : "border-white/15 bg-white/5 text-slate-100 hover:border-emerald-300/40"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isSubmitting || !isResolvable}
+                onClick={() => {
+                  setResolveOutcome(null);
+                  setResolveOptionId(null);
+                }}
+                className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-white/25 disabled:opacity-60"
+              >
+                Zurücksetzen
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <label className="block">
@@ -222,10 +307,11 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
         <div className="mt-2">
           <button
             type="button"
-            disabled={isSubmitting || !resolveOutcome}
+            disabled={isSubmitting || !isResolvable || (answerMode === "binary" ? !resolveOutcome : !resolveOptionId)}
             onClick={() =>
               handleAction("resolve", {
-                resolvedOutcome: resolveOutcome ?? undefined,
+                resolvedOutcome: answerMode === "binary" ? resolveOutcome ?? undefined : undefined,
+                resolvedOptionId: answerMode === "options" ? resolveOptionId ?? undefined : undefined,
                 resolvedSource: resolveSource,
                 resolvedNote: resolveNote,
               })
@@ -234,11 +320,17 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
           >
             Ergebnis speichern
           </button>
-          {resolvedOutcome ? (
+          {hasResolved ? (
             <button
               type="button"
               disabled={isSubmitting}
-              onClick={() => handleAction("resolve", { resolvedSource: "", resolvedNote: "" })}
+              onClick={() => {
+                setResolveOutcome(null);
+                setResolveOptionId(null);
+                setResolveSource("");
+                setResolveNote("");
+                handleAction("resolve", { resolvedSource: "", resolvedNote: "" });
+              }}
               className="ml-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-white/25 disabled:opacity-60"
             >
               Auflösung entfernen
@@ -273,3 +365,4 @@ export default function AdminControls({ questionId, isArchived, resolvedOutcome 
     </div>
   );
 }
+

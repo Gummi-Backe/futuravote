@@ -5,13 +5,16 @@ export const revalidate = 30;
 
 type ResolvedQuestionRow = {
   id: string;
+  answer_mode: "binary" | "options" | null;
   resolved_outcome: "yes" | "no" | null;
+  resolved_option_id: string | null;
 };
 
 type VoteRow = {
   user_id: string | null;
   question_id: string;
-  choice: "yes" | "no";
+  choice: "yes" | "no" | null;
+  option_id: string | null;
 };
 
 type UserRow = {
@@ -44,9 +47,9 @@ export async function GET(request: Request) {
 
   let resolvedQuery = supabase
     .from("questions")
-    .select("id,resolved_outcome")
+    .select("id,answer_mode,resolved_outcome,resolved_option_id")
     .eq("visibility", "public")
-    .not("resolved_outcome", "is", null)
+    .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null")
     .gte("resolved_at", startIso)
     .limit(5000);
 
@@ -60,27 +63,39 @@ export async function GET(request: Request) {
   }
 
   const resolved = (resolvedRows ?? []) as ResolvedQuestionRow[];
-  const outcomeByQuestionId = new Map<string, "yes" | "no">();
+  const resolvedByQuestionId = new Map<
+    string,
+    { mode: "binary"; outcome: "yes" | "no" } | { mode: "options"; optionId: string }
+  >();
   resolved.forEach((q) => {
-    if (!q?.id || !q.resolved_outcome) return;
-    outcomeByQuestionId.set(q.id, q.resolved_outcome);
+    if (!q?.id) return;
+    const mode: "binary" | "options" = q.answer_mode === "options" ? "options" : "binary";
+    if (mode === "binary") {
+      if (q.resolved_outcome === "yes" || q.resolved_outcome === "no") {
+        resolvedByQuestionId.set(q.id, { mode, outcome: q.resolved_outcome });
+      }
+    } else {
+      if (q.resolved_option_id) {
+        resolvedByQuestionId.set(q.id, { mode, optionId: q.resolved_option_id });
+      }
+    }
   });
 
-  const questionIds = Array.from(outcomeByQuestionId.keys());
+  const questionIds = Array.from(resolvedByQuestionId.keys());
   if (questionIds.length === 0) {
     return NextResponse.json({ ok: true, days, category, minSamples, leaders: [] });
   }
 
   const statsByUser = new Map<string, { total: number; correct: number; incorrect: number }>();
   const chunkSize = 200;
-  for (let i = 0; i < questionIds.length; i += chunkSize) {
-    const chunk = questionIds.slice(i, i + chunkSize);
-    const { data: voteRows, error: voteError } = await supabase
-      .from("votes")
-      .select("user_id,question_id,choice")
-      .in("question_id", chunk)
-      .not("user_id", "is", null)
-      .limit(20000);
+    for (let i = 0; i < questionIds.length; i += chunkSize) {
+      const chunk = questionIds.slice(i, i + chunkSize);
+      const { data: voteRows, error: voteError } = await supabase
+        .from("votes")
+        .select("user_id,question_id,choice,option_id")
+        .in("question_id", chunk)
+        .not("user_id", "is", null)
+        .limit(20000);
 
     if (voteError) {
       return NextResponse.json({ ok: false, error: voteError.message }, { status: 500 });
@@ -88,13 +103,21 @@ export async function GET(request: Request) {
 
     (voteRows ?? []).forEach((v) => {
       const row = v as VoteRow;
-      if (!row.user_id || !row.question_id || !row.choice) return;
-      const outcome = outcomeByQuestionId.get(row.question_id);
-      if (!outcome) return;
+      if (!row.user_id || !row.question_id) return;
+      const resolved = resolvedByQuestionId.get(row.question_id);
+      if (!resolved) return;
+
+      let isCorrect: boolean | null = null;
+      if (resolved.mode === "binary") {
+        if (row.choice !== "yes" && row.choice !== "no") return;
+        isCorrect = row.choice === resolved.outcome;
+      } else {
+        if (!row.option_id) return;
+        isCorrect = row.option_id === resolved.optionId;
+      }
       const cur = statsByUser.get(row.user_id) ?? { total: 0, correct: 0, incorrect: 0 };
       cur.total += 1;
-      const ok = row.choice === outcome;
-      if (ok) cur.correct += 1;
+      if (isCorrect) cur.correct += 1;
       else cur.incorrect += 1;
       statsByUser.set(row.user_id, cur);
     });
@@ -147,4 +170,3 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ ok: true, days, category, minSamples, leaders: leaders.slice(0, limit) });
 }
-

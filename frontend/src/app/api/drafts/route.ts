@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/data/dbSupabase";
-import type { PollVisibility } from "@/app/data/mock";
+import type { AnswerMode, PollVisibility } from "@/app/data/mock";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
@@ -17,6 +17,9 @@ type DraftInput = {
   timeLeftHours?: number;
   closesAt?: string;
   visibility?: PollVisibility;
+  answerMode?: AnswerMode;
+  isResolvable?: boolean;
+  options?: string[];
   resolutionCriteria?: string;
   resolutionSource?: string;
   resolutionDeadline?: string;
@@ -57,6 +60,39 @@ export async function POST(request: Request) {
   const resolutionDeadline =
     resolutionDeadlineRaw && !Number.isNaN(Date.parse(resolutionDeadlineRaw)) ? resolutionDeadlineRaw : undefined;
 
+  const answerMode: AnswerMode = body.answerMode === "options" ? "options" : "binary";
+  const isResolvable = typeof body.isResolvable === "boolean" ? body.isResolvable : true;
+  const resolutionCriteriaToSave = isResolvable ? resolutionCriteria : undefined;
+  const resolutionSourceToSave = isResolvable ? resolutionSource : undefined;
+  const resolutionDeadlineToSave = isResolvable ? resolutionDeadline : undefined;
+
+  let options: string[] | undefined = undefined;
+  if (answerMode === "options") {
+    const raw = Array.isArray(body.options) ? body.options : [];
+    const cleaned = raw
+      .map((v) => String(v ?? "").trim())
+      .filter((v) => v.length > 0)
+      .slice(0, 6);
+
+    if (cleaned.length < 2) {
+      return NextResponse.json({ error: "Bitte gib mindestens 2 Antwortoptionen an." }, { status: 400 });
+    }
+
+    const seen = new Set<string>();
+    for (const label of cleaned) {
+      if (label.length > 80) {
+        return NextResponse.json({ error: "Eine Option ist zu lang (max. 80 Zeichen)." }, { status: 400 });
+      }
+      const key = label.toLocaleLowerCase("de-DE");
+      if (seen.has(key)) {
+        return NextResponse.json({ error: "Antwortoptionen muessen eindeutig sein." }, { status: 400 });
+      }
+      seen.add(key);
+    }
+
+    options = cleaned;
+  }
+
   if (!title) {
     return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
   }
@@ -67,7 +103,7 @@ export async function POST(request: Request) {
   const visibility: PollVisibility =
     body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
 
-  if (visibility === "public") {
+  if (visibility === "public" && isResolvable) {
     if (!resolutionCriteria) {
       return NextResponse.json(
         { error: "Bitte beschreibe, wie die Frage aufgeloest wird (Aufloesungs-Regeln)." },
@@ -114,9 +150,12 @@ export async function POST(request: Request) {
       timeLeftHours,
       targetClosesAt,
       creatorId: user.id,
-      resolutionCriteria,
-      resolutionSource,
-      resolutionDeadline,
+      answerMode,
+      isResolvable,
+      options,
+      resolutionCriteria: resolutionCriteriaToSave,
+      resolutionSource: resolutionSourceToSave,
+      resolutionDeadline: resolutionDeadlineToSave,
     });
     await logAnalyticsEventServer({
       event: "create_private_poll",
@@ -139,9 +178,12 @@ export async function POST(request: Request) {
     targetClosesAt,
     creatorId: user.id,
     visibility,
-    resolutionCriteria,
-    resolutionSource,
-    resolutionDeadline,
+    answerMode,
+    isResolvable,
+    options,
+    resolutionCriteria: resolutionCriteriaToSave,
+    resolutionSource: resolutionSourceToSave,
+    resolutionDeadline: resolutionDeadlineToSave,
   });
   await logAnalyticsEventServer({
     event: "create_draft",

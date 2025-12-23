@@ -3,7 +3,7 @@ import "server-only";
 import { randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
-import { categories, type Draft, type PollVisibility, type Question } from "./mock";
+import { categories, type AnswerMode, type Draft, type PollOption, type PollVisibility, type Question } from "./mock";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
@@ -16,7 +16,6 @@ export type QuestionWithVotes = Question & {
   views: number;
   rankingScore: number;
   createdAt: string;
-  userChoice?: VoteChoice;
 };
 
 export type QuestionWithUserVote = QuestionWithVotes & {
@@ -48,9 +47,12 @@ type QuestionRow = {
   resolution_source: string | null;
   resolution_deadline: string | null;
   resolved_outcome: "yes" | "no" | null;
+  resolved_option_id?: string | null;
   resolved_at: string | null;
   resolved_source: string | null;
   resolved_note: string | null;
+  answer_mode?: AnswerMode | null;
+  is_resolvable?: boolean | null;
 };
 
 type QuestionsRankCursor = {
@@ -212,7 +214,8 @@ async function computeDynamicLowVotesThreshold(options: {
 type VoteRow = {
   question_id: string;
   session_id: string;
-  choice: VoteChoice;
+  choice: VoteChoice | null;
+  option_id?: string | null;
   created_at?: string;
 };
 
@@ -236,6 +239,26 @@ type DraftRow = {
   resolution_criteria: string | null;
   resolution_source: string | null;
   resolution_deadline: string | null;
+  answer_mode?: AnswerMode | null;
+  is_resolvable?: boolean | null;
+};
+
+type QuestionOptionRow = {
+  id: string;
+  question_id: string;
+  label: string;
+  sort_order: number;
+  votes_count: number;
+  created_at?: string;
+};
+
+type DraftOptionRow = {
+  id: string;
+  draft_id: string;
+  label: string;
+  sort_order: number;
+  votes_count: number;
+  created_at?: string;
 };
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
@@ -288,14 +311,20 @@ function deleteImageFileIfPresent(imageUrl?: string | null) {
   }
 }
 
-function computeRankingScore(row: QuestionRow): number {
-  const votes = Math.max(0, (row.yes_votes ?? 0) + (row.no_votes ?? 0));
-  const views = Math.max(0, row.views ?? 0);
+type SessionVote = { choice: VoteChoice | null; optionId: string | null };
+
+function normalizeAnswerMode(value: unknown): AnswerMode {
+  return value === "options" ? "options" : "binary";
+}
+
+function computeRankingScore(options: { votes: number; views: number; createdAt: string | null }): number {
+  const votes = Math.max(0, options.votes);
+  const views = Math.max(0, options.views);
   const engagementScore = Math.log(1 + votes);
   const voteRate = votes / Math.max(views, 1);
   const qualityScore = voteRate;
 
-  let createdMs = row.created_at ? Date.parse(row.created_at) : NaN;
+  let createdMs = options.createdAt ? Date.parse(options.createdAt) : NaN;
   if (!Number.isFinite(createdMs)) {
     createdMs = Date.now();
   }
@@ -311,14 +340,156 @@ function computeRankingScore(row: QuestionRow): number {
   return score;
 }
 
-function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWithVotes {
-  const yesVotes = row.yes_votes ?? 0;
-  const noVotes = row.no_votes ?? 0;
-  const total = Math.max(1, yesVotes + noVotes);
-  const yesPct = Math.round((yesVotes / total) * 100);
-  const noPct = 100 - yesPct;
+function computeOptionPcts(options: PollOption[] | undefined): PollOption[] | undefined {
+  if (!options || options.length === 0) return options;
+  const total = options.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0);
+  const denom = Math.max(1, total);
+  return options.map((opt) => ({
+    ...opt,
+    pct: Math.round((Math.max(0, opt.votesCount ?? 0) / denom) * 100),
+  }));
+}
+
+async function fetchQuestionOptionsMap(options: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>;
+  questionIds: string[];
+}): Promise<Map<string, PollOption[]>> {
+  const { supabase, questionIds } = options;
+  const ids = Array.from(new Set(questionIds)).filter(Boolean);
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("question_options")
+    .select("id,question_id,label,sort_order,votes_count")
+    .in("question_id", ids)
+    .order("question_id", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw new Error(`Supabase question_options (select) fehlgeschlagen: ${error.message}`);
+  }
+
+  const map = new Map<string, PollOption[]>();
+  for (const raw of (data as QuestionOptionRow[]) ?? []) {
+    const row = raw as QuestionOptionRow;
+    const arr = map.get(row.question_id) ?? [];
+    arr.push({
+      id: row.id,
+      label: row.label,
+      votesCount: Math.max(0, row.votes_count ?? 0),
+    });
+    map.set(row.question_id, arr);
+  }
+  return map;
+}
+
+async function fetchDraftOptionsMap(options: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>;
+  draftIds: string[];
+}): Promise<Map<string, PollOption[]>> {
+  const { supabase, draftIds } = options;
+  const ids = Array.from(new Set(draftIds)).filter(Boolean);
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("draft_options")
+    .select("id,draft_id,label,sort_order,votes_count")
+    .in("draft_id", ids)
+    .order("draft_id", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw new Error(`Supabase draft_options (select) fehlgeschlagen: ${error.message}`);
+  }
+
+  const map = new Map<string, PollOption[]>();
+  for (const raw of (data as DraftOptionRow[]) ?? []) {
+    const row = raw as DraftOptionRow;
+    const arr = map.get(row.draft_id) ?? [];
+    arr.push({
+      id: row.id,
+      label: row.label,
+      votesCount: Math.max(0, row.votes_count ?? 0),
+    });
+    map.set(row.draft_id, arr);
+  }
+  return map;
+}
+
+async function promoteDraftOptionsToQuestion(options: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>;
+  draftId: string;
+  questionId: string;
+}): Promise<void> {
+  const { supabase, draftId, questionId } = options;
+
+  const { data, error } = await supabase
+    .from("draft_options")
+    .select("label,sort_order")
+    .eq("draft_id", draftId)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw new Error(`Supabase promoteDraftOptionsToQuestion (select draft_options) fehlgeschlagen: ${error.message}`);
+  }
+
+  const rows = ((data as Partial<DraftOptionRow>[]) ?? [])
+    .map((row) => ({
+      question_id: questionId,
+      label: String(row.label ?? "").trim(),
+      sort_order: Number(row.sort_order ?? 0),
+    }))
+    .filter((row) => row.label && Number.isFinite(row.sort_order) && row.sort_order >= 1 && row.sort_order <= 6);
+
+  if (rows.length === 0) {
+    const { error: deleteError } = await supabase.from("question_options").delete().eq("question_id", questionId);
+    if (deleteError) {
+      throw new Error(
+        `Supabase promoteDraftOptionsToQuestion (delete question_options) fehlgeschlagen: ${deleteError.message}`
+      );
+    }
+    return;
+  }
+
+  const { error: upsertError } = await supabase
+    .from("question_options")
+    .upsert(rows, { onConflict: "question_id,sort_order" });
+
+  if (upsertError) {
+    throw new Error(`Supabase promoteDraftOptionsToQuestion (upsert question_options) fehlgeschlagen: ${upsertError.message}`);
+  }
+
+  const maxSort = rows.reduce((m, r) => Math.max(m, r.sort_order), 0);
+  const { error: cleanupError } = await supabase
+    .from("question_options")
+    .delete()
+    .eq("question_id", questionId)
+    .gt("sort_order", maxSort);
+
+  if (cleanupError) {
+    throw new Error(`Supabase promoteDraftOptionsToQuestion (cleanup) fehlgeschlagen: ${cleanupError.message}`);
+  }
+}
+
+function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: PollOption[]): QuestionWithVotes {
+  const answerMode = normalizeAnswerMode(row.answer_mode ?? "binary");
+  const isResolvable = typeof row.is_resolvable === "boolean" ? row.is_resolvable : true;
+
+  const yesVotes = answerMode === "binary" ? (row.yes_votes ?? 0) : 0;
+  const noVotes = answerMode === "binary" ? (row.no_votes ?? 0) : 0;
+  const optionVotesTotal =
+    answerMode === "options"
+      ? (options ?? []).reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
+      : 0;
+  const totalBinary = yesVotes + noVotes;
+  const totalVotes = answerMode === "options" ? optionVotesTotal : totalBinary;
+
+  const totalForPct = Math.max(1, totalBinary);
+  const yesPct = answerMode === "binary" ? Math.round((yesVotes / totalForPct) * 100) : 0;
+  const noPct = answerMode === "binary" ? 100 - yesPct : 0;
+
   const createdAt = row.created_at ?? new Date().toISOString();
-  const rankingScore = computeRankingScore(row);
+  const rankingScore = computeRankingScore({ votes: totalVotes, views: row.views ?? 0, createdAt: row.created_at });
 
   let status: Question["status"] | undefined;
   if (row.status === "archived") {
@@ -357,13 +528,18 @@ function mapQuestion(row: QuestionRow, sessionChoice?: VoteChoice): QuestionWith
     views: row.views ?? 0,
     rankingScore,
     createdAt,
-    userChoice: sessionChoice,
+    userChoice: sessionVote?.choice ?? undefined,
+    userOptionId: sessionVote?.optionId ?? undefined,
     visibility: (row.visibility ?? "public") as PollVisibility,
     shareId: row.share_id ?? undefined,
+    answerMode,
+    isResolvable,
+    options: computeOptionPcts(options),
     resolutionCriteria: row.resolution_criteria ?? undefined,
     resolutionSource: row.resolution_source ?? undefined,
     resolutionDeadline: row.resolution_deadline ?? undefined,
     resolvedOutcome: row.resolved_outcome ?? undefined,
+    resolvedOptionId: row.resolved_option_id ?? undefined,
     resolvedAt: row.resolved_at ?? undefined,
     resolvedSource: row.resolved_source ?? undefined,
     resolvedNote: row.resolved_note ?? undefined,
@@ -386,11 +562,18 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
     return [];
   }
 
-  let sessionVotesMap = new Map<string, VoteChoice>();
+  const typedRows = rows as QuestionRow[];
+
+  const optionQuestionIds = typedRows
+    .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+    .map((row) => row.id);
+  const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
+
+  let sessionVotesMap = new Map<string, SessionVote>();
   if (sessionId) {
     const { data: votes, error: voteError } = await supabase
       .from("votes")
-      .select("question_id, session_id, choice")
+      .select("question_id, choice, option_id")
       .eq("session_id", sessionId);
 
     if (voteError) {
@@ -398,11 +581,14 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
     }
 
     sessionVotesMap = new Map(
-      (votes as VoteRow[]).map((v) => [v.question_id, v.choice])
+      ((votes as VoteRow[]) ?? []).map((v) => [
+        v.question_id,
+        { choice: v.choice ?? null, optionId: (v as any).option_id ?? null },
+      ])
     );
   }
 
-  return (rows as QuestionRow[]).map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+  return typedRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id)));
 }
 
 export async function getQuestionsVotedByUserFromSupabase(options: {
@@ -416,7 +602,7 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
   // Votes des Nutzers laden
   let votesQuery = supabase
     .from("votes")
-    .select("question_id, choice, created_at")
+    .select("question_id, choice, option_id, created_at")
     .eq("user_id", userId);
 
   if (choice !== "all") {
@@ -442,7 +628,8 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
     string,
     {
       question_id: string;
-      choice: VoteChoice;
+      choice: VoteChoice | null;
+      optionId: string | null;
       created_at: string;
     }
   >();
@@ -453,7 +640,8 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
     if (!existing || createdAt > existing.created_at) {
       perQuestion.set(v.question_id, {
         question_id: v.question_id,
-        choice: v.choice,
+        choice: v.choice ?? null,
+        optionId: (v as any).option_id ?? null,
         created_at: createdAt,
       });
     }
@@ -479,8 +667,14 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
     return [];
   }
 
+  const typedQuestionRows = questionRows as QuestionRow[];
+  const optionQuestionIds = typedQuestionRows
+    .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+    .map((row) => row.id);
+  const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
+
   const byId = new Map<string, QuestionRow>();
-  for (const row of questionRows as QuestionRow[]) {
+  for (const row of typedQuestionRows) {
     byId.set(row.id, row);
   }
 
@@ -488,7 +682,7 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
   for (const vote of uniqueVotes) {
     const row = byId.get(vote.question_id);
     if (!row) continue;
-    const mapped = mapQuestion(row, vote.choice);
+    const mapped = mapQuestion(row, { choice: vote.choice, optionId: vote.optionId }, optionsMap.get(row.id));
     result.push({
       ...mapped,
       votedAt: vote.created_at,
@@ -575,12 +769,12 @@ export async function getQuestionsPageFromSupabase(options: {
       : null;
 
   // Votes der aktuellen Session einmalig laden (fuer userChoice und ggf. "unanswered")
-  let sessionVotesMap = new Map<string, VoteChoice>();
+  let sessionVotesMap = new Map<string, SessionVote>();
   let votedQuestionIds: string[] = [];
   if (sessionId) {
     const { data: votes, error: voteError } = await supabase
       .from("votes")
-      .select("question_id, session_id, choice")
+      .select("question_id, choice, option_id")
       .eq("session_id", sessionId);
 
     if (voteError) {
@@ -588,7 +782,12 @@ export async function getQuestionsPageFromSupabase(options: {
     }
 
     const voteRows = (votes as VoteRow[]) ?? [];
-    sessionVotesMap = new Map(voteRows.map((v) => [v.question_id, v.choice]));
+    sessionVotesMap = new Map(
+      voteRows.map((v) => [
+        v.question_id,
+        { choice: v.choice ?? null, optionId: (v as any).option_id ?? null },
+      ])
+    );
 
     if (tab === "unanswered") {
       votedQuestionIds = voteRows.map((v) => v.question_id);
@@ -620,6 +819,7 @@ export async function getQuestionsPageFromSupabase(options: {
       const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
       query = query
         .gte("created_at", minCreatedAt)
+        .eq("answer_mode", "binary")
         .lte("yes_votes", lowVotesThreshold ?? 5)
         .lte("no_votes", lowVotesThreshold ?? 5);
     } else if (tab === "top") {
@@ -747,7 +947,11 @@ export async function getQuestionsPageFromSupabase(options: {
       });
 
     const picked = scored.slice(0, limit).map((x) => x.row);
-    const items = picked.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+    const optionQuestionIds = picked
+      .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+      .map((row) => row.id);
+    const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
+    const items = picked.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id)));
     return { items, total: scored.length, nextCursor: null };
   }
 
@@ -755,7 +959,12 @@ export async function getQuestionsPageFromSupabase(options: {
   const hasMore = effectiveCursorMode ? typedRows.length > limit : offset + typedRows.length < total;
   const pageRows = effectiveCursorMode && typedRows.length > limit ? typedRows.slice(0, limit) : typedRows;
 
-  const items = pageRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id)));
+  const optionQuestionIds = pageRows
+    .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+    .map((row) => row.id);
+  const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
+
+  const items = pageRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id)));
 
   const lastRow = pageRows[pageRows.length - 1];
   let nextCursor: string | null = null;
@@ -804,24 +1013,34 @@ export async function getQuestionByIdFromSupabase(
   }
   if (!row) return null;
 
-  let sessionChoice: VoteChoice | undefined;
-  if (sessionId) {
-    const { data: voteRow, error: voteError } = await supabase
-      .from("votes")
-      .select("choice")
-      .eq("question_id", id)
-      .eq("session_id", sessionId)
-      .maybeSingle();
+  const questionRow = row as QuestionRow;
+  const answerMode = normalizeAnswerMode(questionRow.answer_mode ?? "binary");
 
-    if (voteError) {
-      throw new Error(`Supabase getQuestionById (Vote) fehlgeschlagen: ${voteError.message}`);
-    }
-    if (voteRow && (voteRow as any).choice) {
-      sessionChoice = (voteRow as any).choice as VoteChoice;
-    }
-  }
+  const [optionsMap, sessionVote] = await Promise.all([
+    answerMode === "options"
+      ? fetchQuestionOptionsMap({ supabase, questionIds: [id] })
+      : Promise.resolve(new Map<string, PollOption[]>()),
+    (async (): Promise<SessionVote | undefined> => {
+      if (!sessionId) return undefined;
+      const { data: voteRow, error: voteError } = await supabase
+        .from("votes")
+        .select("choice, option_id")
+        .eq("question_id", id)
+        .eq("session_id", sessionId)
+        .maybeSingle();
 
-  return mapQuestion(row as QuestionRow, sessionChoice);
+      if (voteError) {
+        throw new Error(`Supabase getQuestionById (Vote) fehlgeschlagen: ${voteError.message}`);
+      }
+      if (!voteRow) return undefined;
+      return {
+        choice: (voteRow as any).choice ?? null,
+        optionId: (voteRow as any).option_id ?? null,
+      };
+    })(),
+  ]);
+
+  return mapQuestion(questionRow, sessionVote, optionsMap.get(id));
 }
 
 export type SharedPoll =
@@ -846,26 +1065,33 @@ export async function getPollByShareIdFromSupabase(options: {
   }
 
   if (questionRow) {
-    let sessionChoice: VoteChoice | undefined;
-    if (sessionId) {
-      const { data: voteRow, error: voteError } = await supabase
-        .from("votes")
-        .select("choice")
-        .eq("question_id", (questionRow as any).id)
-        .eq("session_id", sessionId)
-        .maybeSingle();
+    const qRow = questionRow as QuestionRow;
+    const answerMode = normalizeAnswerMode(qRow.answer_mode ?? "binary");
 
-      if (voteError) {
-        throw new Error(`Supabase getPollByShareId (vote) fehlgeschlagen: ${voteError.message}`);
-      }
-      if (voteRow && (voteRow as any).choice) {
-        sessionChoice = (voteRow as any).choice as VoteChoice;
-      }
-    }
+    const [optionsMap, sessionVote] = await Promise.all([
+      answerMode === "options"
+        ? fetchQuestionOptionsMap({ supabase, questionIds: [qRow.id] })
+        : Promise.resolve(new Map<string, PollOption[]>()),
+      (async (): Promise<SessionVote | undefined> => {
+        if (!sessionId) return undefined;
+        const { data: voteRow, error: voteError } = await supabase
+          .from("votes")
+          .select("choice, option_id")
+          .eq("question_id", qRow.id)
+          .eq("session_id", sessionId)
+          .maybeSingle();
+
+        if (voteError) {
+          throw new Error(`Supabase getPollByShareId (vote) fehlgeschlagen: ${voteError.message}`);
+        }
+        if (!voteRow) return undefined;
+        return { choice: (voteRow as any).choice ?? null, optionId: (voteRow as any).option_id ?? null };
+      })(),
+    ]);
 
     return {
       kind: "question",
-      question: mapQuestion(questionRow as QuestionRow, sessionChoice),
+      question: mapQuestion(qRow, sessionVote, optionsMap.get(qRow.id)),
       shareId,
     };
   }
@@ -884,6 +1110,8 @@ export async function getPollByShareIdFromSupabase(options: {
   const draftTyped = draftRow as DraftRow;
   if ((draftTyped.visibility ?? "public") === "link_only" && (draftTyped.share_id ?? null)) {
     const cat = categories.find((c) => c.label === draftTyped.category) ?? categories[0];
+    const answerMode = normalizeAnswerMode(draftTyped.answer_mode ?? "binary");
+    const isResolvable = typeof draftTyped.is_resolvable === "boolean" ? draftTyped.is_resolvable : true;
 
     let closesDate: Date;
     if (draftTyped.target_closes_at) {
@@ -918,12 +1146,23 @@ export async function getPollByShareIdFromSupabase(options: {
           status: "new",
           visibility: "link_only",
           share_id: draftTyped.share_id ?? null,
+          answer_mode: answerMode,
+          is_resolvable: isResolvable,
+          resolution_criteria: draftTyped.resolution_criteria ?? null,
+          resolution_source: draftTyped.resolution_source ?? null,
+          resolution_deadline: draftTyped.resolution_deadline ?? null,
         },
         { onConflict: "id" }
       );
 
     if (upsertError) {
       throw new Error(`Supabase getPollByShareId (promote draft) fehlgeschlagen: ${upsertError.message}`);
+    }
+
+    if (answerMode === "options") {
+      await promoteDraftOptionsToQuestion({ supabase, draftId: draftTyped.id, questionId });
+    } else {
+      await supabase.from("question_options").delete().eq("question_id", questionId);
     }
 
     const question = await getQuestionByIdFromSupabase(questionId, sessionId);
@@ -950,7 +1189,17 @@ export async function getPollByShareIdFromSupabase(options: {
     }
   }
 
-  return { kind: "draft", draft: mapDraftRow(draftTyped), shareId, alreadyReviewed };
+  const draftOptionsMap =
+    normalizeAnswerMode(draftTyped.answer_mode ?? "binary") === "options"
+      ? await fetchDraftOptionsMap({ supabase, draftIds: [draftTyped.id] })
+      : new Map<string, PollOption[]>();
+
+  return {
+    kind: "draft",
+    draft: mapDraftRow(draftTyped, draftOptionsMap.get(draftTyped.id)),
+    shareId,
+    alreadyReviewed,
+  };
 }
 
 export async function voteOnQuestionInSupabase(
@@ -962,17 +1211,17 @@ export async function voteOnQuestionInSupabase(
   const supabase = getSupabaseAdminClient();
 
   // Doppelvotes in derselben Session verhindern
-  const { data: existingVote, error: existingError } = await supabase
+  const { data: existingVotes, error: existingError } = await supabase
     .from("votes")
-    .select("choice")
+    .select("question_id")
     .eq("question_id", id)
     .eq("session_id", sessionId)
-    .maybeSingle();
+    .limit(1);
 
   if (existingError) {
     throw new Error(`Supabase Vote-Check fehlgeschlagen: ${existingError.message}`);
   }
-  if (existingVote) {
+  if ((existingVotes as any[])?.length) {
     return getQuestionByIdFromSupabase(id, sessionId);
   }
 
@@ -1021,6 +1270,71 @@ export async function voteOnQuestionInSupabase(
   return getQuestionByIdFromSupabase(id, sessionId);
 }
 
+export async function voteOnQuestionOptionInSupabase(options: {
+  questionId: string;
+  optionId: string;
+  sessionId: string;
+  userId?: string | null;
+}): Promise<QuestionWithVotes | null> {
+  const supabase = getSupabaseAdminClient();
+  const { questionId, optionId, sessionId, userId } = options;
+
+  // Doppelvotes in derselben Session verhindern
+  const { data: existingVotes, error: existingError } = await supabase
+    .from("votes")
+    .select("question_id")
+    .eq("question_id", questionId)
+    .eq("session_id", sessionId)
+    .limit(1);
+
+  if (existingError) {
+    throw new Error(`Supabase Vote-Check fehlgeschlagen: ${existingError.message}`);
+  }
+  if ((existingVotes as any[])?.length) {
+    return getQuestionByIdFromSupabase(questionId, sessionId);
+  }
+
+  const { data: optionRow, error: optionError } = await supabase
+    .from("question_options")
+    .select("id, question_id, votes_count")
+    .eq("id", optionId)
+    .maybeSingle();
+
+  if (optionError) {
+    throw new Error(`Supabase Option-Check fehlgeschlagen: ${optionError.message}`);
+  }
+  if (!optionRow || (optionRow as any).question_id !== questionId) {
+    throw new Error("Ungültige Option für diese Frage.");
+  }
+
+  const now = new Date().toISOString();
+
+  const { error: insertError } = await supabase.from("votes").insert({
+    question_id: questionId,
+    session_id: sessionId,
+    user_id: userId ?? null,
+    choice: null,
+    option_id: optionId,
+    created_at: now,
+  });
+
+  if (insertError) {
+    throw new Error(`Supabase Vote-Insert fehlgeschlagen: ${insertError.message}`);
+  }
+
+  const currentVotes = Math.max(0, Number((optionRow as any).votes_count) || 0);
+  const { error: updateError } = await supabase
+    .from("question_options")
+    .update({ votes_count: currentVotes + 1 })
+    .eq("id", optionId);
+
+  if (updateError) {
+    throw new Error(`Supabase Vote-Update (option) fehlgeschlagen: ${updateError.message}`);
+  }
+
+  return getQuestionByIdFromSupabase(questionId, sessionId);
+}
+
 export async function incrementViewsForQuestionInSupabase(questionId: string): Promise<void> {
   const supabase = getSupabaseAdminClient();
 
@@ -1048,7 +1362,7 @@ export async function incrementViewsForQuestionInSupabase(questionId: string): P
 
 // --- Drafts / Review / Admin (Supabase) ------------------------------------
 
-function mapDraftRow(row: DraftRow): Draft {
+function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
   // Ursprüngliche Review-Dauer in Stunden
   let timeLeft = row.time_left_hours ?? 72;
 
@@ -1078,6 +1392,9 @@ function mapDraftRow(row: DraftRow): Draft {
     status: (row.status ?? "open") as Draft["status"],
     visibility: (row.visibility ?? "public") as PollVisibility,
     shareId: row.share_id ?? undefined,
+    answerMode: normalizeAnswerMode(row.answer_mode ?? "binary"),
+    isResolvable: typeof row.is_resolvable === "boolean" ? row.is_resolvable : true,
+    options: computeOptionPcts(options),
     resolutionCriteria: row.resolution_criteria ?? undefined,
     resolutionSource: row.resolution_source ?? undefined,
     resolutionDeadline: row.resolution_deadline ?? undefined,
@@ -1095,7 +1412,12 @@ export async function getDraftsFromSupabase(): Promise<Draft[]> {
     throw new Error(`Supabase getDrafts fehlgeschlagen: ${error.message}`);
   }
   if (!data) return [];
-  return (data as DraftRow[]).map(mapDraftRow);
+  const rows = data as DraftRow[];
+  const optionDraftIds = rows
+    .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+    .map((row) => row.id);
+  const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
+  return rows.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
 }
 
 export async function getDraftsForCreatorFromSupabase(options: {
@@ -1118,7 +1440,12 @@ export async function getDraftsForCreatorFromSupabase(options: {
     throw new Error(`Supabase getDraftsForCreator fehlgeschlagen: ${error.message}`);
   }
   if (!data) return [];
-  return (data as DraftRow[]).map(mapDraftRow);
+  const rows = data as DraftRow[];
+  const optionDraftIds = rows
+    .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+    .map((row) => row.id);
+  const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
+  return rows.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
 }
 
 export async function getDraftsPageFromSupabase(options: {
@@ -1286,14 +1613,22 @@ export async function getDraftsPageFromSupabase(options: {
       });
 
     const picked = scored.slice(0, limit).map((x) => x.row);
-    const items = picked.map(mapDraftRow);
+    const optionDraftIds = picked
+      .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+      .map((row) => row.id);
+    const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
+    const items = picked.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
     return { items, total: scored.length, nextCursor: null };
   }
 
   const total = effectiveCursorMode ? totalCount ?? rows.length : count ?? rows.length;
   const hasMore = effectiveCursorMode ? rows.length > limit : offset + rows.length < total;
   const pageRows = effectiveCursorMode && rows.length > limit ? rows.slice(0, limit) : rows;
-  const items = pageRows.map(mapDraftRow);
+  const optionDraftIds = pageRows
+    .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
+    .map((row) => row.id);
+  const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
+  const items = pageRows.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
 
   const lastRow = pageRows[pageRows.length - 1];
   const nextCursor =
@@ -1319,6 +1654,9 @@ export async function createDraftInSupabase(input: {
   targetClosesAt?: string;
   creatorId?: string;
   visibility?: PollVisibility;
+  answerMode?: AnswerMode;
+  isResolvable?: boolean;
+  options?: string[];
   resolutionCriteria?: string;
   resolutionSource?: string;
   resolutionDeadline?: string;
@@ -1327,6 +1665,8 @@ export async function createDraftInSupabase(input: {
   const id = randomUUID();
   const visibility: PollVisibility = input.visibility === "link_only" ? "link_only" : "public";
   const shareId = visibility === "link_only" ? generateShareId() : null;
+  const answerMode = normalizeAnswerMode(input.answerMode ?? "binary");
+  const isResolvable = typeof input.isResolvable === "boolean" ? input.isResolvable : true;
   const timeLeft =
     typeof input.timeLeftHours === "number" && Number.isFinite(input.timeLeftHours) && input.timeLeftHours > 0
       ? Math.round(input.timeLeftHours)
@@ -1350,6 +1690,8 @@ export async function createDraftInSupabase(input: {
       status: "open",
       visibility,
       share_id: shareId,
+      answer_mode: answerMode,
+      is_resolvable: isResolvable,
       resolution_criteria: input.resolutionCriteria ?? null,
       resolution_source: input.resolutionSource ?? null,
       resolution_deadline: input.resolutionDeadline ?? null,
@@ -1364,7 +1706,60 @@ export async function createDraftInSupabase(input: {
     throw new Error("Supabase createDraft hat kein Row-Objekt zurueckgegeben.");
   }
 
-  return mapDraftRow(data as DraftRow);
+  const draftRow = data as DraftRow;
+
+  if (answerMode === "options") {
+    const rawOptions = Array.isArray(input.options) ? input.options : [];
+    const labels = rawOptions
+      .map((v) => String(v ?? "").trim())
+      .filter((v) => v.length > 0)
+      .slice(0, 6);
+
+    if (labels.length < 2) {
+      throw new Error("Options-Umfrage braucht mindestens 2 Optionen.");
+    }
+
+    const seen = new Set<string>();
+    const normalizedLabels: string[] = [];
+    for (const label of labels) {
+      if (label.length > 80) {
+        throw new Error("Option ist zu lang (max. 80 Zeichen).");
+      }
+      const key = label.toLocaleLowerCase("de-DE");
+      if (seen.has(key)) {
+        throw new Error("Optionen muessen eindeutig sein.");
+      }
+      seen.add(key);
+      normalizedLabels.push(label);
+    }
+
+    const rows = normalizedLabels.map((label, idx) => ({
+      draft_id: id,
+      label,
+      sort_order: idx + 1,
+      votes_count: 0,
+    }));
+
+    const { data: insertedOptions, error: optionsError } = await supabase
+      .from("draft_options")
+      .insert(rows)
+      .select("id,label,votes_count,sort_order");
+    if (optionsError) {
+      throw new Error(`Supabase createDraft (draft_options) fehlgeschlagen: ${optionsError.message}`);
+    }
+
+    const options = ((insertedOptions as any[]) ?? [])
+      .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+      .map((opt) => ({
+        id: String(opt.id),
+        label: String(opt.label ?? ""),
+        votesCount: Math.max(0, Number(opt.votes_count) || 0),
+      }));
+
+    return mapDraftRow(draftRow, options);
+  }
+
+  return mapDraftRow(draftRow);
 }
 
 export async function createLinkOnlyQuestionInSupabase(input: {
@@ -1377,6 +1772,9 @@ export async function createLinkOnlyQuestionInSupabase(input: {
   timeLeftHours?: number;
   targetClosesAt?: string;
   creatorId?: string;
+  answerMode?: AnswerMode;
+  isResolvable?: boolean;
+  options?: string[];
   resolutionCriteria?: string;
   resolutionSource?: string;
   resolutionDeadline?: string;
@@ -1386,6 +1784,8 @@ export async function createLinkOnlyQuestionInSupabase(input: {
   const cat = categories.find((c) => c.label === input.category) ?? categories[0];
   const id = `q_${randomUUID()}`;
   const shareId = generateShareId();
+  const answerMode = normalizeAnswerMode(input.answerMode ?? "binary");
+  const isResolvable = typeof input.isResolvable === "boolean" ? input.isResolvable : true;
 
   let closesDate: Date;
   if (input.targetClosesAt) {
@@ -1424,6 +1824,8 @@ export async function createLinkOnlyQuestionInSupabase(input: {
       ranking_score: 0,
       visibility: "link_only",
       share_id: shareId,
+      answer_mode: answerMode,
+      is_resolvable: isResolvable,
       resolution_criteria: input.resolutionCriteria ?? null,
       resolution_source: input.resolutionSource ?? null,
       resolution_deadline: input.resolutionDeadline ?? null,
@@ -1438,7 +1840,60 @@ export async function createLinkOnlyQuestionInSupabase(input: {
     throw new Error("Supabase createLinkOnlyQuestion hat kein Row-Objekt zurueckgegeben.");
   }
 
-  return mapQuestion(data as QuestionRow);
+  const questionRow = data as QuestionRow;
+
+  if (answerMode === "options") {
+    const rawOptions = Array.isArray(input.options) ? input.options : [];
+    const labels = rawOptions
+      .map((v) => String(v ?? "").trim())
+      .filter((v) => v.length > 0)
+      .slice(0, 6);
+
+    if (labels.length < 2) {
+      throw new Error("Options-Umfrage braucht mindestens 2 Optionen.");
+    }
+
+    const seen = new Set<string>();
+    const normalizedLabels: string[] = [];
+    for (const label of labels) {
+      if (label.length > 80) {
+        throw new Error("Option ist zu lang (max. 80 Zeichen).");
+      }
+      const key = label.toLocaleLowerCase("de-DE");
+      if (seen.has(key)) {
+        throw new Error("Optionen muessen eindeutig sein.");
+      }
+      seen.add(key);
+      normalizedLabels.push(label);
+    }
+
+    const rows = normalizedLabels.map((label, idx) => ({
+      question_id: id,
+      label,
+      sort_order: idx + 1,
+      votes_count: 0,
+    }));
+
+    const { data: insertedOptions, error: optionsError } = await supabase
+      .from("question_options")
+      .insert(rows)
+      .select("id,label,votes_count,sort_order");
+    if (optionsError) {
+      throw new Error(`Supabase createLinkOnlyQuestion (question_options) fehlgeschlagen: ${optionsError.message}`);
+    }
+
+    const options = ((insertedOptions as any[]) ?? [])
+      .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+      .map((opt) => ({
+        id: String(opt.id),
+        label: String(opt.label ?? ""),
+        votesCount: Math.max(0, Number(opt.votes_count) || 0),
+      }));
+
+    return mapQuestion(questionRow, undefined, options);
+  }
+
+  return mapQuestion(questionRow);
 }
 
 async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
@@ -1453,6 +1908,8 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
   if (total < 5) return;
 
   if (votesFor >= votesAgainst + 2) {
+    const answerMode = normalizeAnswerMode(row.answer_mode ?? "binary");
+    const isResolvable = typeof row.is_resolvable === "boolean" ? row.is_resolvable : true;
     const cat = categories.find((c) => c.label === row.category) ?? categories[0];
     let closesDate: Date;
     if (row.target_closes_at) {
@@ -1487,6 +1944,8 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
           status: "new",
           visibility: (row.visibility ?? "public") as PollVisibility,
           share_id: row.share_id ?? null,
+          answer_mode: answerMode,
+          is_resolvable: isResolvable,
           resolution_criteria: row.resolution_criteria ?? null,
           resolution_source: row.resolution_source ?? null,
           resolution_deadline: row.resolution_deadline ?? null,
@@ -1496,6 +1955,12 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
 
     if (upsertError) {
       throw new Error(`Supabase maybePromoteDraft (upsert question) fehlgeschlagen: ${upsertError.message}`);
+    }
+
+    if (answerMode === "options") {
+      await promoteDraftOptionsToQuestion({ supabase, draftId: row.id, questionId });
+    } else {
+      await supabase.from("question_options").delete().eq("question_id", questionId);
     }
 
     const { error: updateDraftError } = await supabase
@@ -1539,7 +2004,11 @@ export async function voteOnDraftInSupabase(
   if (reviewInsertError) {
     const code = (reviewInsertError as any).code as string | undefined;
     if (code === "23505") {
-      return { draft: mapDraftRow(draftRow), alreadyVoted: true };
+      const optionsMap =
+        normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
+          ? await fetchDraftOptionsMap({ supabase, draftIds: [draftRow.id] })
+          : new Map<string, PollOption[]>();
+      return { draft: mapDraftRow(draftRow, optionsMap.get(draftRow.id)), alreadyVoted: true };
     }
     if (code === "42P01") {
       throw new Error(
@@ -1569,7 +2038,11 @@ export async function voteOnDraftInSupabase(
 
   await maybePromoteDraftInSupabase(effectiveRow);
 
-  return { draft: mapDraftRow(effectiveRow), alreadyVoted: false };
+  const optionsMap =
+    normalizeAnswerMode(effectiveRow.answer_mode ?? "binary") === "options"
+      ? await fetchDraftOptionsMap({ supabase, draftIds: [effectiveRow.id] })
+      : new Map<string, PollOption[]>();
+  return { draft: mapDraftRow(effectiveRow, optionsMap.get(effectiveRow.id)), alreadyVoted: false };
 }
 export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | null> {
   const supabase = getSupabaseAdminClient();
@@ -1582,6 +2055,8 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
   const draftRow = row as DraftRow;
   if ((draftRow.status ?? "open") !== "accepted") {
     // Admin-Promotion ohne Vote-Schwellen
+    const answerMode = normalizeAnswerMode(draftRow.answer_mode ?? "binary");
+    const isResolvable = typeof draftRow.is_resolvable === "boolean" ? draftRow.is_resolvable : true;
     const cat = categories.find((c) => c.label === draftRow.category) ?? categories[0];
     let closesDate: Date;
     if (draftRow.target_closes_at) {
@@ -1616,12 +2091,23 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
           status: "new",
           visibility: (draftRow.visibility ?? "public") as PollVisibility,
           share_id: draftRow.share_id ?? null,
+          answer_mode: answerMode,
+          is_resolvable: isResolvable,
+          resolution_criteria: draftRow.resolution_criteria ?? null,
+          resolution_source: draftRow.resolution_source ?? null,
+          resolution_deadline: draftRow.resolution_deadline ?? null,
         },
         { onConflict: "id" }
       );
 
     if (upsertError) {
       throw new Error(`Supabase adminAcceptDraft (upsert question) fehlgeschlagen: ${upsertError.message}`);
+    }
+
+    if (answerMode === "options") {
+      await promoteDraftOptionsToQuestion({ supabase, draftId: draftRow.id, questionId });
+    } else {
+      await supabase.from("question_options").delete().eq("question_id", questionId);
     }
 
     const { data: acceptedRow, error: updateDraftError } = await supabase
@@ -1635,10 +2121,19 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
       throw new Error(`Supabase adminAcceptDraft (update draft) fehlgeschlagen: ${updateDraftError.message}`);
     }
 
-    return mapDraftRow((acceptedRow ?? draftRow) as DraftRow);
+    const finalDraftRow = (acceptedRow ?? draftRow) as DraftRow;
+    const optionsMap =
+      normalizeAnswerMode(finalDraftRow.answer_mode ?? "binary") === "options"
+        ? await fetchDraftOptionsMap({ supabase, draftIds: [finalDraftRow.id] })
+        : new Map<string, PollOption[]>();
+    return mapDraftRow(finalDraftRow, optionsMap.get(finalDraftRow.id));
   }
 
-  return mapDraftRow(draftRow);
+  const optionsMap =
+    normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
+      ? await fetchDraftOptionsMap({ supabase, draftIds: [draftRow.id] })
+      : new Map<string, PollOption[]>();
+  return mapDraftRow(draftRow, optionsMap.get(draftRow.id));
 }
 
 export async function adminRejectDraftInSupabase(id: string): Promise<Draft | null> {
@@ -1662,10 +2157,19 @@ export async function adminRejectDraftInSupabase(id: string): Promise<Draft | nu
       throw new Error(`Supabase adminRejectDraft (update) fehlgeschlagen: ${updateError.message}`);
     }
 
-    return mapDraftRow((updatedRow ?? draftRow) as DraftRow);
+    const finalDraftRow = (updatedRow ?? draftRow) as DraftRow;
+    const optionsMap =
+      normalizeAnswerMode(finalDraftRow.answer_mode ?? "binary") === "options"
+        ? await fetchDraftOptionsMap({ supabase, draftIds: [finalDraftRow.id] })
+        : new Map<string, PollOption[]>();
+    return mapDraftRow(finalDraftRow, optionsMap.get(finalDraftRow.id));
   }
 
-  return mapDraftRow(draftRow);
+  const optionsMap =
+    normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
+      ? await fetchDraftOptionsMap({ supabase, draftIds: [draftRow.id] })
+      : new Map<string, PollOption[]>();
+  return mapDraftRow(draftRow, optionsMap.get(draftRow.id));
 }
 
 export async function adminDeleteDraftInSupabase(id: string): Promise<Draft | null> {
@@ -1684,7 +2188,11 @@ export async function adminDeleteDraftInSupabase(id: string): Promise<Draft | nu
     throw new Error(`Supabase adminDeleteDraft (delete) fehlgeschlagen: ${deleteError.message}`);
   }
 
-  return mapDraftRow(draftRow);
+  const optionsMap =
+    normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
+      ? await fetchDraftOptionsMap({ supabase, draftIds: [draftRow.id] })
+      : new Map<string, PollOption[]>();
+  return mapDraftRow(draftRow, optionsMap.get(draftRow.id));
 }
 
 export async function adminArchiveQuestionInSupabase(id: string): Promise<QuestionWithVotes | null> {
@@ -1735,17 +2243,28 @@ export async function adminDeleteQuestionInSupabase(id: string): Promise<Questio
 
 export async function adminResolveQuestionInSupabase(input: {
   id: string;
-  outcome: "yes" | "no" | null;
+  outcome?: "yes" | "no" | null;
+  resolvedOptionId?: string | null;
   resolvedSource?: string | null;
   resolvedNote?: string | null;
 }): Promise<QuestionWithVotes | null> {
   const supabase = getSupabaseAdminClient();
 
+  const outcome = input.outcome === "yes" || input.outcome === "no" ? input.outcome : null;
+  const resolvedOptionId = input.resolvedOptionId ? String(input.resolvedOptionId).trim() : null;
+
+  if (outcome && resolvedOptionId) {
+    throw new Error("adminResolveQuestionInSupabase: outcome und resolvedOptionId duerfen nicht gleichzeitig gesetzt sein.");
+  }
+
+  const resolvedAt = outcome || resolvedOptionId ? new Date().toISOString() : null;
+
   const { data: updatedRow, error } = await supabase
     .from("questions")
     .update({
-      resolved_outcome: input.outcome,
-      resolved_at: input.outcome ? new Date().toISOString() : null,
+      resolved_outcome: outcome,
+      resolved_option_id: resolvedOptionId,
+      resolved_at: resolvedAt,
       resolved_source: input.resolvedSource ?? null,
       resolved_note: input.resolvedNote ?? null,
     })

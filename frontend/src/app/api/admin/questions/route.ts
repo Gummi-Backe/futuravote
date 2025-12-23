@@ -13,6 +13,7 @@ type AdminQuestionBody = {
   questionId?: string;
   action?: "archive" | "delete" | "resolve";
   resolvedOutcome?: "yes" | "no";
+  resolvedOptionId?: string;
   resolvedSource?: string;
   resolvedNote?: string;
 };
@@ -52,11 +53,13 @@ export async function POST(request: Request) {
     question = await adminDeleteQuestionInSupabase(questionId);
   } else if (action === "resolve") {
     const outcome = body.resolvedOutcome === "yes" || body.resolvedOutcome === "no" ? body.resolvedOutcome : null;
+    const resolvedOptionId = (body.resolvedOptionId ?? "").trim() || null;
     const resolvedSource = (body.resolvedSource ?? "").trim() || null;
     const resolvedNote = (body.resolvedNote ?? "").trim() || null;
     question = await adminResolveQuestionInSupabase({
       id: questionId,
       outcome,
+      resolvedOptionId,
       resolvedSource,
       resolvedNote,
     });

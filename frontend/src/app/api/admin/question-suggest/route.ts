@@ -10,6 +10,9 @@ type Body = {
   region?: string;
   theme?: string;
   count?: number;
+  isResolvable?: boolean;
+  answerMode?: "binary" | "options";
+  visibility?: "public" | "link_only";
 };
 
 export type QuestionSuggestion = {
@@ -17,6 +20,10 @@ export type QuestionSuggestion = {
   description: string;
   category: string;
   region: string | null;
+  isResolvable: boolean;
+  answerMode: "binary" | "options";
+  options: string[];
+  imagePrompt: string;
   reviewHours: number;
   pollEndAt: string;
   resolutionCriteria: string;
@@ -155,11 +162,53 @@ function safeJsonFromText(text: string): any | null {
   return null;
 }
 
-function normalizeSuggestion(raw: any): QuestionSuggestion | null {
+function normalizeSuggestion(
+  raw: any,
+  defaults?: { isResolvable?: boolean; answerMode?: "binary" | "options" },
+): QuestionSuggestion | null {
   const title = typeof raw?.title === "string" ? raw.title.trim() : "";
   const description = typeof raw?.description === "string" ? raw.description.trim() : "";
   const category = typeof raw?.category === "string" ? raw.category.trim() : "";
   const region = typeof raw?.region === "string" ? raw.region.trim() : "";
+
+  const isResolvableRaw = raw?.isResolvable ?? raw?.is_resolvable;
+  const isResolvable =
+    typeof isResolvableRaw === "boolean"
+      ? isResolvableRaw
+      : typeof defaults?.isResolvable === "boolean"
+        ? defaults.isResolvable
+        : true;
+
+  const answerModeRaw = raw?.answerMode ?? raw?.answer_mode;
+  const answerMode: "binary" | "options" =
+    answerModeRaw === "options" || answerModeRaw === "binary"
+      ? answerModeRaw
+      : defaults?.answerMode === "options"
+        ? "options"
+        : "binary";
+
+  const optionsRaw: unknown[] = Array.isArray(raw?.options) ? (raw.options as unknown[]) : [];
+  const options =
+    answerMode === "options"
+      ? optionsRaw
+          .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+          .map((s) => s.slice(0, 80))
+          .slice(0, 6)
+      : [];
+
+  const uniqueOptions = (() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const o of options) {
+      const key = o.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(o);
+      if (out.length >= 6) break;
+    }
+    return out;
+  })();
 
   const reviewHoursRaw = Number(raw?.reviewHours);
   const reviewHours = Number.isFinite(reviewHoursRaw)
@@ -177,24 +226,34 @@ function normalizeSuggestion(raw: any): QuestionSuggestion | null {
     .filter(Boolean)
     .slice(0, 6);
 
+  const imagePrompt = typeof raw?.imagePrompt === "string" ? raw.imagePrompt.trim() : "";
+  const normalizedImagePrompt = imagePrompt.length >= 20 ? imagePrompt.slice(0, 900) : "";
+
   if (!title || title.length < 8) return null;
   if (!description || description.length < 20) return null;
   if (!category) return null;
   if (!pollEndAt || Number.isNaN(Date.parse(pollEndAt))) return null;
-  if (!resolutionCriteria || resolutionCriteria.length < 10) return null;
-  if (!resolutionSource) return null;
-  if (!resolutionDeadlineAt || Number.isNaN(Date.parse(resolutionDeadlineAt))) return null;
+  if (answerMode === "options" && uniqueOptions.length < 2) return null;
+  if (isResolvable) {
+    if (!resolutionCriteria || resolutionCriteria.length < 10) return null;
+    if (!resolutionSource) return null;
+    if (!resolutionDeadlineAt || Number.isNaN(Date.parse(resolutionDeadlineAt))) return null;
+  }
 
   return {
     title: title.slice(0, 180),
     description: description.slice(0, 2500),
     category: category.slice(0, 80),
     region: region ? region.slice(0, 100) : null,
+    isResolvable,
+    answerMode,
+    options: uniqueOptions,
+    imagePrompt: normalizedImagePrompt,
     reviewHours,
     pollEndAt,
-    resolutionCriteria: resolutionCriteria.slice(0, 2000),
-    resolutionSource: resolutionSource.slice(0, 500),
-    resolutionDeadlineAt,
+    resolutionCriteria: (isResolvable ? resolutionCriteria : "").slice(0, 2000),
+    resolutionSource: (isResolvable ? resolutionSource : "").slice(0, 500),
+    resolutionDeadlineAt: isResolvable ? resolutionDeadlineAt : "",
     sources,
   };
 }
@@ -206,30 +265,72 @@ function buildPrompt(opts: {
   count: number;
   allowedCategories: string[];
   avoidTitles?: string[];
+  requestedIsResolvable?: boolean;
+  requestedAnswerMode?: "binary" | "options";
+  requestedVisibility?: "public" | "link_only";
 }): string {
   const category = (opts.category ?? "").trim();
   const region = (opts.region ?? "").trim();
   const theme = (opts.theme ?? "").trim();
   const avoidTitles = (opts.avoidTitles ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 12);
 
+  const constraintLines = [
+    typeof opts.requestedVisibility === "string"
+      ? `- Sichtbarkeit: ${opts.requestedVisibility === "public" ? "Öffentlich" : "Privat (nur per Link)"}`
+      : "",
+    typeof opts.requestedIsResolvable === "boolean"
+      ? `- Typ: ${opts.requestedIsResolvable ? "Prognose (isResolvable=true)" : "Meinungs-Umfrage (isResolvable=false)"}`
+      : "",
+    typeof opts.requestedAnswerMode === "string"
+      ? `- Antwortmodus: ${opts.requestedAnswerMode === "options" ? "Optionen (2-6, Single-Choice)" : "Ja/Nein (binary)"}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return [
-    "Du bist ein Recherche-Assistent fuer Prognosefragen (Ja/Nein) auf Future-Vote.",
-    "Aufgabe: Erstelle serioese, eindeutige Fragen, die spaeter mit Quellen klar aufgeloest werden koennen.",
+    "Du bist ein Recherche-Assistent fuer Fragen/Umfragen auf Future-Vote.",
+    "Aufgabe: Erstelle serioese, eindeutige Vorschlaege. Es gibt Prognosen (aufloesbar, Punkte) und Meinungs-Umfragen (nicht aufloesbar).",
     "",
     "Eingabe (vom Admin):",
     category ? `- Kategorie-Wunsch: ${category}` : "- Kategorie-Wunsch: (frei)",
     region ? `- Region-Wunsch: ${region}` : "- Region-Wunsch: (optional)",
     theme ? `- Thema/Briefing: ${theme}` : "- Thema/Briefing: (leer)",
+    constraintLines ? "- Vorgaben (MUSS):" : "",
+    constraintLines,
     avoidTitles.length ? `- NICHT wiederholen (Titel): ${avoidTitles.join(" | ")}` : "",
     "",
     "WICHTIG:",
-    "- Titel: klare Ja/Nein-Frage, eindeutig, max. 140 Zeichen.",
+    "- Titel: klar, eindeutig, max. 140 Zeichen.",
     "- Beschreibung: 3-5 Saetze Kontext (DE), kurz halten, keine echten Zeilenumbrueche.",
+    typeof opts.requestedIsResolvable === "boolean"
+      ? `- Erstelle ausschliesslich ${
+          opts.requestedIsResolvable ? "Prognosen (isResolvable=true)" : "Meinungs-Umfragen (isResolvable=false)"
+        }.`
+      : "- Entscheide pro Vorschlag: Prognose vs Meinungs-Umfrage.",
+    typeof opts.requestedIsResolvable !== "boolean" || opts.requestedIsResolvable
+      ? "- Bei Prognose: isResolvable=true und Aufloesung muss mit Quellen klar pruefbar sein."
+      : "",
+    typeof opts.requestedIsResolvable !== "boolean" || !opts.requestedIsResolvable
+      ? "- Bei Meinungs-Umfrage: isResolvable=false und resolutionCriteria/resolutionSource/resolutionDeadlineAt als leere Strings setzen."
+      : "",
+    typeof opts.requestedAnswerMode === "string"
+      ? `- Verwende fuer alle Vorschlaege answerMode='${opts.requestedAnswerMode}'.`
+      : "- answerMode: 'binary' (Ja/Nein) oder 'options' (2-6 feste Optionen, Single-Choice).",
+    typeof opts.requestedAnswerMode !== "string" || opts.requestedAnswerMode === "options"
+      ? "- Bei answerMode='options': options muss 2-6 neutrale, klare Optionen enthalten (keine Duplikate)."
+      : "",
+    typeof opts.requestedAnswerMode === "string" && opts.requestedAnswerMode === "binary"
+      ? "- Bei answerMode='binary': options als leeres Array setzen."
+      : "",
+    "- Zusaetzlich: imagePrompt (DE) fuer ein passendes Thumbnail-Bild: 2-4 Saetze, fotorealistisch wie ein journalistisches Foto (Szene, Ort, Objekte, Licht, Perspektive).",
+    "- imagePrompt: KEINE Illustration/Icons/Clipart/Infografik. Keine Logos, keine Marken, keine Wasserzeichen, keine bekannten Personen, keine Politiker, keine Prominenten.",
+    "- imagePrompt: Vermeide gut lesbaren Text. Falls Text unvermeidbar ist: nur sehr kurz und auf Deutsch.",
     "- Schreibe Deutsch mit Umlauten: ä, ö, ü, ß. Verwende NICHT ae/oe/ue/ss als Ersatz.",
-    "- resolutionCriteria: konkret, woran 'Ja'/'Nein' festgemacht wird.",
-    "- sources: 2-4 URLs als Nachweis (offizielle Stellen/Institutionen/serioese Medien).",
+    "- Bei Prognose: resolutionCriteria konkret, woran das Ergebnis festgemacht wird (bei Optionen: welche Option gilt als Gewinner).",
+    "- sources: 2-4 URLs als Nachweis (offizielle Stellen/Institutionen/serioese Medien). Bei Meinungs-Umfrage optional.",
     "- pollEndAt: bis wann abgestimmt werden kann (nahe am Ereignis/Stichtag).",
-    "- resolutionDeadlineAt: spaetestens wann das echte Ergebnis pruefbar sein muss (>= pollEndAt, oft +1-3 Tage).",
+    "- Bei Prognose: resolutionDeadlineAt spaetestens wann das echte Ergebnis pruefbar sein muss (>= pollEndAt, oft +1-3 Tage).",
     "- reviewHours: variiere sinnvoll (24,48,72,168,336).",
     "",
     "Kategorie-Regel:",
@@ -238,7 +339,7 @@ function buildPrompt(opts: {
     "Antworte NUR als JSON (kein Markdown, kein Text davor/danach).",
     "WICHTIG: In JSON-Strings keine echten Zeilenumbrueche verwenden. Falls noetig, nutze \\n.",
     "Format:",
-    `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"...","resolutionSource":"kurzer Quellen-Hinweis oder URL","resolutionDeadlineAt":"ISO-8601","sources":["https://..."]}]}`,
+    `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`,
     "",
     `Erstelle genau ${opts.count} Vorschlaege.`,
   ]
@@ -261,7 +362,7 @@ async function callPerplexity(opts: { apiKey: string; model: string; prompt: str
         {
           role: "system",
           content:
-            "Du antwortest strikt als JSON. Schreibe Deutsch mit Umlauten (ä, ö, ü, ß) und nutze keine ae/oe/ue/ss-Ersatzschreibweise.",
+            "Du antwortest strikt als JSON. Schreibe auf Deutsch.",
         },
         { role: "user", content: opts.prompt },
       ],
@@ -303,6 +404,17 @@ export async function POST(request: Request) {
   const category = (body.category ?? "").trim();
   const region = (body.region ?? "").trim();
 
+  if (body.answerMode && body.answerMode !== "binary" && body.answerMode !== "options") {
+    return NextResponse.json({ error: "answerMode muss 'binary' oder 'options' sein." }, { status: 400 });
+  }
+  if (body.visibility && body.visibility !== "public" && body.visibility !== "link_only") {
+    return NextResponse.json({ error: "visibility muss 'public' oder 'link_only' sein." }, { status: 400 });
+  }
+
+  const requestedIsResolvable = typeof body.isResolvable === "boolean" ? body.isResolvable : undefined;
+  const requestedAnswerMode = body.answerMode === "binary" || body.answerMode === "options" ? body.answerMode : undefined;
+  const requestedVisibility = body.visibility === "public" || body.visibility === "link_only" ? body.visibility : undefined;
+
   const countRaw = typeof body.count === "number" ? body.count : 1;
   const count = Math.max(1, Math.min(8, Math.round(Number.isFinite(countRaw) ? countRaw : 1)));
 
@@ -320,6 +432,8 @@ export async function POST(request: Request) {
 
   const collected: QuestionSuggestion[] = [];
   const seenTitles = new Set<string>();
+  let lastRaw: string | null = null;
+  let lastFinishReason: string | null = null;
 
   // Batching verhindert abgeschnittenes JSON (Token-Limit) bei vielen Vorschlägen.
   const maxAttempts = 4;
@@ -334,12 +448,17 @@ export async function POST(request: Request) {
       count: batchCount,
       allowedCategories,
       avoidTitles: collected.map((s) => s.title),
+      requestedIsResolvable,
+      requestedAnswerMode,
+      requestedVisibility,
     });
 
     const resp = await callPerplexity({ apiKey, model, prompt, maxTokens: 2200 });
     if (!resp.ok) {
       return NextResponse.json({ error: resp.error }, { status: 502 });
     }
+    lastRaw = resp.content;
+    lastFinishReason = resp.finishReason;
 
     const parsed = safeJsonFromText(resp.content);
     const rawSuggestions: unknown[] = Array.isArray(parsed)
@@ -349,10 +468,16 @@ export async function POST(request: Request) {
         : [];
 
     const normalized = rawSuggestions
-      .map((s: unknown) => normalizeSuggestion(s))
+      .map((s: unknown) => normalizeSuggestion(s, { isResolvable: requestedIsResolvable, answerMode: requestedAnswerMode }))
       .filter(Boolean) as QuestionSuggestion[];
 
-    for (const s of normalized) {
+    const constrained = normalized.filter((s) => {
+      if (typeof requestedIsResolvable === "boolean" && s.isResolvable !== requestedIsResolvable) return false;
+      if (typeof requestedAnswerMode === "string" && s.answerMode !== requestedAnswerMode) return false;
+      return true;
+    });
+
+    for (const s of constrained) {
       const key = s.title.trim().toLowerCase();
       if (!key) continue;
       if (seenTitles.has(key)) continue;
@@ -361,7 +486,11 @@ export async function POST(request: Request) {
       if (collected.length >= count) break;
     }
 
-    if (normalized.length === 0) {
+    if ((rawSuggestions.length === 0 || constrained.length === 0) && attempt < maxAttempts - 1) {
+      continue;
+    }
+
+    if (rawSuggestions.length === 0 || constrained.length === 0) {
       const maybeCutOff =
         resp.finishReason.toLowerCase().includes("length") ||
         !resp.content.trim().endsWith("}") ||
@@ -370,7 +499,7 @@ export async function POST(request: Request) {
         {
           error: maybeCutOff
             ? "KI-Antwort scheint abgeschnitten zu sein (Token-Limit). Bitte Anzahl Vorschläge reduzieren oder erneut versuchen."
-            : "KI-Antwort konnte nicht gelesen werden (kein gueltiges JSON).",
+            : "KI-Antwort konnte nicht gelesen werden oder enthielt keine passenden Vorschl\u00e4ge. Bitte erneut versuchen.",
           raw: resp.content.slice(0, 1500),
         },
         { status: 502 }
@@ -379,7 +508,14 @@ export async function POST(request: Request) {
   }
 
   if (collected.length === 0) {
-    return NextResponse.json({ error: "Keine Vorschläge erhalten." }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: "Keine passenden Vorschl\u00e4ge erhalten.",
+        raw: lastRaw ? lastRaw.slice(0, 1500) : null,
+        finishReason: lastFinishReason,
+      },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({

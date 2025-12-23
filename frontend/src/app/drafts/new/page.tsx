@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { categories, type PollVisibility } from "@/app/data/mock";
+import { categories, type AnswerMode, type PollVisibility } from "@/app/data/mock";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { AdminAiAssistant, type QuestionSuggestion } from "./AdminAiAssistant";
@@ -143,6 +143,7 @@ export default function NewDraftPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [aiImagePrompt, setAiImagePrompt] = useState("");
   const [category, setCategory] = useState<string>(categories[0]?.label ?? "");
   const [useCustomCategory, setUseCustomCategory] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
@@ -151,6 +152,11 @@ export default function NewDraftPage() {
   const [customRegion, setCustomRegion] = useState("");
 
   const [visibility, setVisibility] = useState<PollVisibility>("public");
+
+  const [pollKind, setPollKind] = useState<"prognose" | "meinung">("prognose");
+  const isResolvable = pollKind === "prognose";
+  const [answerMode, setAnswerMode] = useState<AnswerMode>("binary");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
 
   const [resolutionCriteria, setResolutionCriteria] = useState("");
   const [resolutionSource, setResolutionSource] = useState("");
@@ -182,6 +188,14 @@ export default function NewDraftPage() {
       setEndTime(nextMinTime);
     }
   }, [isPrivatePoll, endDate, endTime, minEndDate]);
+
+  useEffect(() => {
+    if (isResolvable) return;
+    setResolutionCriteria("");
+    setResolutionSource("");
+    setResolutionDeadlineDate("");
+    setResolutionDeadlineTime("");
+  }, [isResolvable]);
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageCredit, setImageCredit] = useState("");
@@ -368,8 +382,35 @@ export default function NewDraftPage() {
   const isAdmin = currentUser?.role === "admin";
 
   const applyAiSuggestion = useCallback((s: QuestionSuggestion) => {
+    const nextPollKind: "prognose" | "meinung" = s.isResolvable !== false ? "prognose" : "meinung";
+    setPollKind(nextPollKind);
+
+    const nextAnswerMode: AnswerMode = s.answerMode === "options" ? "options" : "binary";
+    setAnswerMode(nextAnswerMode);
+    if (nextAnswerMode === "options") {
+      const raw = Array.isArray((s as any).options) ? ((s as any).options as unknown[]) : [];
+      const normalized = raw
+        .map((v) => (typeof v === "string" ? v.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 6);
+      const unique: string[] = [];
+      const seen = new Set<string>();
+      for (const opt of normalized) {
+        const key = opt.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(opt);
+        if (unique.length >= 6) break;
+      }
+      const padded = unique.length >= 2 ? unique : [...unique, ...Array.from({ length: 2 - unique.length }, () => "")];
+      setPollOptions(padded);
+    } else {
+      setPollOptions(["", ""]);
+    }
+
     setTitle(s.title ?? "");
     setDescription(s.description ?? "");
+    setAiImagePrompt(typeof (s as any).imagePrompt === "string" ? (s as any).imagePrompt : "");
 
     const knownCategory = categories.some((c) => c.label === s.category);
     if (knownCategory) {
@@ -411,19 +452,26 @@ export default function NewDraftPage() {
       setEndTime(`${hh}:${mi}`);
     }
 
-    setResolutionCriteria(s.resolutionCriteria ?? "");
-    setResolutionSource(s.resolutionSource ?? (s.sources?.[0] ?? ""));
+    if (nextPollKind === "prognose") {
+      setResolutionCriteria(s.resolutionCriteria ?? "");
+      setResolutionSource(s.resolutionSource ?? (s.sources?.[0] ?? ""));
 
-    const resMs = Date.parse(s.resolutionDeadlineAt);
-    if (Number.isFinite(resMs)) {
-      const d = new Date(resMs);
-      const yyyy = d.getFullYear();
-      const mm = pad2(d.getMonth() + 1);
-      const dd = pad2(d.getDate());
-      const hh = pad2(d.getHours());
-      const mi = pad2(d.getMinutes());
-      setResolutionDeadlineDate(`${yyyy}-${mm}-${dd}`);
-      setResolutionDeadlineTime(`${hh}:${mi}`);
+      const resMs = Date.parse(s.resolutionDeadlineAt);
+      if (Number.isFinite(resMs)) {
+        const d = new Date(resMs);
+        const yyyy = d.getFullYear();
+        const mm = pad2(d.getMonth() + 1);
+        const dd = pad2(d.getDate());
+        const hh = pad2(d.getHours());
+        const mi = pad2(d.getMinutes());
+        setResolutionDeadlineDate(`${yyyy}-${mm}-${dd}`);
+        setResolutionDeadlineTime(`${hh}:${mi}`);
+      }
+    } else {
+      setResolutionCriteria("");
+      setResolutionSource("");
+      setResolutionDeadlineDate("");
+      setResolutionDeadlineTime("");
     }
   }, []);
 
@@ -539,6 +587,35 @@ export default function NewDraftPage() {
       }
     }
 
+    const optionsToSend =
+      answerMode === "options"
+        ? pollOptions
+            .map((v) => v.trim())
+            .filter((v) => v.length > 0)
+            .slice(0, 6)
+        : undefined;
+
+    if (answerMode === "options") {
+      if (!optionsToSend || optionsToSend.length < 2) {
+        setError("Bitte gib mindestens 2 Antwortoptionen an.");
+        return;
+      }
+
+      const seen = new Set<string>();
+      for (const label of optionsToSend) {
+        if (label.length > 80) {
+          setError("Eine Option ist zu lang (max. 80 Zeichen).");
+          return;
+        }
+        const key = label.toLocaleLowerCase("de-DE");
+        if (seen.has(key)) {
+          setError("Antwortoptionen muessen eindeutig sein.");
+          return;
+        }
+        seen.add(key);
+      }
+    }
+
     const trimmedResolutionCriteria = resolutionCriteria.trim();
     const trimmedResolutionSource = resolutionSource.trim();
     const composedResolutionDeadline =
@@ -549,12 +626,12 @@ export default function NewDraftPage() {
       ? new Date(composedResolutionDeadline).toISOString()
       : undefined;
 
-    const shouldSendResolution = visibility === "public";
+    const shouldSendResolution = visibility === "public" && isResolvable;
     const resolutionCriteriaToSend = shouldSendResolution ? trimmedResolutionCriteria || undefined : undefined;
     const resolutionSourceToSend = shouldSendResolution ? trimmedResolutionSource || undefined : undefined;
     const resolutionDeadlineToSend = shouldSendResolution ? resolutionDeadline : undefined;
 
-    if (visibility === "public") {
+    if (visibility === "public" && isResolvable) {
       if (!trimmedResolutionCriteria) {
         setError("Bitte beschreibe, wie die Frage aufgeloest wird (Aufloesungs-Regeln).");
         return;
@@ -616,6 +693,9 @@ export default function NewDraftPage() {
           category: finalCategory,
           region: finalRegion || "Global",
           visibility,
+          answerMode,
+          isResolvable,
+          options: optionsToSend,
           imageUrl: finalImageUrl,
           imageCredit: trimmedImageCredit || undefined,
           timeLeftHours: isPrivatePoll ? undefined : finalTimeLeftHours,
@@ -784,12 +864,6 @@ export default function NewDraftPage() {
             Privat (nur per Link) ist sie nicht im Feed gelistet und wird direkt per Link abgestimmt.
           </p>
 
-          {currentUser && currentUser.emailVerified !== false && isAdmin ? (
-            <div className="mt-6">
-              <AdminAiAssistant isAdmin={isAdmin} onApply={applyAiSuggestion} />
-            </div>
-          ) : null}
-
            {currentUser && currentUser.emailVerified !== false && (
              <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
              <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
@@ -821,11 +895,133 @@ export default function NewDraftPage() {
                 </div>
                 <p className="text-xs text-slate-400">
                   {visibility === "public"
-                    ? "Öffentlich: erscheint (nach dem Review) im Feed. Alle können dann im Feed mit Ja/Nein abstimmen."
-                    : "Privat: nicht im Feed gelistet. Jeder mit dem Link kann direkt mit Ja/Nein abstimmen."}
+                    ? "Öffentlich: erscheint (nach dem Review) im Feed. Alle können dann im Feed abstimmen."
+                    : "Privat: nicht im Feed gelistet. Jeder mit dem Link kann direkt abstimmen."}
                 </p>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-100">Typ</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPollKind("prognose")}
+                    className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      pollKind === "prognose"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Prognose
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPollKind("meinung")}
+                    className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      pollKind === "meinung"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Meinungs-Umfrage
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  {pollKind === "prognose"
+                    ? "Prognose: wird sp„ter aufgel”st (fr Punkte & Ranking)."
+                    : "Meinungs-Umfrage: endet nur (ohne Aufl”sung & ohne Punkte)."}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-100">Antwortmodus</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAnswerMode("binary")}
+                    className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      answerMode === "binary"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Ja/Nein
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAnswerMode("options")}
+                    className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      answerMode === "options"
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
+                    }`}
+                  >
+                    Optionen (2–6)
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Nach dem Verffentlichen sind die Antwortoptionen fix und k”nnen nicht mehr ge„ndert werden.
+                </p>
+              </div>
+
+              {answerMode === "options" ? (
+                <div className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white">Antwortoptionen</span>
+                    <button
+                      type="button"
+                      onClick={() => setPollOptions((prev) => (prev.length >= 6 ? prev : [...prev, ""]))}
+                      disabled={pollOptions.length >= 6}
+                      className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40 disabled:opacity-50"
+                    >
+                      + Option
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {pollOptions.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="w-5 text-xs font-semibold text-slate-300">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) =>
+                            setPollOptions((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                          }
+                          className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                          placeholder={idx === 0 ? "Option A" : idx === 1 ? "Option B" : `Option ${idx + 1}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPollOptions((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx)))
+                          }
+                          disabled={pollOptions.length <= 2}
+                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:border-rose-200/40 disabled:opacity-50"
+                          title="Option entfernen"
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Mindestens 2, maximal 6. "Keine Ahnung/Enthaltung" kann einfach eine Option sein.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            {isAdmin ? (
+              <AdminAiAssistant
+                isAdmin={isAdmin}
+                onApply={applyAiSuggestion}
+                requestedIsResolvable={pollKind === "prognose"}
+                requestedAnswerMode={answerMode}
+                requestedVisibility={visibility}
+              />
+            ) : null}
+
+            <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
               <div className="space-y-2">
                 <label htmlFor="title" className="text-sm font-medium text-slate-100">
                   Titel der Frage
@@ -900,7 +1096,7 @@ export default function NewDraftPage() {
                 </p>
               </div>
 
-              {!isPrivatePoll ? (
+              {!isPrivatePoll && isResolvable ? (
                 <div className="space-y-2 pt-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-sm font-medium text-slate-100">Auflösung (echtes Ergebnis)</label>
@@ -913,7 +1109,11 @@ export default function NewDraftPage() {
                     onChange={(e) => setResolutionCriteria(e.target.value)}
                     rows={3}
                     className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                    placeholder="Wann gilt Ja/Nein? (klarer, prüfbarer Maßstab)"
+                    placeholder={
+                      answerMode === "options"
+                        ? "Welche Option gilt als richtig? (klarer, prüfbarer Maßstab)"
+                        : "Wann gilt Ja/Nein? (klarer, prüfbarer Maßstab)"
+                    }
                   />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block">
@@ -1029,6 +1229,7 @@ export default function NewDraftPage() {
                   isAdmin={isAdmin}
                   title={title}
                   description={description}
+                  imagePrompt={aiImagePrompt}
                   disabled={submitting || imageUploadPhase !== "idle"}
                   onAdoptImageFile={adoptAiImageFile}
                 />

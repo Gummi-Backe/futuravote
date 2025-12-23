@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
@@ -15,6 +14,7 @@ import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
 import { CommentsSection } from "./CommentsSection";
 import { QuestionViewTracker } from "@/app/components/QuestionViewTracker";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { CommunityResolutionProposals } from "./CommunityResolutionProposals";
 
 export const dynamic = "force-dynamic";
 
@@ -154,6 +154,7 @@ export default async function QuestionDetail(props: {
   const fromParam = resolvedSearchParams?.from;
   const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
   const cameFromAdminReports = from === "admin_reports";
+  const cameFromAdminResolutions = from === "admin_resolutions";
 
   const cookieStore = await cookies();
   const fvSessionId = cookieStore.get("fv_session")?.value ?? null;
@@ -169,12 +170,30 @@ export default async function QuestionDetail(props: {
     notFound();
   }
 
-  const backHref = isAdmin && cameFromAdminReports ? "/admin/reports" : "/";
-  const backLabel = isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : "← Zurück";
+  const backHref =
+    isAdmin && cameFromAdminReports
+      ? "/admin/reports"
+      : isAdmin && cameFromAdminResolutions
+        ? "/admin/resolutions"
+        : "/";
+  const backLabel =
+    isAdmin && cameFromAdminReports
+      ? "← Zurück zu Meldungen"
+      : isAdmin && cameFromAdminResolutions
+        ? "← Zurück zu Auflösungen"
+        : "← Zurück";
 
-  const yesVotes = question.yesVotes ?? 0;
-  const noVotes = question.noVotes ?? 0;
-  const totalVotes = yesVotes + noVotes;
+  const answerMode = question.answerMode ?? "binary";
+  const isResolvable = question.isResolvable ?? true;
+  const options = question.options ?? [];
+  const optionsTotalVotes =
+    answerMode === "options"
+      ? options.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
+      : 0;
+
+  const yesVotes = answerMode === "binary" ? (question.yesVotes ?? 0) : 0;
+  const noVotes = answerMode === "binary" ? (question.noVotes ?? 0) : 0;
+  const totalVotes = answerMode === "options" ? optionsTotalVotes : yesVotes + noVotes;
   const views = question.views ?? 0;
   const rankingScore =
     typeof question.rankingScore === "number" ? question.rankingScore.toFixed(2) : "-";
@@ -187,18 +206,32 @@ export default async function QuestionDetail(props: {
     : "unbekannt";
   const statusLabel =
     question.status === "archived" ? "gestoppt" : question.status ?? "aktiv";
+  const ended = String(question.closesAt).slice(0, 10) < new Date().toISOString().slice(0, 10);
 
   const resolutionDeadlineLabel = formatDateTimeLocal(question.resolutionDeadline) ?? question.resolutionDeadline ?? null;
   const resolvedAtLabel = formatDateTimeLocal(question.resolvedAt) ?? question.resolvedAt ?? null;
   const resolvedOutcomeLabel =
     question.resolvedOutcome === "yes" ? "Ja" : question.resolvedOutcome === "no" ? "Nein" : null;
 
+  const resolvedOptionLabel =
+    answerMode === "options" && question.resolvedOptionId
+      ? options.find((o) => o.id === question.resolvedOptionId)?.label ?? "Option"
+      : null;
+  const resolvedLabel = resolvedOutcomeLabel ?? resolvedOptionLabel;
+
   const votedLabel =
-    question.userChoice === "yes"
-      ? "Du hast Ja gestimmt"
-      : question.userChoice === "no"
-        ? "Du hast Nein gestimmt"
-        : null;
+    answerMode === "options"
+      ? question.userOptionId
+        ? (() => {
+            const label = options.find((o) => o.id === question.userOptionId)?.label;
+            return label ? `Du hast \"${label}\" gew„hlt` : "Du hast abgestimmt";
+          })()
+        : null
+      : question.userChoice === "yes"
+        ? "Du hast Ja gestimmt"
+        : question.userChoice === "no"
+          ? "Du hast Nein gestimmt"
+          : null;
 
   const baseUrl =
     process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
@@ -274,12 +307,28 @@ export default async function QuestionDetail(props: {
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-200">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-white/5 px-3 py-1">
-                {question.yesPct}% Ja ({yesVotes})
-              </span>
-              <span className="rounded-full bg-white/5 px-3 py-1">
-                {question.noPct}% Nein ({noVotes})
-              </span>
+              {answerMode === "binary" ? (
+                <>
+                  <span className="rounded-full bg-white/5 px-3 py-1">
+                    {question.yesPct}% Ja ({yesVotes})
+                  </span>
+                  <span className="rounded-full bg-white/5 px-3 py-1">
+                    {question.noPct}% Nein ({noVotes})
+                  </span>
+                </>
+              ) : (
+                <>
+                  {options
+                    .slice()
+                    .sort((a, b) => (b.votesCount ?? 0) - (a.votesCount ?? 0))
+                    .slice(0, 3)
+                    .map((opt) => (
+                      <span key={opt.id} className="rounded-full bg-white/5 px-3 py-1">
+                        {(opt.pct ?? 0)}% {opt.label} ({opt.votesCount ?? 0})
+                      </span>
+                    ))}
+                </>
+              )}
               <span className="rounded-full bg-white/5 px-3 py-1">
                 Insgesamt {totalVotes} Stimmen
               </span>
@@ -296,7 +345,11 @@ export default async function QuestionDetail(props: {
               <AdminControls
                 questionId={id}
                 isArchived={question.status === "archived"}
+                answerMode={answerMode}
+                isResolvable={isResolvable}
                 resolvedOutcome={question.resolvedOutcome ?? null}
+                resolvedOptionId={question.resolvedOptionId ?? null}
+                options={options}
               />
             </div>
           )}
@@ -317,16 +370,46 @@ export default async function QuestionDetail(props: {
 
         <section className="mt-6 grid gap-6 sm:mt-8 md:grid-cols-3">
           <div className="md:col-span-2 flex min-h-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
-            <div className="flex items-center justify-between text-sm text-slate-200">
-              <span>Community glaubt</span>
-              <span className="font-semibold text-white">
-                {question.yesPct}% Ja · {question.noPct}% Nein
-              </span>
-            </div>
-            <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
-            <div className="min-h-0 flex-1">
-              <TrendSparkline questionId={id} />
-            </div>
+            {answerMode === "binary" ? (
+              <>
+                <div className="flex items-center justify-between text-sm text-slate-200">
+                  <span>Community glaubt</span>
+                  <span className="font-semibold text-white">
+                    {question.yesPct}% Ja · {question.noPct}% Nein
+                  </span>
+                </div>
+                <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
+                <div className="min-h-0 flex-1">
+                  <TrendSparkline questionId={id} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-sm text-slate-200">
+                  <span>Community stimmt ab</span>
+                  <span className="font-semibold text-white">{totalVotes} Stimmen</span>
+                </div>
+                <div className="space-y-3">
+                  {options.map((opt) => (
+                    <div key={opt.id} className="space-y-1">
+                      <div className="flex items-center justify-between gap-3 text-sm text-slate-200">
+                        <span className="min-w-0 truncate">{opt.label}</span>
+                        <span className="shrink-0 font-semibold text-white">{opt.pct ?? 0}%</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full bg-emerald-400 transition-all duration-500 ease-out"
+                          style={{ width: `${opt.pct ?? 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="min-h-0 flex-1">
+                  <TrendSparkline questionId={id} />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
@@ -335,7 +418,11 @@ export default async function QuestionDetail(props: {
               <StatsCard
                 label="Votes (absolut)"
                 value={totalVotes.toString()}
-                hint={`Ja ${yesVotes} / Nein ${noVotes}`}
+                hint={
+                  answerMode === "binary"
+                    ? `Ja ${yesVotes} / Nein ${noVotes}`
+                    : options.map((opt) => `${opt.label}: ${opt.votesCount ?? 0}`).join(" · ")
+                }
               />
               <StatsCard
                 label="Views"
@@ -371,12 +458,13 @@ export default async function QuestionDetail(props: {
           </div>
         </section>
 
-        <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
+        {isResolvable ? (
+          <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-base font-semibold text-white">Auflösung</h3>
-            {resolvedOutcomeLabel ? (
+            {resolvedLabel ? (
               <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
-                Entschieden: {resolvedOutcomeLabel}
+                Entschieden: {resolvedLabel}
               </span>
             ) : (
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
@@ -442,16 +530,28 @@ export default async function QuestionDetail(props: {
               ) : null}
             </div>
           ) : null}
-        </section>
+
+          {!resolvedLabel && ended && answerMode === "binary" ? (
+            <CommunityResolutionProposals
+              questionId={id}
+              isLoggedIn={Boolean(currentUser)}
+              canPost={Boolean(currentUser?.emailVerified)}
+            />
+          ) : null}
+          </section>
+        ) : null}
 
         <DetailVoteButtons
           questionId={id}
           closesAt={question.closesAt}
+          answerMode={answerMode}
+          options={options}
           initialChoice={
             question.userChoice === "yes" || question.userChoice === "no"
               ? question.userChoice
               : null
           }
+          initialOptionId={question.userOptionId ?? null}
         />
 
         <CommentsSection questionId={id} isLoggedIn={Boolean(currentUser)} canPost={Boolean(currentUser?.emailVerified)} />

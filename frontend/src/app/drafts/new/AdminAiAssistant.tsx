@@ -10,6 +10,10 @@ export type QuestionSuggestion = {
   description: string;
   category: string;
   region: string | null;
+  isResolvable: boolean;
+  answerMode: "binary" | "options";
+  options: string[];
+  imagePrompt: string;
   reviewHours: number;
   pollEndAt: string;
   resolutionCriteria: string;
@@ -47,9 +51,15 @@ function Chip({ active, label, onClick }: { active: boolean; label: string; onCl
 export function AdminAiAssistant({
   isAdmin,
   onApply,
+  requestedIsResolvable,
+  requestedAnswerMode,
+  requestedVisibility,
 }: {
   isAdmin: boolean;
   onApply: (s: QuestionSuggestion) => void;
+  requestedIsResolvable?: boolean;
+  requestedAnswerMode?: "binary" | "options";
+  requestedVisibility?: "public" | "link_only";
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("category");
@@ -66,6 +76,20 @@ export function AdminAiAssistant({
   const [requestedCount, setRequestedCount] = useState<number | null>(null);
   const [partial, setPartial] = useState<boolean>(false);
 
+  const constraintLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (typeof requestedVisibility === "string") {
+      parts.push(requestedVisibility === "public" ? "Öffentlich" : "Privat (Link)");
+    }
+    if (typeof requestedIsResolvable === "boolean") {
+      parts.push(requestedIsResolvable ? "Prognose" : "Meinungs-Umfrage");
+    }
+    if (typeof requestedAnswerMode === "string") {
+      parts.push(requestedAnswerMode === "options" ? "Optionen" : "Ja/Nein");
+    }
+    return parts.filter(Boolean).join(" · ");
+  }, [requestedAnswerMode, requestedIsResolvable, requestedVisibility]);
+
   const canGenerate = useMemo(() => {
     if (!isAdmin) return false;
     if (mode === "theme") return theme.trim().length >= 6;
@@ -80,10 +104,17 @@ export function AdminAiAssistant({
     setRequestedCount(null);
     setPartial(false);
     try {
-      const payload =
+      const basePayload =
         mode === "theme"
           ? { theme: theme.trim(), region: region.trim() || undefined, count }
           : { category: category.trim(), region: region.trim() || undefined, count };
+
+      const payload = {
+        ...basePayload,
+        isResolvable: typeof requestedIsResolvable === "boolean" ? requestedIsResolvable : undefined,
+        answerMode: requestedAnswerMode,
+        visibility: requestedVisibility,
+      };
 
       const res = await fetch("/api/admin/question-suggest", {
         method: "POST",
@@ -110,7 +141,7 @@ export function AdminAiAssistant({
     } finally {
       setLoading(false);
     }
-  }, [category, count, mode, region, theme]);
+  }, [category, count, mode, region, requestedAnswerMode, requestedIsResolvable, requestedVisibility, theme]);
 
   if (!isAdmin) return null;
 
@@ -122,6 +153,9 @@ export function AdminAiAssistant({
           <div className="mt-1 text-xs text-slate-300">
             Erst Vorschläge holen, dann ins Formular übernehmen und manuell prüfen. Keine automatische Veröffentlichung.
           </div>
+          {constraintLabel ? (
+            <div className="mt-1 text-xs text-emerald-100/80">Generiert passend zu: {constraintLabel}</div>
+          ) : null}
         </div>
         <button
           type="button"
@@ -259,6 +293,12 @@ export function AdminAiAssistant({
                         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100">
                           {s.category}
                         </span>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100">
+                          {s.isResolvable !== false ? "Prognose" : "Meinungs-Umfrage"}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100">
+                          {s.answerMode === "options" ? "Optionen" : "Ja/Nein"}
+                        </span>
                         {s.region ? (
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100">
                             {s.region}
@@ -270,25 +310,47 @@ export function AdminAiAssistant({
                       </div>
                       <h3 className="mt-2 text-base font-semibold text-white">{s.title}</h3>
                       <p className="mt-2 text-sm text-slate-200">{s.description}</p>
-                      <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <div className="text-xs font-semibold text-slate-100">Auflösung</div>
-                        <div className="mt-1 text-xs text-slate-300">{s.resolutionCriteria}</div>
-                        <div className="mt-2 text-xs text-slate-400">
-                          Deadline: {formatDateTime(s.resolutionDeadlineAt)}
-                        </div>
-                        <div className="mt-2 text-xs text-slate-300">
-                          Quelle: <span className="break-all">{s.resolutionSource}</span>
-                        </div>
-                        {s.sources?.length ? (
-                          <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                            {s.sources.map((url) => (
-                              <li key={url} className="break-all">
-                                {url}
+                      {s.answerMode === "options" && Array.isArray(s.options) && s.options.length > 0 ? (
+                        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div className="text-xs font-semibold text-slate-100">Optionen</div>
+                          <ul className="mt-2 space-y-1 text-xs text-slate-200">
+                            {s.options.slice(0, 6).map((opt) => (
+                              <li key={opt} className="break-words">
+                                - {opt}
                               </li>
                             ))}
                           </ul>
-                        ) : null}
-                      </div>
+                        </div>
+                      ) : null}
+
+                      {typeof s.imagePrompt === "string" && s.imagePrompt.trim() ? (
+                        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div className="text-xs font-semibold text-slate-100">Bild-Prompt (KI)</div>
+                          <div className="mt-1 text-xs text-slate-300">{s.imagePrompt.trim()}</div>
+                        </div>
+                      ) : null}
+
+                      {s.isResolvable !== false ? (
+                        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div className="text-xs font-semibold text-slate-100">Auflösung</div>
+                          <div className="mt-1 text-xs text-slate-300">{s.resolutionCriteria}</div>
+                          <div className="mt-2 text-xs text-slate-400">
+                            Deadline: {formatDateTime(s.resolutionDeadlineAt)}
+                          </div>
+                          <div className="mt-2 text-xs text-slate-300">
+                            Quelle: <span className="break-all">{s.resolutionSource}</span>
+                          </div>
+                          {s.sources?.length ? (
+                            <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                              {s.sources.map((url) => (
+                                <li key={url} className="break-all">
+                                  {url}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
 
                     <button

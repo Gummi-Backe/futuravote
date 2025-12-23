@@ -48,6 +48,9 @@ type PublicQuestionRow = {
   yes_votes: number;
   no_votes: number;
   resolved_outcome?: "yes" | "no" | null;
+  answer_mode?: "binary" | "options" | null;
+  is_resolvable?: boolean | null;
+  resolved_option_id?: string | null;
 };
 
 type CategoryCount = {
@@ -124,12 +127,24 @@ function getMajorityChoice(yesVotes: number, noVotes: number): "yes" | "no" | nu
   return yesVotes > noVotes ? "yes" : "no";
 }
 
+function normalizeAnswerMode(value: unknown): "binary" | "options" {
+  return value === "options" ? "options" : "binary";
+}
+
+function normalizeResolvable(value: unknown): boolean {
+  return value !== false;
+}
+
 export default async function ArchivPage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = props.searchParams ? await props.searchParams : {};
   const pageParam = sp.page;
   const page = Math.max(1, Number(Array.isArray(pageParam) ? pageParam[0] : pageParam ?? "1") || 1);
+  const typeParam = sp.type;
+  const typeRaw = String(Array.isArray(typeParam) ? typeParam[0] : typeParam ?? "all").trim() || "all";
+  const typeFilter: "all" | "prognose" | "umfrage" =
+    typeRaw === "prognose" ? "prognose" : typeRaw === "umfrage" ? "umfrage" : "all";
   const pageSize = 20;
   const offset = (page - 1) * pageSize;
 
@@ -220,7 +235,7 @@ export default async function ArchivPage(props: {
 
   const { data: openSoonRows } = await supabase
     .from("questions")
-    .select("id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes")
+    .select("id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes,answer_mode,is_resolvable")
     .eq("visibility", "public")
     .gte("closes_at", todayIso)
     .order("closes_at", { ascending: true })
@@ -228,38 +243,111 @@ export default async function ArchivPage(props: {
   const openSoon = ((openSoonRows as any[]) ?? []) as PublicQuestionRow[];
   const firstEndsLabel = openSoon.length > 0 ? timeUntilLabel(openSoon[0].closes_at, nowMs) : null;
 
-  const { data: endedRows, count: endedTotal } = await supabase
+  let endedQuery = supabase
     .from("questions")
-    .select("id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes,resolved_outcome", {
-      count: "exact",
-    })
+    .select(
+      "id,title,category,category_icon,category_color,region,closes_at,yes_votes,no_votes,resolved_outcome,answer_mode,is_resolvable,resolved_option_id",
+      { count: "exact" }
+    )
     .eq("visibility", "public")
     .lt("closes_at", todayIso)
-    .order("closes_at", { ascending: false })
-    .range(offset, offset + pageSize - 1);
+    .order("closes_at", { ascending: false });
+
+  if (typeFilter === "prognose") {
+    endedQuery = endedQuery.eq("is_resolvable", true);
+  } else if (typeFilter === "umfrage") {
+    endedQuery = endedQuery.eq("is_resolvable", false);
+  }
+
+  const { data: endedRows, count: endedTotal } = await endedQuery.range(offset, offset + pageSize - 1);
 
   const ended = ((endedRows as any[]) ?? []) as PublicQuestionRow[];
+  const endedIds = ended.map((r) => String(r.id)).filter(Boolean);
+
+  const { data: optionRows } = endedIds.length
+    ? await supabase
+        .from("question_options")
+        .select("question_id,id,label,sort_order,votes_count")
+        .in("question_id", endedIds)
+        .order("sort_order", { ascending: true })
+    : { data: [] as any[] };
+
+  const optionsByQuestionId = new Map<string, Array<{ id: string; label: string; votesCount: number; sortOrder: number }>>();
+  (optionRows ?? []).forEach((r: any) => {
+    const qid = String(r?.question_id ?? "");
+    if (!qid) return;
+    const list = optionsByQuestionId.get(qid) ?? [];
+    list.push({
+      id: String(r?.id ?? ""),
+      label: String(r?.label ?? ""),
+      votesCount: Number(r?.votes_count ?? 0) || 0,
+      sortOrder: Number(r?.sort_order ?? 0) || 0,
+    });
+    optionsByQuestionId.set(qid, list);
+  });
 
   const { data: resolvedRows } = await supabase
     .from("questions")
-    .select("yes_votes,no_votes,resolved_outcome")
+    .select("id,answer_mode,is_resolvable,yes_votes,no_votes,resolved_outcome,resolved_option_id")
     .eq("visibility", "public")
     .lt("closes_at", todayIso)
-    .not("resolved_outcome", "is", null);
+    .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null")
+    .limit(5000);
 
-  const resolved = ((resolvedRows as any[]) ?? []) as Pick<PublicQuestionRow, "yes_votes" | "no_votes" | "resolved_outcome">[];
-  const resolvedConsidered = resolved.filter((r) => r.resolved_outcome && getMajorityChoice(r.yes_votes ?? 0, r.no_votes ?? 0));
+  const resolved = ((resolvedRows as any[]) ?? []) as PublicQuestionRow[];
+  const resolvedOptionsQuestionIds = resolved
+    .filter((r) => normalizeAnswerMode(r.answer_mode) === "options" && r.resolved_option_id)
+    .map((r) => String(r.id))
+    .filter(Boolean);
+
+  const { data: resolvedOptionRows } = resolvedOptionsQuestionIds.length
+    ? await supabase.from("question_options").select("question_id,id,votes_count").in("question_id", resolvedOptionsQuestionIds)
+    : { data: [] as any[] };
+
+  const resolvedOptionsByQuestionId = new Map<string, Array<{ id: string; votesCount: number }>>();
+  (resolvedOptionRows ?? []).forEach((r: any) => {
+    const qid = String(r?.question_id ?? "");
+    if (!qid) return;
+    const list = resolvedOptionsByQuestionId.get(qid) ?? [];
+    list.push({ id: String(r?.id ?? ""), votesCount: Number(r?.votes_count ?? 0) || 0 });
+    resolvedOptionsByQuestionId.set(qid, list);
+  });
+
+  const resolvedConsidered = resolved.filter((r) => {
+    if (!normalizeResolvable(r.is_resolvable)) return false;
+    if (normalizeAnswerMode(r.answer_mode) === "binary") {
+      return (
+        (r.resolved_outcome === "yes" || r.resolved_outcome === "no") &&
+        Boolean(getMajorityChoice(r.yes_votes ?? 0, r.no_votes ?? 0))
+      );
+    }
+    if (!r.resolved_option_id) return false;
+    const opts = resolvedOptionsByQuestionId.get(String(r.id)) ?? [];
+    if (opts.length < 2) return false;
+    const max = Math.max(...opts.map((o) => o.votesCount));
+    const leaders = opts.filter((o) => o.votesCount === max);
+    return leaders.length === 1;
+  });
   const resolvedTotalConsidered = resolvedConsidered.length;
   const resolvedCorrect = resolvedConsidered.reduce((acc, r) => {
-    const majority = getMajorityChoice(r.yes_votes ?? 0, r.no_votes ?? 0);
-    if (!majority || !r.resolved_outcome) return acc;
-    return acc + (majority === r.resolved_outcome ? 1 : 0);
+    if (normalizeAnswerMode(r.answer_mode) === "binary") {
+      const majority = getMajorityChoice(r.yes_votes ?? 0, r.no_votes ?? 0);
+      if (!majority || !r.resolved_outcome) return acc;
+      return acc + (majority === r.resolved_outcome ? 1 : 0);
+    }
+    const opts = resolvedOptionsByQuestionId.get(String(r.id)) ?? [];
+    const max = Math.max(...opts.map((o) => o.votesCount));
+    const leader = opts.find((o) => o.votesCount === max);
+    if (!leader || !r.resolved_option_id) return acc;
+    return acc + (String(leader.id) === String(r.resolved_option_id) ? 1 : 0);
   }, 0);
   const resolvedAccuracyPct =
     resolvedTotalConsidered > 0 ? Math.round((resolvedCorrect / resolvedTotalConsidered) * 100) : null;
 
-  const prevHref = page > 1 ? `/archiv?page=${page - 1}` : null;
-  const nextHref = endedTotal && offset + pageSize < endedTotal ? `/archiv?page=${page + 1}` : null;
+  const makePageHref = (nextPage: number) =>
+    `/archiv?page=${nextPage}${typeFilter === "all" ? "" : `&type=${encodeURIComponent(typeFilter)}`}`;
+  const prevHref = page > 1 ? makePageHref(page - 1) : null;
+  const nextHref = endedTotal && offset + pageSize < endedTotal ? makePageHref(page + 1) : null;
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
@@ -383,6 +471,29 @@ export default async function ArchivPage(props: {
                 )}
               </p>
             </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+              {[
+                { key: "all" as const, label: "Alle" },
+                { key: "prognose" as const, label: "Prognosen" },
+                { key: "umfrage" as const, label: "Umfragen" },
+              ].map((t) => {
+                const active = typeFilter === t.key;
+                const href = `/archiv?page=1${t.key === "all" ? "" : `&type=${encodeURIComponent(t.key)}`}`;
+                return (
+                  <Link
+                    key={t.key}
+                    href={href}
+                    className={`rounded-full border px-4 py-2 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                      active
+                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
+                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/30"
+                    }`}
+                  >
+                    {t.label}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
           {ended.length === 0 ? (
@@ -449,13 +560,55 @@ export default async function ArchivPage(props: {
               })()}
 
               {ended.map((q) => {
-                const outcome = outcomeLabel(q.yes_votes ?? 0, q.no_votes ?? 0);
-                const total = Math.max(0, (q.yes_votes ?? 0) + (q.no_votes ?? 0));
-                const shareTextParts = [
-                  `Ergebnis: ${q.resolved_outcome === "yes" ? "Ja" : q.resolved_outcome === "no" ? "Nein" : "ausstehend"}.`,
-                  `Community: ${pct(q.yes_votes ?? 0, total)}% Ja · ${pct(q.no_votes ?? 0, total)}% Nein (${total} Stimmen).`,
-                ];
-                const shareText = `${q.title}\n${shareTextParts.join(" ")}`;
+                const answerMode = normalizeAnswerMode(q.answer_mode);
+                const isResolvable = normalizeResolvable(q.is_resolvable);
+                const opts = optionsByQuestionId.get(String(q.id)) ?? [];
+                const total =
+                  answerMode === "options"
+                    ? opts.reduce((sum, o) => sum + Math.max(0, o.votesCount), 0)
+                    : Math.max(0, (q.yes_votes ?? 0) + (q.no_votes ?? 0));
+
+                const binaryOutcome = outcomeLabel(q.yes_votes ?? 0, q.no_votes ?? 0);
+                const maxVotes = answerMode === "options" && opts.length > 0 ? Math.max(...opts.map((o) => o.votesCount)) : 0;
+                const leaders = answerMode === "options" ? opts.filter((o) => o.votesCount === maxVotes && maxVotes > 0) : [];
+                const isTie = answerMode === "options" ? leaders.length > 1 : (q.yes_votes ?? 0) === (q.no_votes ?? 0);
+
+                const winnerLabel =
+                  answerMode === "options"
+                    ? total === 0
+                      ? "Keine Stimmen"
+                      : isTie
+                        ? `Gleichstand (${leaders.map((o) => o.label).slice(0, 2).join(" / ")})`
+                        : `Vorn: ${leaders[0]?.label ?? "Option"}`
+                    : binaryOutcome.label;
+
+                const winnerClassName =
+                  answerMode === "options"
+                    ? total === 0
+                      ? "bg-white/5 text-slate-200 border-white/10"
+                      : isTie
+                        ? "bg-sky-500/15 text-sky-100 border-sky-300/30"
+                        : "bg-emerald-500/15 text-emerald-100 border-emerald-300/30"
+                    : binaryOutcome.className;
+
+                const resolvedLabel =
+                  isResolvable && answerMode === "binary"
+                    ? q.resolved_outcome === "yes"
+                      ? "Ja"
+                      : q.resolved_outcome === "no"
+                        ? "Nein"
+                        : null
+                    : isResolvable && answerMode === "options" && q.resolved_option_id
+                      ? opts.find((o) => o.id === q.resolved_option_id)?.label ?? "Option"
+                      : null;
+
+                const shareText =
+                  answerMode === "binary"
+                    ? `${q.title}\nErgebnis: ${resolvedLabel ?? "ausstehend"}. Community: ${pct(q.yes_votes ?? 0, total)}% Ja · ${pct(q.no_votes ?? 0, total)}% Nein (${total} Stimmen).`
+                    : `${q.title}\n${isResolvable ? `Aufl\u00f6sung: ${resolvedLabel ?? "ausstehend"}. ` : ""}Stand: ${leaders
+                        .slice(0, 3)
+                        .map((o) => `${o.label} ${pct(o.votesCount, total)}%`)
+                        .join(" · ")} (${total} Stimmen).`;
                 return (
                   <article key={q.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -479,15 +632,24 @@ export default async function ArchivPage(props: {
                         </div>
                         <h3 className="mt-2 card-title-wrap text-base font-semibold text-white">{q.title}</h3>
                         <p className="mt-1 text-xs text-slate-300">
-                          Stimmen: {total} · Ja {q.yes_votes ?? 0} · Nein {q.no_votes ?? 0}
+                          {answerMode === "binary" ? (
+                            <>
+                              Stimmen: {total} · Ja {q.yes_votes ?? 0} · Nein {q.no_votes ?? 0}
+                            </>
+                          ) : (
+                            <>
+                              Stimmen: {total}
+                              {leaders[0]?.label ? <> · Vorn: {leaders[0].label}</> : null}
+                            </>
+                          )}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end sm:justify-start">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${outcome.className}`}>
-                          {outcome.label}
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${winnerClassName}`}>
+                          {winnerLabel}
                         </span>
                         <div className="flex items-center gap-2">
-                          {q.resolved_outcome === "yes" || q.resolved_outcome === "no" ? (
+                          {resolvedLabel ? (
                             <ShareLinkButton
                               url={`${baseUrl}/questions/${encodeURIComponent(q.id)}`}
                               variant="icon"

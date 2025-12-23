@@ -11,6 +11,8 @@ type NotificationPrefs = {
   privatePollEndingSoon: boolean;
   creatorPublicQuestionEnded: boolean;
   creatorPublicQuestionResolved: boolean;
+  creatorDraftAccepted: boolean;
+  creatorDraftRejected: boolean;
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
@@ -19,6 +21,8 @@ const DEFAULT_PREFS: NotificationPrefs = {
   privatePollEndingSoon: false,
   creatorPublicQuestionEnded: true,
   creatorPublicQuestionResolved: true,
+  creatorDraftAccepted: true,
+  creatorDraftRejected: true,
 };
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -45,7 +49,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("notification_preferences")
       .select(
-        "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved"
+        "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected"
       )
       .eq("user_id", user.id)
       .maybeSingle();
@@ -67,6 +71,8 @@ export async function GET() {
         (data as any)?.creator_public_question_resolved,
         DEFAULT_PREFS.creatorPublicQuestionResolved
       ),
+      creatorDraftAccepted: normalizeBoolean((data as any)?.creator_draft_accepted, DEFAULT_PREFS.creatorDraftAccepted),
+      creatorDraftRejected: normalizeBoolean((data as any)?.creator_draft_rejected, DEFAULT_PREFS.creatorDraftRejected),
     };
 
     return NextResponse.json({ ok: true, prefs });
@@ -97,6 +103,8 @@ export async function PUT(request: Request) {
       body.creatorPublicQuestionResolved,
       DEFAULT_PREFS.creatorPublicQuestionResolved
     ),
+    creatorDraftAccepted: normalizeBoolean(body.creatorDraftAccepted, DEFAULT_PREFS.creatorDraftAccepted),
+    creatorDraftRejected: normalizeBoolean(body.creatorDraftRejected, DEFAULT_PREFS.creatorDraftRejected),
   };
 
   const supabase = getSupabaseAdminClient();
@@ -110,6 +118,8 @@ export async function PUT(request: Request) {
         private_poll_ending_soon: next.privatePollEndingSoon,
         creator_public_question_ended: next.creatorPublicQuestionEnded,
         creator_public_question_resolved: next.creatorPublicQuestionResolved,
+        creator_draft_accepted: next.creatorDraftAccepted,
+        creator_draft_rejected: next.creatorDraftRejected,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" }

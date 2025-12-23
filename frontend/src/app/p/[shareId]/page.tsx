@@ -135,9 +135,21 @@ export default async function SharedPollPage(props: {
   const fromParam = resolvedSearchParams?.from;
   const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
   const cameFromAdminReports = from === "admin_reports";
+  const cameFromAdminResolutions = from === "admin_resolutions";
 
   const poll = await fetchSharedPoll(shareId);
   if (!poll) notFound();
+
+  const sharedQuestion = poll.kind === "question" ? poll.question : null;
+  const answerMode = sharedQuestion?.answerMode ?? "binary";
+  const isOptions = answerMode === "options";
+  const options = sharedQuestion?.options ?? [];
+  const optionsTotalVotes = isOptions
+    ? options.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
+    : 0;
+  const yesVotes = !isOptions ? sharedQuestion?.yesVotes ?? 0 : 0;
+  const noVotes = !isOptions ? sharedQuestion?.noVotes ?? 0 : 0;
+  const totalVotes = isOptions ? optionsTotalVotes : yesVotes + noVotes;
 
   const cookieStore = await cookies();
   const userSessionId = cookieStore.get("fv_user")?.value;
@@ -151,9 +163,21 @@ export default async function SharedPollPage(props: {
     poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
   const isOwner = Boolean(currentUser?.id && ownerId && currentUser.id === ownerId);
   const backFallbackHref =
-    isAdmin && cameFromAdminReports ? "/admin/reports" : isOwner ? "/profil?tab=private" : "/";
+    isAdmin && cameFromAdminReports
+      ? "/admin/reports"
+      : isAdmin && cameFromAdminResolutions
+        ? "/admin/resolutions"
+        : isOwner
+          ? "/profil?tab=private"
+          : "/";
   const backLabel =
-    isAdmin && cameFromAdminReports ? "← Zurück zu Meldungen" : isOwner ? "← Zurück zum Profil" : "← Zurück";
+    isAdmin && cameFromAdminReports
+      ? "← Zurück zu Meldungen"
+      : isAdmin && cameFromAdminResolutions
+        ? "← Zurück zu Auflösungen"
+        : isOwner
+          ? "← Zurück zum Profil"
+          : "← Zurück";
 
   return (
     <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
@@ -274,27 +298,66 @@ export default async function SharedPollPage(props: {
                 <p className="text-sm text-slate-200 sm:text-base">{poll.question.description}</p>
               ) : null}
 
-              <div className="flex items-center justify-between text-sm text-slate-200">
-                <span>Community glaubt</span>
-                <span className="font-semibold text-white">
-                  {poll.question.yesPct}% Ja · {poll.question.noPct}% Nein
-                </span>
-              </div>
-              <VoteBar yesPct={poll.question.yesPct} noPct={poll.question.noPct} />
-
-              <TrendSparkline questionId={poll.question.id} />
+              {isOptions ? (
+                <>
+                  <div className="flex items-center justify-between text-sm text-slate-200">
+                    <span>Community stimmt ab</span>
+                    <span className="font-semibold text-white">{totalVotes} Stimmen</span>
+                  </div>
+                  <div className="space-y-3">
+                    {options.map((opt) => (
+                      <div key={opt.id} className="space-y-1">
+                        <div className="flex items-center justify-between gap-3 text-sm text-slate-200">
+                          <span className="min-w-0 truncate">{opt.label}</span>
+                          <span className="shrink-0 font-semibold text-white">{opt.pct ?? 0}%</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full bg-emerald-400" style={{ width: `${opt.pct ?? 0}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-sm text-slate-200">
+                    <span>Community glaubt</span>
+                    <span className="font-semibold text-white">
+                      {poll.question.yesPct}% Ja · {poll.question.noPct}% Nein
+                    </span>
+                  </div>
+                  <VoteBar yesPct={poll.question.yesPct} noPct={poll.question.noPct} />
+                  <TrendSparkline questionId={poll.question.id} />
+                </>
+              )}
             </div>
 
             <div className="space-y-3 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
+                {!isOptions ? (
+                  <>
+                    <span className="rounded-full bg-white/5 px-3 py-1">
+                      {poll.question.yesPct}% Ja ({poll.question.yesVotes ?? 0})
+                    </span>
+                    <span className="rounded-full bg-white/5 px-3 py-1">
+                      {poll.question.noPct}% Nein ({poll.question.noVotes ?? 0})
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {options
+                      .slice()
+                      .sort((a, b) => (b.votesCount ?? 0) - (a.votesCount ?? 0))
+                      .slice(0, 3)
+                      .map((opt) => (
+                        <span key={opt.id} className="rounded-full bg-white/5 px-3 py-1">
+                          {(opt.pct ?? 0)}% {opt.label} ({opt.votesCount ?? 0})
+                        </span>
+                      ))}
+                  </>
+                )}
                 <span className="rounded-full bg-white/5 px-3 py-1">
-                  {poll.question.yesPct}% Ja ({poll.question.yesVotes ?? 0})
-                </span>
-                <span className="rounded-full bg-white/5 px-3 py-1">
-                  {poll.question.noPct}% Nein ({poll.question.noVotes ?? 0})
-                </span>
-                <span className="rounded-full bg-white/5 px-3 py-1">
-                  Insgesamt {(poll.question.yesVotes ?? 0) + (poll.question.noVotes ?? 0)} Stimmen
+                  Insgesamt {totalVotes} Stimmen
                 </span>
               </div>
 
@@ -322,11 +385,14 @@ export default async function SharedPollPage(props: {
                 <DetailVoteButtons
                   questionId={poll.question.id}
                   closesAt={poll.question.closesAt}
+                  answerMode={answerMode}
+                  options={options}
                   initialChoice={
                     poll.question.userChoice === "yes" || poll.question.userChoice === "no"
                       ? poll.question.userChoice
                       : null
                   }
+                  initialOptionId={poll.question.userOptionId ?? null}
                 />
               </div>
             ) : null}

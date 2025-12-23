@@ -9,6 +9,8 @@ type NotificationPrefs = {
   privatePollEndingSoon: boolean;
   creatorPublicQuestionEnded: boolean;
   creatorPublicQuestionResolved: boolean;
+  creatorDraftAccepted: boolean;
+  creatorDraftRejected: boolean;
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
@@ -17,6 +19,8 @@ const DEFAULT_PREFS: NotificationPrefs = {
   privatePollEndingSoon: false,
   creatorPublicQuestionEnded: true,
   creatorPublicQuestionResolved: true,
+  creatorDraftAccepted: true,
+  creatorDraftRejected: true,
 };
 
 const CACHE_TTL_MS = 30_000;
@@ -208,6 +212,36 @@ export function EmailNotificationSettings() {
               checked={prefs.creatorPublicQuestionResolved}
               disabled={masterOff}
               onChange={(e) => setAndSave({ creatorPublicQuestionResolved: e.target.checked })}
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="min-w-0">
+              <div className="font-medium text-slate-100">Dein Draft wurde angenommen</div>
+              <div className="text-[11px] text-slate-400">
+                Du bekommst eine E-Mail, wenn dein Vorschlag aus dem Review-Bereich live geschaltet wurde.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={prefs.creatorDraftAccepted}
+              disabled={masterOff}
+              onChange={(e) => setAndSave({ creatorDraftAccepted: e.target.checked })}
+            />
+          </label>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className="min-w-0">
+              <div className="font-medium text-slate-100">Dein Draft wurde abgelehnt</div>
+              <div className="text-[11px] text-slate-400">
+                Du bekommst eine E-Mail, wenn dein Vorschlag im Review-Bereich abgelehnt wurde.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={prefs.creatorDraftRejected}
+              disabled={masterOff}
+              onChange={(e) => setAndSave({ creatorDraftRejected: e.target.checked })}
             />
           </label>
         </div>

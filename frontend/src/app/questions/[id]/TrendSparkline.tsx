@@ -7,9 +7,10 @@ type Metric = "total" | "split" | "yesPct" | "views" | "ranking";
 
 type TrendPoint = {
   date: string; // YYYY-MM-DD
-  yes: number;
-  no: number;
   total: number;
+  yes?: number;
+  no?: number;
+  optionCounts?: Record<string, number>;
   views?: number | null;
   rankingScore?: number | null;
 };
@@ -19,6 +20,8 @@ type TrendResponse = {
   days: number;
   startDate: string;
   source?: "snapshots" | "votes";
+  answerMode?: "binary" | "options";
+  options?: { id: string; label: string }[] | null;
   points: TrendPoint[];
 };
 
@@ -44,6 +47,8 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [answerMode, setAnswerMode] = useState<"binary" | "options">("binary");
+  const [options, setOptions] = useState<Array<{ id: string; label: string }>>([]);
   const [points, setPoints] = useState<TrendPoint[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -68,11 +73,15 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
       })
       .then((data) => {
         if (!alive) return;
+        setAnswerMode(data?.answerMode === "options" ? "options" : "binary");
+        setOptions(Array.isArray(data?.options) ? data.options.filter((o) => o && o.id && o.label) : []);
         setPoints(data?.points ?? []);
       })
       .catch((err) => {
         if (!alive) return;
         setError(err instanceof Error ? err.message : "Trend konnte nicht geladen werden.");
+        setAnswerMode("binary");
+        setOptions([]);
         setPoints([]);
       })
       .finally(() => {
@@ -85,11 +94,33 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
     };
   }, [questionId, days]);
 
+  useEffect(() => {
+    if (answerMode === "options" && metric === "yesPct") {
+      setMetric("total");
+    }
+  }, [answerMode, metric]);
+
   const labels = useMemo(() => points.map((p) => formatShortDay(p.date)), [points]);
 
   const totals = useMemo(() => points.map((p) => p.total), [points]);
-  const yesSeries = useMemo(() => points.map((p) => p.yes), [points]);
-  const noSeries = useMemo(() => points.map((p) => p.no), [points]);
+  const yesSeries = useMemo(() => points.map((p) => (typeof p.yes === "number" ? p.yes : 0)), [points]);
+  const noSeries = useMemo(() => points.map((p) => (typeof p.no === "number" ? p.no : 0)), [points]);
+
+  const optionIds = useMemo(() => options.map((o) => o.id), [options]);
+  const optionLabelById = useMemo(() => new Map(options.map((o) => [o.id, o.label])), [options]);
+  const optionSeriesById = useMemo(() => {
+    const result = new Map<string, number[]>();
+    for (const id of optionIds) {
+      result.set(
+        id,
+        points.map((p) => {
+          const v = p.optionCounts?.[id];
+          return typeof v === "number" && Number.isFinite(v) ? v : 0;
+        })
+      );
+    }
+    return result;
+  }, [optionIds, points]);
   const viewsSeries = useMemo(() => {
     let last = 0;
     return points.map((p) => {
@@ -112,7 +143,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
     let yesAcc = 0;
     let totalAcc = 0;
     return points.map((p) => {
-      yesAcc += p.yes;
+      yesAcc += typeof p.yes === "number" ? p.yes : 0;
       totalAcc += p.total;
       return totalAcc > 0 ? Math.round((yesAcc / totalAcc) * 100) : 0;
     });
@@ -129,6 +160,13 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   const totalsCum = useMemo(() => cumulative(totals), [totals]);
   const yesCum = useMemo(() => cumulative(yesSeries), [yesSeries]);
   const noCum = useMemo(() => cumulative(noSeries), [noSeries]);
+  const optionCumById = useMemo(() => {
+    const result = new Map<string, number[]>();
+    optionSeriesById.forEach((series, id) => {
+      result.set(id, cumulative(series));
+    });
+    return result;
+  }, [optionSeriesById]);
 
   const totalSum = totalsCum.length > 0 ? totalsCum[totalsCum.length - 1] : 0;
   const yesSum = yesCum.length > 0 ? yesCum[yesCum.length - 1] : 0;
@@ -141,12 +179,26 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
     metric === "total"
       ? `Stimmen (${totalSum})`
       : metric === "split"
-        ? `Ja/Nein (${yesSum}/${noSum})`
+        ? answerMode === "options"
+          ? `Optionen (${totalSum})`
+          : `Ja/Nein (${yesSum}/${noSum})`
         : metric === "yesPct"
           ? `Ja-Quote (${clamp(yesPct, 0, 100)}%)`
           : metric === "views"
             ? `Views (${viewsLast})`
             : `Ranking (${rankingLast.toFixed(2)})`;
+
+  function colorForIndex(index: number) {
+    const palette = [
+      "rgba(52, 211, 153, 0.95)",
+      "rgba(59, 130, 246, 0.95)",
+      "rgba(250, 204, 21, 0.95)",
+      "rgba(248, 113, 113, 0.95)",
+      "rgba(168, 85, 247, 0.95)",
+      "rgba(251, 146, 60, 0.95)",
+    ];
+    return palette[index % palette.length];
+  }
 
   const datasets = useMemo(() => {
     const base: Partial<ChartDataset<"line">> = {
@@ -160,6 +212,22 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
     };
 
     if (metric === "split") {
+      if (answerMode === "options") {
+        const out: ChartDataset<"line">[] = [];
+        optionIds.forEach((id, idx) => {
+          const label = optionLabelById.get(id) ?? `Option ${idx + 1}`;
+          const color = colorForIndex(idx);
+          out.push({
+            ...base,
+            label,
+            data: optionCumById.get(id) ?? [],
+            borderColor: color,
+            backgroundColor: color,
+          });
+        });
+        return out;
+      }
+
       return [
         {
           ...base,
@@ -223,7 +291,19 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
         backgroundColor: "rgba(52, 211, 153, 0.95)",
       },
     ] satisfies ChartDataset<"line">[];
-  }, [metric, noCum, rankingSeries, totalsCum, viewsSeries, yesCum, yesPctSeries]);
+  }, [
+    answerMode,
+    metric,
+    noCum,
+    optionCumById,
+    optionIds,
+    optionLabelById,
+    rankingSeries,
+    totalsCum,
+    viewsSeries,
+    yesCum,
+    yesPctSeries,
+  ]);
 
   const yMaxValue = useMemo(() => {
     const all: number[] = [];
@@ -257,7 +337,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
         maintainAspectRatio: false,
         animation: { duration: 250 },
         plugins: {
-          legend: { display: false },
+          legend: { display: metric === "split" && answerMode === "options" },
           tooltip: {
             mode: "index",
             intersect: false,
@@ -345,34 +425,36 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
         )}
       </div>
 
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2 text-sm text-slate-100">
-          <button
-            type="button"
-            onClick={() => setMetric("total")}
-            className={`${chipBase} ${metric === "total" ? chipActive : chipInactive}`}
-          >
-            Stimmen
-          </button>
-          <button
-            type="button"
-            onClick={() => setMetric("split")}
-            className={`${chipBase} ${metric === "split" ? chipActive : chipInactive}`}
-          >
-            Ja/Nein
-          </button>
-          <button
-            type="button"
-            onClick={() => setMetric("yesPct")}
-            className={`${chipBase} ${metric === "yesPct" ? chipActive : chipInactive}`}
-          >
-            Ja-Quote
-          </button>
-          <button
-            type="button"
-            onClick={() => setMetric("views")}
-            className={`${chipBase} ${metric === "views" ? chipActive : chipInactive}`}
-          >
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2 text-sm text-slate-100">
+            <button
+              type="button"
+              onClick={() => setMetric("total")}
+              className={`${chipBase} ${metric === "total" ? chipActive : chipInactive}`}
+            >
+              Stimmen
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric("split")}
+              className={`${chipBase} ${metric === "split" ? chipActive : chipInactive}`}
+            >
+              {answerMode === "options" ? "Optionen" : "Ja/Nein"}
+            </button>
+            {answerMode === "binary" ? (
+              <button
+                type="button"
+                onClick={() => setMetric("yesPct")}
+                className={`${chipBase} ${metric === "yesPct" ? chipActive : chipInactive}`}
+              >
+                Ja-Quote
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setMetric("views")}
+              className={`${chipBase} ${metric === "views" ? chipActive : chipInactive}`}
+            >
             Views
           </button>
           <button

@@ -83,7 +83,7 @@ export async function GET() {
   try {
     const { data: voteRows, error: votesError } = await supabase
       .from("votes")
-      .select("question_id, choice, created_at")
+      .select("question_id, choice, option_id, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(5000);
@@ -92,39 +92,75 @@ export async function GET() {
       throw votesError;
     }
 
-    const perQuestion = new Map<string, "yes" | "no">();
-    ((voteRows ?? []) as { question_id: string; choice: "yes" | "no" }[]).forEach((v) => {
-      if (!v?.question_id || !v?.choice) return;
+    const perQuestion = new Map<string, { choice?: "yes" | "no"; optionId?: string }>();
+    (
+      (voteRows ?? []) as { question_id: string; choice: "yes" | "no" | null; option_id: string | null }[]
+    ).forEach((v) => {
+      if (!v?.question_id) return;
       if (perQuestion.has(v.question_id)) return;
-      perQuestion.set(v.question_id, v.choice);
+      const choice = v.choice === "yes" || v.choice === "no" ? v.choice : undefined;
+      const optionId = v.option_id ? String(v.option_id) : undefined;
+      if (!choice && !optionId) return;
+      perQuestion.set(v.question_id, { choice, optionId });
     });
 
     const questionIds = Array.from(perQuestion.keys());
     if (questionIds.length > 0) {
-      const byId = new Map<string, { resolvedOutcome: "yes" | "no" | null; category: string }>();
+      const byId = new Map<
+        string,
+        {
+          answerMode: "binary" | "options";
+          resolvedOutcome: "yes" | "no" | null;
+          resolvedOptionId: string | null;
+          category: string;
+        }
+      >();
       const chunkSize = 500;
       for (let i = 0; i < questionIds.length; i += chunkSize) {
         const chunk = questionIds.slice(i, i + chunkSize);
         const { data: questionRows, error: qErr } = await supabase
           .from("questions")
-          .select("id, resolved_outcome, category")
+          .select("id, answer_mode, resolved_outcome, resolved_option_id, category")
           .in("id", chunk);
         if (qErr) throw qErr;
-        ((questionRows ?? []) as { id: string; resolved_outcome: "yes" | "no" | null; category: string | null }[]).forEach(
-          (q) => {
-            byId.set(q.id, { resolvedOutcome: q.resolved_outcome ?? null, category: q.category ?? "Sonstiges" });
-          }
-        );
+        (
+          (questionRows ?? []) as {
+            id: string;
+            answer_mode: "binary" | "options" | null;
+            resolved_outcome: "yes" | "no" | null;
+            resolved_option_id: string | null;
+            category: string | null;
+          }[]
+        ).forEach((q) => {
+          byId.set(q.id, {
+            answerMode: q.answer_mode === "options" ? "options" : "binary",
+            resolvedOutcome: q.resolved_outcome ?? null,
+            resolvedOptionId: q.resolved_option_id ?? null,
+            category: q.category ?? "Sonstiges",
+          });
+        });
       }
 
       const categoryMap = new Map<string, { category: string; total: number; correct: number; incorrect: number }>();
-      perQuestion.forEach((choice, questionId) => {
+      perQuestion.forEach((vote, questionId) => {
         const meta = byId.get(questionId);
-        const resolved = meta?.resolvedOutcome ?? null;
-        if (!resolved) return;
+        if (!meta) return;
+
+        const resolvedOutcome = meta.resolvedOutcome;
+        const resolvedOptionId = meta.resolvedOptionId;
+
+        let ok: boolean | null = null;
+        if (meta.answerMode === "binary") {
+          if (!resolvedOutcome) return;
+          if (vote.choice !== "yes" && vote.choice !== "no") return;
+          ok = vote.choice === resolvedOutcome;
+        } else {
+          if (!resolvedOptionId) return;
+          if (!vote.optionId) return;
+          ok = vote.optionId === resolvedOptionId;
+        }
 
         trackTotal += 1;
-        const ok = choice === resolved;
         if (ok) trackCorrect += 1;
         else trackIncorrect += 1;
 

@@ -128,6 +128,7 @@ export default async function AdminHomePage() {
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <Card title="Meldungen" desc="Gemeldete Inhalte prüfen und moderieren." href="/admin/reports" action="Öffnen" />
           <Card title="Analytics" desc="Basis-Kennzahlen (7 Tage) ohne IP/E-Mail." href="/admin/analytics" action="Öffnen" />
+          <Card title="Auflösungen" desc="KI-Vorschläge für abgelaufene Fragen prüfen." href="/admin/resolutions" action="Öffnen" />
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -138,4 +139,3 @@ export default async function AdminHomePage() {
     </main>
   );
 }
-

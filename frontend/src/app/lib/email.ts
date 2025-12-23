@@ -301,3 +301,79 @@ export async function sendCreatorPublicQuestionResolvedEmail(options: {
     html,
   });
 }
+
+export async function sendCreatorDraftAcceptedEmail(options: {
+  to: string;
+  displayName: string;
+  title: string;
+  targetUrl: string;
+}): Promise<void> {
+  const transport = getTransporter();
+
+  const subject = `Dein Vorschlag wurde angenommen: ${options.title}`;
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    "gute Nachrichten: Dein Draft wurde im Review-Bereich angenommen und ist jetzt live.",
+    "",
+    "Hier kannst du ihn öffnen:",
+    options.targetUrl,
+  ].join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>gute Nachrichten: Dein Draft wurde im Review-Bereich angenommen und ist jetzt live.</p>
+    <p><a href="${options.targetUrl}">Jetzt öffnen</a></p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Creator Draft Accepted:", { to: options.to, targetUrl: options.targetUrl, subject });
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendCreatorDraftRejectedEmail(options: {
+  to: string;
+  displayName: string;
+  title: string;
+  draftUrl: string;
+}): Promise<void> {
+  const transport = getTransporter();
+
+  const subject = `Dein Vorschlag wurde abgelehnt: ${options.title}`;
+  const text = [
+    `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
+    "",
+    "dein Draft wurde im Review-Bereich abgelehnt.",
+    "",
+    "Du kannst ihn im Profil weiterhin ansehen:",
+    options.draftUrl,
+  ].join("\n");
+
+  const html = `
+    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>dein Draft wurde im Review-Bereich abgelehnt.</p>
+    <p><a href="${options.draftUrl}">Draft ansehen</a></p>
+  `;
+
+  if (!transport) {
+    console.log("[Future-Vote] Creator Draft Rejected:", { to: options.to, draftUrl: options.draftUrl, subject });
+    return;
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM,
+    to: options.to,
+    subject,
+    text,
+    html,
+  });
+}

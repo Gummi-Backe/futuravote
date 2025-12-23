@@ -41,9 +41,26 @@ export default async function QuestionWidgetPage(props: { params: Promise<{ id: 
   const question = await getQuestionByIdFromSupabase(id).catch(() => null);
   if (!question || question.visibility !== "public") notFound();
 
-  const totalVotes = (question.yesVotes ?? 0) + (question.noVotes ?? 0);
+  const answerMode = question.answerMode ?? "binary";
+  const options = question.options ?? [];
+  const isResolvable = question.isResolvable ?? true;
+  const resolvedOptionId = question.resolvedOptionId ?? null;
+  const optionsTotalVotes =
+    answerMode === "options"
+      ? options.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
+      : 0;
+  const totalVotes =
+    answerMode === "options" ? optionsTotalVotes : (question.yesVotes ?? 0) + (question.noVotes ?? 0);
   const yesPct = question.yesPct ?? 0;
   const noPct = question.noPct ?? 0;
+
+  const topOptions =
+    answerMode === "options"
+      ? [...options]
+          .sort((a, b) => (b.votesCount ?? 0) - (a.votesCount ?? 0))
+          .slice(0, 3)
+      : [];
+  const hiddenOptionsCount = answerMode === "options" ? Math.max(0, options.length - topOptions.length) : 0;
 
   return (
     <main className="min-h-screen w-full bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-0 text-slate-100">
@@ -91,13 +108,46 @@ export default async function QuestionWidgetPage(props: { params: Promise<{ id: 
         </div>
 
         <div className="mt-4 flex-1 space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-200">
-            <span className="font-semibold text-white">
-              {yesPct}% Ja · {noPct}% Nein
-            </span>
-            <span className="text-slate-300">{totalVotes} Stimmen</span>
-          </div>
-          <VoteBar yesPct={yesPct} noPct={noPct} />
+          {answerMode === "binary" ? (
+            <>
+              <div className="flex items-center justify-between text-xs text-slate-200">
+                <span className="font-semibold text-white">
+                  {yesPct}% Ja · {noPct}% Nein
+                </span>
+                <span className="text-slate-300">{totalVotes} Stimmen</span>
+              </div>
+              <VoteBar yesPct={yesPct} noPct={noPct} />
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-xs text-slate-200">
+                <span className="font-semibold text-white">Stand (Optionen)</span>
+                <span className="text-slate-300">{totalVotes} Stimmen</span>
+              </div>
+              <div className="space-y-2">
+                {topOptions.map((opt) => (
+                  <div key={opt.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-slate-200">
+                      <span className="min-w-0 truncate">{opt.label}</span>
+                      <span className="shrink-0 font-semibold text-white">{opt.pct ?? 0}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={`h-full ${isResolvable && resolvedOptionId === opt.id ? "bg-amber-300" : "bg-emerald-400"}`}
+                        style={{ width: `${opt.pct ?? 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {hiddenOptionsCount > 0 ? (
+                <p className="mt-2 text-[11px] text-slate-400">+ {hiddenOptionsCount} weitere Option(en)</p>
+              ) : null}
+              {isResolvable && resolvedOptionId ? (
+                <p className="mt-1 text-[11px] text-amber-100/90">Hinweis: Gewinner-Option ist markiert.</p>
+              ) : null}
+            </>
+          )}
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3">
@@ -115,4 +165,3 @@ export default async function QuestionWidgetPage(props: { params: Promise<{ id: 
     </main>
   );
 }
-

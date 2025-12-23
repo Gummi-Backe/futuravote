@@ -12,13 +12,31 @@ function b64ToBlob(b64: string, mime: string): Blob {
 function defaultPrompt(opts: { title: string; description: string }) {
   const title = (opts.title || "").trim();
   const description = (opts.description || "").trim();
-  const context = description ? `Context: ${description}` : "";
+  const context = description ? `Kontext: ${description}` : "";
   return [
-    "Create a clean, modern editorial illustration for a prediction question.",
-    "No text, no logos, no watermarks, no brand names, no recognizable real people, no politicians, no celebrities.",
-    "High quality, neutral mood, suitable as a small card thumbnail.",
-    title ? `Topic / Question: ${title}` : "",
+    "Erstelle ein fotorealistisches, journalistisches Foto als Thumbnail (keine Illustration, keine Clipart, keine Icons) glaubwuerdige Szene.",
+    "Keine Logos, keine Wasserzeichen, keine Markennamen, keine bekannten Personen, keine Politiker, keine Prominenten.",
+    "Hohe Qualitaet, neutrale Stimmung, geeignet als kleines Karten-Thumbnail.",
+    "Vermeide gut lesbaren Text. Falls Text unvermeidbar ist: nur sehr kurz und auf Deutsch.",
+    title ? `Thema / Frage: ${title}` : "",
     context,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function enhancedPrompt(opts: { imagePrompt: string; fallbackTitle: string; fallbackDescription: string }) {
+  const imagePrompt = (opts.imagePrompt || "").trim();
+  if (!imagePrompt) return defaultPrompt({ title: opts.fallbackTitle, description: opts.fallbackDescription });
+
+  return [
+    "Erstelle ein fotorealistisches, journalistisches Foto als Thumbnail (keine Illustration, keine Clipart, keine Icons) glaubwuerdige Szene.",
+    "Keine Logos, keine Wasserzeichen, keine Markennamen, keine bekannten Personen, keine Politiker, keine Prominenten.",
+    "Hohe Qualitaet, neutrale Stimmung, geeignet als kleines Karten-Thumbnail.",
+    "Vermeide gut lesbaren Text. Falls Text unvermeidbar ist: nur sehr kurz und auf Deutsch.",
+    "",
+    "Bildbeschreibung:",
+    imagePrompt,
   ]
     .filter(Boolean)
     .join("\n");
@@ -28,12 +46,14 @@ export function AdminAiImageGenerator({
   isAdmin,
   title,
   description,
+  imagePrompt,
   disabled,
   onAdoptImageFile,
 }: {
   isAdmin: boolean;
   title: string;
   description: string;
+  imagePrompt?: string;
   disabled: boolean;
   onAdoptImageFile: (file: File, previewUrl: string) => void;
 }) {
@@ -47,7 +67,10 @@ export function AdminAiImageGenerator({
   const [b64, setB64] = useState<string | null>(null);
   const [mime, setMime] = useState<string>("image/png");
 
-  const autoPrompt = useMemo(() => defaultPrompt({ title, description }), [description, title]);
+  const autoPrompt = useMemo(
+    () => enhancedPrompt({ imagePrompt: imagePrompt ?? "", fallbackTitle: title, fallbackDescription: description }),
+    [description, imagePrompt, title]
+  );
 
   const previewDataUrl = useMemo(() => {
     if (!b64) return null;
@@ -141,7 +164,7 @@ export function AdminAiImageGenerator({
               placeholder="Beschreibe das gewünschte Bild."
             />
             <div className="text-[11px] text-slate-400">
-              Tipp: Keine Logos/Marken, kein Text im Bild, keine erkennbaren realen Personen.
+              Tipp: Keine Logos/Marken; wenn Text vorkommt, dann nur sehr kurz und auf Deutsch.
             </div>
           </div>
 

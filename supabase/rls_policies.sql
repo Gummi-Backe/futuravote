@@ -21,11 +21,16 @@ alter table if exists public.private_poll_result_emails enable row level securit
 alter table if exists public.private_poll_reminder_emails enable row level security;
 alter table if exists public.creator_question_ended_emails enable row level security;
 alter table if exists public.creator_question_resolved_emails enable row level security;
+alter table if exists public.creator_draft_decision_emails enable row level security;
 alter table if exists public.favorites enable row level security;
 alter table if exists public.question_comments enable row level security;
 alter table if exists public.analytics_events enable row level security;
 alter table if exists public.reports enable row level security;
 alter table if exists public.question_metrics_daily enable row level security;
+alter table if exists public.question_resolution_suggestions enable row level security;
+alter table if exists public.question_resolution_proposals enable row level security;
+alter table if exists public.question_options enable row level security;
+alter table if exists public.draft_options enable row level security;
 
 -- Idempotent: Policies neu anlegen
 drop policy if exists "Public read questions" on public.questions;

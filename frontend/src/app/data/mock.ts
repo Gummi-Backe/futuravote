@@ -1,5 +1,14 @@
 export type PollVisibility = "public" | "link_only";
 
+export type AnswerMode = "binary" | "options";
+
+export type PollOption = {
+  id: string;
+  label: string;
+  votesCount: number;
+  pct?: number;
+};
+
 export type Question = {
   id: string;
   creatorId?: string;
@@ -29,10 +38,15 @@ export type Question = {
   status?: "closingSoon" | "new" | "trending" | "top" | "archived";
   views?: number;
   userChoice?: "yes" | "no";
+  userOptionId?: string;
   createdAt?: string;
   rankingScore?: number;
   visibility?: PollVisibility;
   shareId?: string;
+  answerMode?: AnswerMode;
+  isResolvable?: boolean;
+  options?: PollOption[];
+  resolvedOptionId?: string;
 
   // Aufloesung (Seriositaet-MVP)
   resolutionCriteria?: string;
@@ -71,6 +85,9 @@ export type Draft = {
   status?: "open" | "accepted" | "rejected";
   visibility?: PollVisibility;
   shareId?: string;
+  answerMode?: AnswerMode;
+  isResolvable?: boolean;
+  options?: PollOption[];
 
   // Aufloesung (wird beim Promote zur Frage uebernommen)
   resolutionCriteria?: string;

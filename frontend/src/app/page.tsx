@@ -146,6 +146,7 @@ function FeedCardSkeleton({ variant }: { variant: "question" | "draft" }) {
 function EventCard({
   question,
   onVote,
+  onVoteOption,
   isSubmitting,
   showFavorite,
   isFavorited,
@@ -154,6 +155,7 @@ function EventCard({
   }: {
   question: Question;
   onVote?: (choice: "yes" | "no") => void;
+  onVoteOption?: (optionId: string) => void;
   isSubmitting?: boolean;
   onOpenDetails?: (href: string) => void;
   showFavorite?: boolean;
@@ -162,12 +164,37 @@ function EventCard({
   isFavoriteSubmitting?: boolean;
 }) {
   const badge = statusBadge(question.status);
+  const answerMode = question.answerMode ?? "binary";
+  const isOptions = answerMode === "options";
   const votedChoice = question.userChoice;
-  const voted = Boolean(votedChoice);
-  const votedLabel = votedChoice ? (votedChoice === "yes" ? "Abgestimmt: Ja" : "Abgestimmt: Nein") : null;
+  const voted = isOptions ? Boolean(question.userOptionId) : Boolean(votedChoice);
+  const votedLabel = isOptions
+    ? question.userOptionId
+      ? (() => {
+          const label = question.options?.find((o) => o.id === question.userOptionId)?.label;
+          return label ? `Abgestimmt: ${label}` : "Abgestimmt";
+        })()
+      : null
+    : votedChoice
+      ? votedChoice === "yes"
+        ? "Abgestimmt: Ja"
+        : "Abgestimmt: Nein"
+      : null;
   const voteLocked = voted;
   const isClosingSoon = question.status === "closingSoon";
   const hasChoice = votedChoice === "yes" || votedChoice === "no";
+  const optionsTotalVotes = isOptions
+    ? (question.options ?? []).reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
+    : 0;
+  const optionBars = (question.options ?? []).slice(0, 6);
+  const topOptionsLabel = isOptions
+    ? (question.options ?? [])
+        .slice()
+        .sort((a, b) => (b.votesCount ?? 0) - (a.votesCount ?? 0))
+        .slice(0, 3)
+        .map((opt) => `${opt.label} (${opt.pct ?? 0}%)`)
+        .join(" · ")
+    : "";
 
   return (
     <article
@@ -289,49 +316,108 @@ function EventCard({
             <span className="text-base">⏳</span>
             <span suppressHydrationWarning>{formatDeadline(question.closesAt)}</span>
           </span>
-          <span className="min-w-0 break-words [overflow-wrap:anywhere] text-slate-200 sm:text-right">
-            Ja {question.yesVotes} ({question.yesPct}%) · Nein {question.noVotes} ({question.noPct}%)
-          </span>
+          {!isOptions ? (
+            <span className="min-w-0 break-words [overflow-wrap:anywhere] text-slate-200 sm:text-right">
+              {`Ja ${question.yesVotes} (${question.yesPct}%) · Nein ${question.noVotes} (${question.noPct}%)`}
+            </span>
+          ) : null}
         </div>
-        <VoteBar yesPct={question.yesPct} noPct={question.noPct} />
+        {!isOptions ? <VoteBar yesPct={question.yesPct} noPct={question.noPct} /> : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.currentTarget.blur();
-            if (!voteLocked) onVote?.("yes");
-          }}
-          disabled={isSubmitting || voteLocked}
-          className={`card-button yes ${
-            question.userChoice === "yes"
-              ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
-              : hasChoice
-                ? "opacity-30 saturate-50"
-                : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
-          } ${isSubmitting ? "opacity-70" : ""}`}
-        >
-          Ja
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.currentTarget.blur();
-            if (!voteLocked) onVote?.("no");
-          }}
-          disabled={isSubmitting || voteLocked}
-          className={`card-button no ${
-            question.userChoice === "no"
-              ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
-              : hasChoice
-                ? "opacity-30 saturate-50"
-                : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
-          } ${isSubmitting ? "opacity-70" : ""}`}
-        >
-          Nein
-        </button>
-      </div>
+      {isOptions ? (
+        <div className="space-y-1">
+          {optionBars.length > 0 ? (
+            optionBars.map((opt) => {
+              const pct = Math.max(0, Math.min(100, Number(opt.pct ?? 0) || 0));
+              const isSelected = question.userOptionId === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    if (!voteLocked && !isSubmitting) onVoteOption?.(opt.id);
+                  }}
+                  disabled={voteLocked || Boolean(isSubmitting)}
+                  aria-label={`Option waehlen: ${opt.label}`}
+                  className={`group flex w-full items-center gap-1.5 rounded-md border p-[2px] text-left transition ${
+                    isSelected
+                      ? "border-emerald-200/85 bg-emerald-500/20 shadow-[0_0_0_1px_rgba(52,211,153,0.25),0_0_18px_rgba(52,211,153,0.12)]"
+                      : "border-white/10 bg-black/10 hover:border-emerald-200/30 hover:bg-white/5"
+                  } ${voteLocked ? (isSelected ? "cursor-default" : "cursor-default opacity-60") : ""} ${
+                    isSubmitting ? "opacity-70 cursor-wait" : ""
+                  }`}
+                >
+                  <div className="w-8 shrink-0 text-[9px] font-semibold text-slate-200 tabular-nums">{pct}%</div>
+                  <div className="relative h-[12px] flex-1 overflow-hidden rounded-[4px] bg-white/5">
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-[4px] ${
+                        isSelected ? "bg-emerald-300/90" : "bg-emerald-400/35 group-hover:bg-emerald-400/45"
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                    <div className="absolute inset-0 flex items-center px-1.5">
+                      <span
+                        className={`min-w-0 truncate text-[9px] font-semibold leading-none drop-shadow ${
+                          isSelected ? "text-white" : "text-slate-100/90"
+                        }`}
+                      >
+                        {opt.label}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          ) : (
+            <Link
+              href={`/questions/${encodeURIComponent(question.id)}`}
+              className="card-button yes text-center hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
+            >
+              Zur Umfrage
+            </Link>
+          )}
+
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.currentTarget.blur();
+              if (!voteLocked) onVote?.("yes");
+            }}
+            disabled={isSubmitting || voteLocked}
+            className={`card-button yes ${
+              question.userChoice === "yes"
+                ? "ring-2 ring-emerald-200/80 border-emerald-200/80 brightness-110 shadow-[0_0_0_2px_rgba(52,211,153,0.32),0_0_46px_rgba(52,211,153,0.62)]"
+                : hasChoice
+                  ? "opacity-30 saturate-50"
+                  : "hover:shadow-[0_0_18px_rgba(52,211,153,0.25)]"
+            } ${isSubmitting ? "opacity-70" : ""}`}
+          >
+            Ja
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.currentTarget.blur();
+              if (!voteLocked) onVote?.("no");
+            }}
+            disabled={isSubmitting || voteLocked}
+            className={`card-button no ${
+              question.userChoice === "no"
+                ? "ring-2 ring-rose-200/80 border-rose-200/80 brightness-110 shadow-[0_0_0_2px_rgba(248,113,113,0.32),0_0_46px_rgba(248,113,113,0.62)]"
+                : hasChoice
+                  ? "opacity-30 saturate-50"
+                  : "hover:shadow-[0_0_18px_rgba(248,113,113,0.25)]"
+            } ${isSubmitting ? "opacity-70" : ""}`}
+          >
+            Nein
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center justify-between text-xs text-slate-300">
         <Link href={`/questions/${question.id}`} className="text-emerald-100 hover:text-emerald-200">
@@ -1195,6 +1281,63 @@ export default function Home() {
     [fetchLatest, questions, showToast]
   );
 
+  const handleVoteOption = useCallback(
+    async (questionId: string, optionId: string) => {
+      const alreadyVoted = questions.find((q) => q.id === questionId)?.userOptionId;
+      if (alreadyVoted) return;
+
+      setSubmittingId(questionId);
+      setQuestions((prev) =>
+        prev.map((q) => {
+          if (q.id !== questionId) return q;
+          const nextOptions = (q.options ?? []).map((opt) => ({
+            ...opt,
+            votesCount: opt.id === optionId ? Math.max(0, opt.votesCount ?? 0) + 1 : Math.max(0, opt.votesCount ?? 0),
+          }));
+          const total = nextOptions.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0);
+          const denom = Math.max(1, total);
+          const withPct = nextOptions.map((opt) => ({
+            ...opt,
+            pct: Math.round((Math.max(0, opt.votesCount ?? 0) / denom) * 100),
+          }));
+          return { ...q, userOptionId: optionId, options: withPct };
+        })
+      );
+
+      try {
+        const res = await fetch("/api/votes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionId, optionId }),
+        });
+        if (res.status === 429) {
+          const { retryAfterMs } = (await res.json()) as { retryAfterMs?: number };
+          const retry = Math.ceil(((retryAfterMs ?? 1000) as number) / 1000);
+          setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
+          showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error ?? "Vote failed");
+
+        const updated = data.question as Question;
+        setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
+        invalidateProfileCaches();
+        setError(null);
+        triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
+        showToast("Deine Stimme wurde gezählt.", "success");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Vote fehlgeschlagen. Bitte versuche es erneut.";
+        setError(message);
+        showToast(message, "error");
+        await fetchLatest();
+      } finally {
+        setSubmittingId(null);
+      }
+    },
+    [fetchLatest, questions, showToast]
+  );
+
   const handleDraftVote = useCallback(
     async (draftId: string, choice: DraftReviewChoice) => {
       if (reviewedDrafts[draftId]) return;
@@ -1712,6 +1855,7 @@ export default function Home() {
                       isFavoriteSubmitting={favoriteSubmittingId === q.id}
                       onToggleFavorite={() => void handleToggleFavorite(q.id)}
                       onVote={(choice) => handleVote(q.id, choice)}
+                      onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
                       onOpenDetails={(href) => navigateWithTransition(href)}
                     />
                   ))}

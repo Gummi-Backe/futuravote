@@ -3,6 +3,8 @@ import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import {
   sendCreatorPublicQuestionEndedEmail,
   sendCreatorPublicQuestionResolvedEmail,
+  sendCreatorDraftAcceptedEmail,
+  sendCreatorDraftRejectedEmail,
 } from "@/app/lib/email";
 
 export const revalidate = 0;
@@ -37,11 +39,15 @@ async function getPrefs(
   allEmailsEnabled: boolean;
   creatorPublicQuestionEnded: boolean;
   creatorPublicQuestionResolved: boolean;
+  creatorDraftAccepted: boolean;
+  creatorDraftRejected: boolean;
 }> {
   try {
     const { data, error } = await supabase
       .from("notification_preferences")
-      .select("all_emails_enabled, creator_public_question_ended, creator_public_question_resolved")
+      .select(
+        "all_emails_enabled, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected"
+      )
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
@@ -53,10 +59,18 @@ async function getPrefs(
         typeof (data as any)?.creator_public_question_resolved === "boolean"
           ? (data as any).creator_public_question_resolved
           : true,
+      creatorDraftAccepted: typeof (data as any)?.creator_draft_accepted === "boolean" ? (data as any).creator_draft_accepted : true,
+      creatorDraftRejected: typeof (data as any)?.creator_draft_rejected === "boolean" ? (data as any).creator_draft_rejected : true,
     };
   } catch {
     // Falls Setup fehlt: Default = an (wie in UI)
-    return { allEmailsEnabled: true, creatorPublicQuestionEnded: true, creatorPublicQuestionResolved: true };
+    return {
+      allEmailsEnabled: true,
+      creatorPublicQuestionEnded: true,
+      creatorPublicQuestionResolved: true,
+      creatorDraftAccepted: true,
+      creatorDraftRejected: true,
+    };
   }
 }
 
@@ -114,10 +128,10 @@ export async function GET(request: Request) {
   // 2) "Resolved" (Ergebnis eingetragen) fuer public questions
   const { data: resolvedQuestions, error: resolvedErr } = await supabase
     .from("questions")
-    .select("id,title,creator_id,resolved_outcome,resolved_at,resolved_source,visibility")
+    .select("id,title,creator_id,answer_mode,resolved_outcome,resolved_option_id,resolved_at,resolved_source,visibility")
     .eq("visibility", "public")
     .not("creator_id", "is", null)
-    .not("resolved_outcome", "is", null)
+    .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null")
     .limit(limit);
 
   if (resolvedErr) {
@@ -145,8 +159,52 @@ export async function GET(request: Request) {
   const resolvedAlready = new Set((resolvedSentRows ?? []).map((r: any) => String(r.question_id)));
   const resolvedPending = resolvedRows.filter((r) => !resolvedAlready.has(String(r.id)));
 
+  const optionLabelById = new Map<string, string>();
+  const resolvedOptionIds = resolvedPending
+    .map((r) => String((r as any).resolved_option_id ?? ""))
+    .filter(Boolean);
+  for (let i = 0; i < resolvedOptionIds.length; i += 200) {
+    const chunk = resolvedOptionIds.slice(i, i + 200);
+    const { data: optionRows } = await supabase.from("question_options").select("id,label").in("id", chunk);
+    ((optionRows ?? []) as any[]).forEach((o) => optionLabelById.set(String(o.id), String(o.label ?? "")));
+  }
+
+  // 3) Draft-Entscheide (accepted/rejected) fuer Creator
+  const { data: decidedDrafts, error: draftsErr } = await supabase
+    .from("drafts")
+    .select("id,title,creator_id,status,visibility,share_id")
+    .in("status", ["accepted", "rejected"])
+    .not("creator_id", "is", null)
+    .limit(limit);
+
+  if (draftsErr) {
+    return NextResponse.json({ ok: false, error: "Konnte Draft-Entscheide nicht laden.", details: draftsErr.message }, { status: 500 });
+  }
+
+  const draftRows = (decidedDrafts ?? []) as any[];
+  const draftIds = draftRows.map((r) => String(r.id));
+  const { data: draftSentRows, error: draftSentErr } = draftIds.length
+    ? await supabase.from("creator_draft_decision_emails").select("draft_id").in("draft_id", draftIds)
+    : { data: [], error: null as any };
+
+  if (draftSentErr) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Outbox-Tabelle fehlt oder ist nicht erreichbar. Fuehre `supabase/creator_draft_emails.sql` in Supabase aus.",
+        details: draftSentErr.message,
+      },
+      { status: 500 }
+    );
+  }
+
+  const draftsAlready = new Set((draftSentRows ?? []).map((r: any) => String(r.draft_id)));
+  const draftsPending = draftRows.filter((r) => !draftsAlready.has(String(r.id)));
+
   let endedSent = 0;
   let resolvedSent = 0;
+  let draftDecisionSent = 0;
   let skipped = 0;
 
   const userCache = new Map<string, { email: string; displayName: string; prefs: Awaited<ReturnType<typeof getPrefs>> }>();
@@ -222,6 +280,20 @@ export async function GET(request: Request) {
       skipped += 1;
       continue;
     }
+
+    const answerMode = String((row as any).answer_mode ?? "") === "options" ? "options" : "binary";
+    const outcome = String((row as any).resolved_outcome ?? "");
+    const resolvedOptionId = String((row as any).resolved_option_id ?? "");
+    const resolvedOutcomeLabel =
+      answerMode === "options" && resolvedOptionId
+        ? optionLabelById.get(resolvedOptionId) || "Option"
+        : outcome === "yes"
+          ? "Ja"
+          : outcome === "no"
+            ? "Nein"
+            : outcome;
+
+    const questionUrl = `${siteUrl}/questions/${encodeURIComponent(String(row.id))}`;
     if (!info.prefs.allEmailsEnabled || !info.prefs.creatorPublicQuestionResolved) {
       try {
         await supabase.from("creator_question_resolved_emails").insert({
@@ -229,17 +301,13 @@ export async function GET(request: Request) {
           creator_id: creatorId,
           to_email: info.email,
           resolved_at: (row.resolved_at as string | null) ?? null,
-          resolved_outcome: (row.resolved_outcome as string | null) ?? null,
+          resolved_outcome: resolvedOutcomeLabel || null,
         });
       } catch {
         // ignore
       }
       continue;
     }
-
-    const questionUrl = `${siteUrl}/questions/${encodeURIComponent(String(row.id))}`;
-    const outcome = String(row.resolved_outcome ?? "");
-    const resolvedOutcomeLabel = outcome === "yes" ? "Ja" : outcome === "no" ? "Nein" : outcome;
     try {
       await sendCreatorPublicQuestionResolvedEmail({
         to: info.email,
@@ -255,10 +323,81 @@ export async function GET(request: Request) {
         creator_id: creatorId,
         to_email: info.email,
         resolved_at: (row.resolved_at as string | null) ?? null,
-        resolved_outcome: (row.resolved_outcome as string | null) ?? null,
+        resolved_outcome: resolvedOutcomeLabel || null,
       });
 
       resolvedSent += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+
+  for (const row of draftsPending) {
+    const draftId = String(row.id);
+    const creatorId = String(row.creator_id);
+    const status = String(row.status ?? "");
+    const decision = status === "accepted" ? "accepted" : "rejected";
+
+    const info = await getUserInfo(creatorId);
+    if (!info) {
+      skipped += 1;
+      continue;
+    }
+
+    const prefsAllowed =
+      info.prefs.allEmailsEnabled &&
+      (decision === "accepted" ? info.prefs.creatorDraftAccepted : info.prefs.creatorDraftRejected);
+
+    const draftUrl = `${siteUrl}/drafts/${encodeURIComponent(draftId)}`;
+    const questionId = draftId.startsWith("q_") ? draftId : `q_${draftId}`;
+    const shareId = row.share_id ? String(row.share_id) : null;
+    const visibility = row.visibility ? String(row.visibility) : "public";
+    const acceptedUrl =
+      visibility === "link_only" && shareId ? `${siteUrl}/p/${encodeURIComponent(shareId)}` : `${siteUrl}/questions/${encodeURIComponent(questionId)}`;
+
+    if (!prefsAllowed) {
+      try {
+        await supabase.from("creator_draft_decision_emails").insert({
+          draft_id: draftId,
+          creator_id: creatorId,
+          to_email: info.email,
+          decision,
+          question_id: decision === "accepted" ? questionId : null,
+          share_id: decision === "accepted" ? shareId : null,
+        });
+      } catch {
+        // ignore
+      }
+      continue;
+    }
+
+    try {
+      if (decision === "accepted") {
+        await sendCreatorDraftAcceptedEmail({
+          to: info.email,
+          displayName: info.displayName,
+          title: String(row.title ?? ""),
+          targetUrl: acceptedUrl,
+        });
+      } else {
+        await sendCreatorDraftRejectedEmail({
+          to: info.email,
+          displayName: info.displayName,
+          title: String(row.title ?? ""),
+          draftUrl,
+        });
+      }
+
+      await supabase.from("creator_draft_decision_emails").insert({
+        draft_id: draftId,
+        creator_id: creatorId,
+        to_email: info.email,
+        decision,
+        question_id: decision === "accepted" ? questionId : null,
+        share_id: decision === "accepted" ? shareId : null,
+      });
+
+      draftDecisionSent += 1;
     } catch {
       skipped += 1;
     }
@@ -272,6 +411,9 @@ export async function GET(request: Request) {
     resolvedChecked: resolvedRows.length,
     resolvedPending: resolvedPending.length,
     resolvedSent,
+    draftChecked: draftRows.length,
+    draftPending: draftsPending.length,
+    draftDecisionSent,
     skipped,
     todayUtc: todayUtcIso,
   });

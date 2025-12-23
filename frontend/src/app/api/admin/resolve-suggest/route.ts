@@ -11,6 +11,7 @@ type Body = {
 
 type Suggestion = {
   suggestedOutcome: "yes" | "no" | "unknown";
+  suggestedOptionId: string | null;
   confidence: number;
   note: string;
   sources: string[];
@@ -28,10 +29,22 @@ function safeJsonFromText(text: string): any | null {
   }
 }
 
-function normalizeSuggestion(raw: any): Suggestion | null {
+function normalizeSuggestion(raw: any, opts: { answerMode: "binary" | "options"; validOptionIds?: string[] }): Suggestion | null {
   const outcome = raw?.suggestedOutcome;
-  const suggestedOutcome: Suggestion["suggestedOutcome"] =
+  let suggestedOutcome: Suggestion["suggestedOutcome"] =
     outcome === "yes" || outcome === "no" || outcome === "unknown" ? outcome : "unknown";
+
+  const suggestedOptionIdRaw = raw?.suggestedOptionId;
+  const suggestedOptionIdText = typeof suggestedOptionIdRaw === "string" ? suggestedOptionIdRaw.trim() : "";
+  const validOptionIds = new Set((opts.validOptionIds ?? []).map((v) => String(v)));
+  let suggestedOptionId: string | null =
+    suggestedOptionIdText && validOptionIds.has(suggestedOptionIdText) ? suggestedOptionIdText : null;
+
+  if (opts.answerMode === "binary") {
+    suggestedOptionId = null;
+  } else {
+    suggestedOutcome = "unknown";
+  }
 
   const confidenceRaw = Number(raw?.confidence);
   const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(100, Math.round(confidenceRaw))) : 0;
@@ -44,9 +57,9 @@ function normalizeSuggestion(raw: any): Suggestion | null {
     .filter(Boolean)
     .slice(0, 6);
 
-  if (!note && sources.length === 0 && suggestedOutcome === "unknown") return null;
+  if (!note && sources.length === 0 && suggestedOutcome === "unknown" && !suggestedOptionId) return null;
 
-  return { suggestedOutcome, confidence, note, sources };
+  return { suggestedOutcome, suggestedOptionId, confidence, note, sources };
 }
 
 export async function POST(request: Request) {
@@ -79,7 +92,7 @@ export async function POST(request: Request) {
   const { data: row, error } = await supabase
     .from("questions")
     .select(
-      "id,title,description,category,region,closes_at,resolution_criteria,resolution_source,resolution_deadline"
+      "id,title,description,category,region,closes_at,resolution_criteria,resolution_source,resolution_deadline,answer_mode,is_resolvable"
     )
     .eq("id", questionId)
     .maybeSingle();
@@ -93,28 +106,82 @@ export async function POST(request: Request) {
 
   const model = process.env.PERPLEXITY_MODEL?.trim() || "sonar-pro";
 
-  const prompt = [
-    "Du bist ein Recherche-Assistent fuer die Aufloesung von Prognosefragen (Ja/Nein).",
-    "Nutze Web-Recherche, liefere 2-5 gute Quellen-Links und gib einen Vorschlag fuer das echte Ergebnis.",
-    "",
-    "WICHTIG:",
-    "- Antworte NUR als JSON (ohne Markdown, ohne Text davor/danach).",
-    "- Wenn du das Ergebnis nicht sicher bestimmen kannst: suggestedOutcome = \"unknown\".",
-    "- Quellen muessen als URLs in sources stehen.",
-    "",
-    "JSON Format:",
-    "{\"suggestedOutcome\":\"yes|no|unknown\",\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
-    "",
-    "Frage:",
-    `- Titel: ${String((row as any).title ?? "")}`,
-    `- Beschreibung: ${String((row as any).description ?? "")}`,
-    `- Kategorie: ${String((row as any).category ?? "")}`,
-    `- Region: ${String((row as any).region ?? "")}`,
-    `- Voting-Ende (closes_at): ${String((row as any).closes_at ?? "")}`,
-    `- Aufloesungs-Regeln: ${String((row as any).resolution_criteria ?? "")}`,
-    `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
-    `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
-  ].join("\n");
+  if ((row as any).is_resolvable === false) {
+    return NextResponse.json({ ok: false, error: "Diese Frage ist keine Prognose und kann nicht aufgeloest werden." }, { status: 400 });
+  }
+
+  const answerMode: "binary" | "options" = (row as any).answer_mode === "options" ? "options" : "binary";
+  const optionsRes =
+    answerMode === "options"
+      ? await supabase
+          .from("question_options")
+          .select("id,label,sort_order")
+          .eq("question_id", questionId)
+          .order("sort_order", { ascending: true })
+      : null;
+
+  if (answerMode === "options" && optionsRes?.error) {
+    return NextResponse.json({ ok: false, error: `Optionen konnten nicht geladen werden: ${optionsRes.error.message}` }, { status: 500 });
+  }
+
+  const optionsList = answerMode === "options" ? (((optionsRes?.data ?? []) as any[]) || []) : [];
+  const optionLines =
+    answerMode === "options"
+      ? [
+          "",
+          "Antwortoptionen (du MUSST eine dieser IDs waehlen oder null):",
+          ...optionsList.map((o: any) => `- ${String(o.id)} | ${String(o.label ?? "")}`),
+        ]
+      : [];
+
+  const prompt =
+    answerMode === "binary"
+      ? [
+          "Du bist ein Recherche-Assistent fuer die Aufloesung von Prognosefragen (Ja/Nein).",
+          "Nutze Web-Recherche, liefere 2-5 gute Quellen-Links und gib einen Vorschlag fuer das echte Ergebnis.",
+          "",
+          "WICHTIG:",
+          "- Antworte NUR als JSON (ohne Markdown, ohne Text davor/danach).",
+          "- Wenn du das Ergebnis nicht sicher bestimmen kannst: suggestedOutcome = \"unknown\".",
+          "- Quellen muessen als URLs in sources stehen.",
+          "",
+          "JSON Format:",
+          "{\"suggestedOutcome\":\"yes|no|unknown\",\"suggestedOptionId\":null,\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
+          "",
+          "Frage:",
+          `- Titel: ${String((row as any).title ?? "")}`,
+          `- Beschreibung: ${String((row as any).description ?? "")}`,
+          `- Kategorie: ${String((row as any).category ?? "")}`,
+          `- Region: ${String((row as any).region ?? "")}`,
+          `- Voting-Ende (closes_at): ${String((row as any).closes_at ?? "")}`,
+          `- Aufloesungs-Regeln: ${String((row as any).resolution_criteria ?? "")}`,
+          `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
+          `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
+        ].join("\n")
+      : [
+          "Du bist ein Recherche-Assistent fuer die Aufloesung von Prognosefragen (Optionen).",
+          "Nutze Web-Recherche, liefere 2-5 gute Quellen-Links und gib einen Vorschlag fuer die richtige Gewinner-Option.",
+          "",
+          "WICHTIG:",
+          "- Antworte NUR als JSON (ohne Markdown, ohne Text davor/danach).",
+          "- Wenn du das Ergebnis nicht sicher bestimmen kannst: suggestedOutcome = \"unknown\" und suggestedOptionId = null.",
+          "- suggestedOptionId MUSS exakt eine der unten stehenden IDs sein (oder null).",
+          "- Quellen muessen als URLs in sources stehen.",
+          "",
+          "JSON Format:",
+          "{\"suggestedOutcome\":\"unknown\",\"suggestedOptionId\":\"uuid|null\",\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
+          "",
+          "Frage:",
+          `- Titel: ${String((row as any).title ?? "")}`,
+          `- Beschreibung: ${String((row as any).description ?? "")}`,
+          `- Kategorie: ${String((row as any).category ?? "")}`,
+          `- Region: ${String((row as any).region ?? "")}`,
+          `- Voting-Ende (closes_at): ${String((row as any).closes_at ?? "")}`,
+          `- Aufloesungs-Regeln: ${String((row as any).resolution_criteria ?? "")}`,
+          `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
+          `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
+          ...optionLines,
+        ].join("\n");
 
   const res = await fetch("https://api.perplexity.ai/chat/completions", {
     method: "POST",
@@ -148,7 +215,10 @@ export async function POST(request: Request) {
   }
 
   const parsed = safeJsonFromText(content.trim());
-  const suggestion = normalizeSuggestion(parsed);
+  const suggestion = normalizeSuggestion(parsed, {
+    answerMode,
+    validOptionIds: answerMode === "options" ? optionsList.map((o: any) => String(o.id)) : undefined,
+  });
   if (!suggestion) {
     return NextResponse.json(
       { error: "KI-Antwort konnte nicht als JSON gelesen werden.", raw: content.slice(0, 1500) },
