@@ -46,6 +46,7 @@ export type Question = {
   answerMode?: AnswerMode;
   isResolvable?: boolean;
   options?: PollOption[];
+  leadingOptionIds?: string[];
   resolvedOptionId?: string;
 
   // Aufloesung (Seriositaet-MVP)

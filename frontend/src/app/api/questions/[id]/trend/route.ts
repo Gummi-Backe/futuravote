@@ -16,6 +16,7 @@ type MetricRow = {
 };
 
 type OptionRow = { id: string; label: string; sort_order: number };
+type OptionMetricRow = { day: string; option_id: string; votes: number };
 
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -62,7 +63,7 @@ export async function GET(request: Request, context: Params) {
           .order("sort_order", { ascending: true })
       : { data: null as any };
 
-  // Etappe 2: bevorzugt Snapshot-Tabelle (skalierbar), fallback auf Roh-Votes wenn nicht vorhanden.
+  // Etappe 2: bevorzugt Snapshot-Tabellen (skalierbar), fallback auf Roh-Votes wenn nicht vorhanden.
   const { data: metricsData, error: metricsError } = await supabase
     .from("question_metrics_daily")
     .select("day, yes_votes, no_votes, views, ranking_score")
@@ -71,8 +72,17 @@ export async function GET(request: Request, context: Params) {
     .lte("day", todayDay)
     .order("day", { ascending: true });
 
-  // Bei Options-Umfragen sind Snapshots fuer Votes aktuell nicht geeignet (yes/no bleiben 0),
-  // aber Views/Ranking koennen trotzdem genutzt werden.
+  const { data: optionMetricsData, error: optionMetricsError } =
+    answerMode === "options"
+      ? await supabase
+          .from("question_option_metrics_daily")
+          .select("day, option_id, votes")
+          .eq("question_id", id)
+          .gte("day", startDay)
+          .lte("day", todayDay)
+          .order("day", { ascending: true })
+      : { data: null as any, error: null as any };
+
   if (answerMode === "binary" && !metricsError && Array.isArray(metricsData) && metricsData.length > 0) {
     const byDate = new Map<string, { yes: number; no: number; views: number | null; rankingScore: number | null }>();
     for (const row of (metricsData as unknown as MetricRow[])) {
@@ -114,6 +124,77 @@ export async function GET(request: Request, context: Params) {
       source: "snapshots",
       answerMode: "binary",
       options: null,
+      points,
+    });
+  }
+
+  if (
+    answerMode === "options" &&
+    !optionMetricsError &&
+    Array.isArray(optionMetricsData) &&
+    optionMetricsData.length > 0
+  ) {
+    const metricsByDate = new Map<string, { views: number | null; rankingScore: number | null }>();
+    if (!metricsError && Array.isArray(metricsData) && metricsData.length > 0) {
+      for (const row of (metricsData as unknown as MetricRow[])) {
+        if (!row?.day) continue;
+        metricsByDate.set(row.day, { views: row.views ?? null, rankingScore: row.ranking_score ?? null });
+      }
+    }
+
+    const byDateOptions = new Map<string, Map<string, number>>();
+    for (const row of (optionMetricsData as unknown as OptionMetricRow[])) {
+      const day = String((row as any)?.day ?? "");
+      const optionId = String((row as any)?.option_id ?? "");
+      if (!day || !optionId) continue;
+      const votes = Math.max(0, Number((row as any)?.votes ?? 0) || 0);
+      const map = byDateOptions.get(day) ?? new Map<string, number>();
+      map.set(optionId, votes);
+      byDateOptions.set(day, map);
+    }
+
+    const points: Array<{
+      date: string;
+      total: number;
+      optionCounts: Record<string, number>;
+      views: number | null;
+      rankingScore: number | null;
+    }> = [];
+
+    for (let i = 0; i < days; i += 1) {
+      const d = addUtcDays(start, i);
+      const key = dateKeyUtc(d.toISOString());
+      const meta = metricsByDate.get(key) ?? { views: null, rankingScore: null };
+      const map = byDateOptions.get(key) ?? new Map<string, number>();
+      const optionCounts: Record<string, number> = {};
+      let total = 0;
+      map.forEach((count, optionId) => {
+        const safe = Math.max(0, Number(count) || 0);
+        optionCounts[optionId] = safe;
+        total += safe;
+      });
+
+      points.push({
+        date: key,
+        total,
+        optionCounts,
+        views: meta.views,
+        rankingScore: meta.rankingScore,
+      });
+    }
+
+    const options =
+      answerMode === "options"
+        ? ((optionRows ?? []) as OptionRow[]).map((o) => ({ id: String(o.id), label: String(o.label) }))
+        : null;
+
+    return NextResponse.json({
+      questionId: id,
+      days,
+      startDate: startDay,
+      source: "snapshots",
+      answerMode: "options",
+      options,
       points,
     });
   }
@@ -203,6 +284,9 @@ export async function GET(request: Request, context: Params) {
 
   if (metricsError) {
     console.warn("Trend snapshots unavailable; fallback to votes:", metricsError);
+  }
+  if (optionMetricsError) {
+    console.warn("Trend option snapshots unavailable; fallback to votes:", optionMetricsError);
   }
 
   const options = answerMode === "options" ? ((optionRows ?? []) as OptionRow[]).map((o) => ({ id: String(o.id), label: String(o.label) })) : null;

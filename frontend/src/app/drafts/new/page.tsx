@@ -742,6 +742,21 @@ export default function NewDraftPage() {
 
   const currentCategoryLabel = (useCustomCategory ? customCategory : category) || "Kategorie";
 
+  const previewOptionLabels = useMemo(() => {
+    if (answerMode !== "options") return [];
+
+    const placeholders = ["Option A", "Option B", "Option C", "Option D", "Option E", "Option F"];
+
+    const cleaned = (pollOptions ?? [])
+      .map((v) => String(v ?? "").trim())
+      .filter((v) => v.length > 0)
+      .slice(0, 6);
+
+    const next = [...cleaned];
+    for (let i = next.length; i < 2; i += 1) next.push(placeholders[i]);
+    return next.slice(0, 6);
+  }, [answerMode, pollOptions]);
+
   const previewCard = (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-md shadow-emerald-500/10">
       <div className="flex items-start gap-3 text-xs font-semibold text-slate-100">
@@ -773,6 +788,58 @@ export default function NewDraftPage() {
           </h3>
           {description && <p className="text-xs text-slate-200 line-clamp-2">{description}</p>}
         </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold">
+        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">
+          {pollKind === "meinung" ? "Meinungs-Umfrage" : "Prognose"}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">
+          {answerMode === "options" ? "Optionen" : "Ja/Nein"}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">
+          {visibility === "link_only" ? "Privat" : "Öffentlich"}
+        </span>
+      </div>
+      <div className="mt-3">
+        {answerMode === "options" ? (
+          <div className="space-y-2">
+            {previewOptionLabels.map((label, idx) => {
+              const width = Math.max(22, 68 - idx * 6);
+              return (
+                <button
+                  key={`${idx}-${label}`}
+                  type="button"
+                  disabled
+                  className="group relative h-7 w-full overflow-hidden rounded-lg border border-white/10 bg-white/5 px-2 text-left text-[11px] font-semibold text-slate-100"
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 bg-emerald-500/20"
+                    style={{ width: `${width}%` }}
+                    aria-hidden="true"
+                  />
+                  <span className="relative z-10 truncate">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled
+              className="h-9 rounded-xl border border-emerald-300/30 bg-emerald-500/15 text-xs font-bold text-emerald-50"
+            >
+              Ja
+            </button>
+            <button
+              type="button"
+              disabled
+              className="h-9 rounded-xl border border-rose-300/30 bg-rose-500/15 text-xs font-bold text-rose-50"
+            >
+              Nein
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -846,26 +913,16 @@ export default function NewDraftPage() {
               )}
             </div>
           )}
-          <div className="sticky top-4 z-20 mb-4">
-            <div className="space-y-3 rounded-2xl border border-white/20 bg-slate-950/95 p-4 shadow-xl shadow-emerald-500/25">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-white">Kachel-Vorschau</h2>
-                <span className="text-[11px] text-slate-400">
-                  So ungefähr wird deine Frage im Feed aussehen.
-                </span>
-              </div>
-              {previewCard}
-            </div>
-          </div>
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-white">Frage vorschlagen</h1>
+              <p className="mt-1 text-sm text-slate-300">
+                Formuliere eine neue Prognosefrage. Öffentlich geht sie erst in den Community-Review und danach in den Feed.
+                Privat (nur per Link) ist sie nicht im Feed gelistet und wird direkt per Link abgestimmt.
+              </p>
 
-          <h1 className="text-2xl font-bold text-white">Frage vorschlagen</h1>
-          <p className="mt-1 text-sm text-slate-300">
-            Formuliere eine neue Prognosefrage. Öffentlich geht sie erst in den Community-Review und danach in den Feed.
-            Privat (nur per Link) ist sie nicht im Feed gelistet und wird direkt per Link abgestimmt.
-          </p>
-
-           {currentUser && currentUser.emailVerified !== false && (
-             <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
+              {currentUser && currentUser.emailVerified !== false && (
+                <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="mt-6 space-y-5">
              <div className="space-y-3 rounded-2xl border border-white/15 bg-black/20 p-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-100">Sichtbarkeit</label>
@@ -928,8 +985,8 @@ export default function NewDraftPage() {
                 </div>
                 <p className="text-xs text-slate-400">
                   {pollKind === "prognose"
-                    ? "Prognose: wird sp„ter aufgel”st (fr Punkte & Ranking)."
-                    : "Meinungs-Umfrage: endet nur (ohne Aufl”sung & ohne Punkte)."}
+                    ? "Prognose: wird später aufgelöst (für Punkte & Ranking)."
+                    : "Meinungs-Umfrage: endet nur (ohne Auflösung & ohne Punkte)."}
                 </p>
               </div>
 
@@ -960,7 +1017,7 @@ export default function NewDraftPage() {
                   </button>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Nach dem Verffentlichen sind die Antwortoptionen fix und k”nnen nicht mehr ge„ndert werden.
+                  Nach dem Veröffentlichen sind die Antwortoptionen fix und können nicht mehr geändert werden.
                 </p>
               </div>
 
@@ -1551,7 +1608,31 @@ export default function NewDraftPage() {
               </button>
             </div>
           </form>
-          )}
+              )}
+
+              <div className="mt-6 lg:hidden">
+                <div className="space-y-3 rounded-2xl border border-white/20 bg-slate-950/95 p-4 shadow-xl shadow-emerald-500/25">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-white">Kachel-Vorschau</h2>
+                    <span className="text-[11px] text-slate-400">So ungefähr wird deine Frage im Feed aussehen.</span>
+                  </div>
+                  {previewCard}
+                </div>
+              </div>
+            </div>
+
+            <aside className="hidden lg:block">
+              <div className="sticky top-4 z-20">
+                <div className="space-y-3 rounded-2xl border border-white/20 bg-slate-950/95 p-4 shadow-xl shadow-emerald-500/25">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-white">Kachel-Vorschau</h2>
+                    <span className="text-[11px] text-slate-400">So ungefähr wird deine Frage im Feed aussehen.</span>
+                  </div>
+                  {previewCard}
+                </div>
+              </div>
+            </aside>
+          </div>
         </section>
       </div>
     </main>

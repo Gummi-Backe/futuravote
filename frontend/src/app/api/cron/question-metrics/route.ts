@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: "Snapshot konnte nicht erstellt werden. SQL-Funktion vorhanden?",
-        hint: "Fuehre `supabase/question_metrics_daily.sql` in Supabase aus und stelle sicher, dass die Funktion `refresh_question_metrics_daily` existiert.",
+        hint: "Fuehre `supabase/question_metrics_daily.sql` in Supabase aus (inkl. Options-Snapshots) und stelle sicher, dass die Funktion `refresh_question_metrics_daily` existiert.",
         details: error.message,
       },
       { status: 500 }
@@ -40,4 +40,3 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ ok: true, result: data });
 }
-

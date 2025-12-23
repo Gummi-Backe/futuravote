@@ -8,10 +8,14 @@ sollte RLS (Row Level Security) aktiv sein.
 - In Supabase: `SQL Editor` oeffnen
 - Inhalt aus `supabase/link_only_polls.sql` ausfuehren (einmalig, falls du Private/Link-only Umfragen nutzt)
 - Inhalt aus `supabase/poll_options.sql` ausfuehren (einmalig, fuer Options-Umfragen + Prognose/Meinungs-Umfrage Toggle)
+- Inhalt aus `supabase/votes_hardening.sql` ausfuehren (einmalig, empfohlen: Votes-Constraints + votes.id)
 - Inhalt aus `supabase/draft_reviews.sql` ausfuehren (einmalig)
 - Inhalt aus `supabase/password_resets.sql` ausfuehren (einmalig)
 - Inhalt aus `supabase/question_metrics_daily.sql` ausfuehren (einmalig, fuer Trend Etappe 2 Snapshots)
 - Inhalt aus `supabase/rls_policies.sql` ausfuehren (idempotent)
+- Optional: `supabase/seed_content_curated.sql` (Start-Content fuer einen nicht-leeren Feed)
+- Optional: `supabase/seed_demo_activity.sql` (Demo-Votes/Reviews/Reports/Analytics fuer realistische Tests)
+- Optional: `supabase/db_reset_content.sql` (Content/Activity leeren, `users`/`user_sessions` behalten)
 - In Vercel/Prod und lokal sicherstellen:
   - `SUPABASE_SERVICE_ROLE_KEY` ist als **Server-Secret** gesetzt (niemals `NEXT_PUBLIC_...`)
 

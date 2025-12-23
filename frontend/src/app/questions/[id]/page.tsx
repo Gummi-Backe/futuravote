@@ -224,7 +224,7 @@ export default async function QuestionDetail(props: {
       ? question.userOptionId
         ? (() => {
             const label = options.find((o) => o.id === question.userOptionId)?.label;
-            return label ? `Du hast \"${label}\" gew„hlt` : "Du hast abgestimmt";
+            return label ? `Du hast \"${label}\" gewählt` : "Du hast abgestimmt";
           })()
         : null
       : question.userChoice === "yes"

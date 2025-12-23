@@ -484,6 +484,20 @@ function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: Poll
   const totalBinary = yesVotes + noVotes;
   const totalVotes = answerMode === "options" ? optionVotesTotal : totalBinary;
 
+  const leadingOptionIds =
+    answerMode === "options"
+      ? (() => {
+          const list = options ?? [];
+          if (list.length === 0) return [];
+          let maxVotes = 0;
+          for (const opt of list) {
+            maxVotes = Math.max(maxVotes, Math.max(0, opt.votesCount ?? 0));
+          }
+          if (maxVotes <= 0) return [];
+          return list.filter((opt) => Math.max(0, opt.votesCount ?? 0) === maxVotes).map((opt) => opt.id);
+        })()
+      : undefined;
+
   const totalForPct = Math.max(1, totalBinary);
   const yesPct = answerMode === "binary" ? Math.round((yesVotes / totalForPct) * 100) : 0;
   const noPct = answerMode === "binary" ? 100 - yesPct : 0;
@@ -535,6 +549,7 @@ function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: Poll
     answerMode,
     isResolvable,
     options: computeOptionPcts(options),
+    leadingOptionIds,
     resolutionCriteria: row.resolution_criteria ?? undefined,
     resolutionSource: row.resolution_source ?? undefined,
     resolutionDeadline: row.resolution_deadline ?? undefined,

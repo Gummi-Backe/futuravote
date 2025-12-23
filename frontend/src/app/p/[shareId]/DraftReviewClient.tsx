@@ -170,6 +170,18 @@ export function DraftReviewClient({
       </div>
 
       <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
+      {draft.answerMode === "options" && (draft.options?.length ?? 0) > 0 ? (
+        <div className="space-y-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Antwortoptionen</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-200">
+            {(draft.options ?? []).slice(0, 6).map((opt) => (
+              <div key={opt.id} className="min-w-0 truncate" title={opt.label}>
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {draft.description && <p className="text-xs text-slate-200">{draft.description}</p>}
 
       <div className="flex items-center gap-2 text-xs text-slate-200">

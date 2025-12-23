@@ -28,6 +28,21 @@ create index if not exists question_metrics_daily_day_idx
 -- Server-only: keine Public Policies (Service-Role only)
 alter table public.question_metrics_daily enable row level security;
 
+-- Options-Umfragen: Votes pro Option/Tag (damit Trend ohne Roh-Votes skalieren kann)
+create table if not exists public.question_option_metrics_daily (
+  question_id text not null,
+  option_id uuid not null references public.question_options(id) on delete cascade,
+  day date not null,
+  votes integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (question_id, option_id, day)
+);
+
+create index if not exists question_option_metrics_daily_day_idx
+  on public.question_option_metrics_daily (day);
+
+alter table public.question_option_metrics_daily enable row level security;
+
 -- Refresh-Funktion: aggregiert Votes (letzte N Tage) + schreibt heutigen Views/Ranking Snapshot
 create or replace function public.refresh_question_metrics_daily(days_back integer default 120)
 returns jsonb
@@ -38,6 +53,7 @@ as $$
 declare
   start_date date := ((now() at time zone 'UTC')::date - greatest(1, coalesce(days_back, 120)));
   votes_rows int := 0;
+  option_rows int := 0;
   snap_rows int := 0;
 begin
   -- Votes -> daily aggregates (yes/no)
@@ -57,6 +73,24 @@ begin
         updated_at = now();
 
   get diagnostics votes_rows = row_count;
+
+  -- Options-Votes -> daily aggregates (pro option_id)
+  insert into public.question_option_metrics_daily (question_id, option_id, day, votes, updated_at)
+  select
+    v.question_id,
+    v.option_id,
+    (v.created_at at time zone 'UTC')::date as day,
+    count(*)::int as votes,
+    now()
+  from public.votes v
+  where v.created_at >= (start_date::timestamptz)
+    and v.option_id is not null
+  group by v.question_id, v.option_id, (v.created_at at time zone 'UTC')::date
+  on conflict (question_id, option_id, day) do update
+    set votes = excluded.votes,
+        updated_at = now();
+
+  get diagnostics option_rows = row_count;
 
   -- Views/Ranking Snapshot fuer "heute" (UTC)
   insert into public.question_metrics_daily (question_id, day, yes_votes, no_votes, views, ranking_score, updated_at)
@@ -81,6 +115,7 @@ begin
     'daysBack', coalesce(days_back, 120),
     'startDateUtc', start_date::text,
     'votesRowsUpserted', votes_rows,
+    'optionRowsUpserted', option_rows,
     'snapshotRowsUpserted', snap_rows
   );
 end;
