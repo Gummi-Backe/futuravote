@@ -1113,7 +1113,7 @@ export default function NewDraftPage() {
                 </div>
                 <p className="text-xs text-slate-400">
                   {answerMode === "options"
-                    ? "Optionen: 2–6 feste Antworten (Single-Choice). Du definierst sie direkt unten."
+                    ? "Optionen: 2–6 feste Antworten (Single-Choice). Du definierst sie weiter unten (nach Titel/Beschreibung)."
                     : "Ja/Nein: schnelle Abstimmung mit zwei Antworten."}{" "}
                   Nach dem Veröffentlichen sind die Antwortoptionen fix und können nicht mehr geändert werden.
                 </p>
@@ -1145,62 +1145,6 @@ export default function NewDraftPage() {
                 ) : null}
               </div>
 
-              {answerMode === "options" ? (
-                <div className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3 list-enter">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-white">Antwortoptionen</span>
-                    <button
-                      type="button"
-                      onClick={() => setPollOptions((prev) => (prev.length >= 6 ? prev : [...prev, ""]))}
-                      disabled={pollOptions.length >= 6}
-                      className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40 disabled:opacity-50"
-                    >
-                      + Option
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {pollOptions.map((opt, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="w-5 text-xs font-semibold text-slate-300">{idx + 1}.</span>
-                        <input
-                          type="text"
-                          value={opt}
-                          onChange={(e) =>
-                            setPollOptions((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
-                          }
-                          className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                          placeholder={idx === 0 ? "Option A" : idx === 1 ? "Option B" : `Option ${idx + 1}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPollOptions((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx)))
-                          }
-                          disabled={pollOptions.length <= 2}
-                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:border-rose-200/40 disabled:opacity-50"
-                          title="Option entfernen"
-                        >
-                          Entfernen
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    {pollOptionsValidation.filledCount}/6 ausgefüllt · mindestens 2 erforderlich
-                  </div>
-                  {pollOptionsValidation.ok ? (
-                    <p className="text-xs text-slate-400">
-                      Mindestens 2, maximal 6. „Keine Ahnung/Enthaltung“ kann einfach eine Option sein.
-                    </p>
-                  ) : (
-                    <div className="rounded-xl border border-rose-300/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-50/90">
-                      {pollOptionsValidation.errors.map((msg) => (
-                        <div key={msg}>{msg}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
             </div>
 
             {isAdmin ? (
@@ -1287,6 +1231,63 @@ export default function NewDraftPage() {
                   sondern in der Detailansicht der Frage.
                 </p>
               </div>
+
+              {answerMode === "options" ? (
+                <div className="space-y-2 list-enter">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-sm font-medium text-slate-100">Antwortoptionen</label>
+                    <button
+                      type="button"
+                      onClick={() => setPollOptions((prev) => (prev.length >= 6 ? prev : [...prev, ""]))}
+                      disabled={pollOptions.length >= 6}
+                      className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40 disabled:opacity-50"
+                    >
+                      + Option
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {pollOptions.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="w-5 text-xs font-semibold text-slate-300">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) =>
+                            setPollOptions((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))
+                          }
+                          className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                          placeholder={idx === 0 ? "Option A" : idx === 1 ? "Option B" : `Option ${idx + 1}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPollOptions((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx)))
+                          }
+                          disabled={pollOptions.length <= 2}
+                          className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 hover:border-rose-200/40 disabled:opacity-50"
+                          title="Option entfernen"
+                        >
+                          Entfernen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {pollOptionsValidation.filledCount}/6 ausgefüllt · mindestens 2 erforderlich
+                  </div>
+                  {pollOptionsValidation.ok ? (
+                    <p className="text-xs text-slate-400">
+                      Mindestens 2, maximal 6. „Keine Ahnung/Enthaltung“ kann einfach eine Option sein.
+                    </p>
+                  ) : (
+                    <div className="rounded-xl border border-rose-300/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-50/90">
+                      {pollOptionsValidation.errors.map((msg) => (
+                        <div key={msg}>{msg}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {!isPrivatePoll && isResolvable ? (
                 <div className="space-y-2 pt-1">
