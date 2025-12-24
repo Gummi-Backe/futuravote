@@ -757,6 +757,36 @@ export default function NewDraftPage() {
     return next.slice(0, 6);
   }, [answerMode, pollOptions]);
 
+  const pollOptionsValidation = useMemo(() => {
+    if (answerMode !== "options") {
+      return { ok: true, errors: [] as string[], filledCount: 0, hasDuplicates: false, hasTooLong: false };
+    }
+
+    const cleaned = (pollOptions ?? [])
+      .map((v) => String(v ?? "").trim())
+      .filter((v) => v.length > 0)
+      .slice(0, 6);
+
+    const filledCount = cleaned.length;
+
+    const seen = new Set<string>();
+    let hasDuplicates = false;
+    let hasTooLong = false;
+    for (const label of cleaned) {
+      if (label.length > 80) hasTooLong = true;
+      const key = label.toLocaleLowerCase("de-DE");
+      if (seen.has(key)) hasDuplicates = true;
+      seen.add(key);
+    }
+
+    const errors: string[] = [];
+    if (filledCount < 2) errors.push("Bitte mindestens 2 Antwortoptionen ausfüllen.");
+    if (hasTooLong) errors.push("Eine Option ist zu lang (max. 80 Zeichen).");
+    if (hasDuplicates) errors.push("Antwortoptionen müssen eindeutig sein.");
+
+    return { ok: errors.length === 0, errors, filledCount, hasDuplicates, hasTooLong };
+  }, [answerMode, pollOptions]);
+
   const previewCard = (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-md shadow-emerald-500/10">
       <div className="flex items-start gap-3 text-xs font-semibold text-slate-100">
@@ -800,7 +830,7 @@ export default function NewDraftPage() {
           {visibility === "link_only" ? "Privat" : "Öffentlich"}
         </span>
       </div>
-      <div className="mt-3">
+      <div key={`preview-vote-${pollKind}-${answerMode}`} className="mt-3 list-enter">
         {answerMode === "options" ? (
           <div className="space-y-2">
             {previewOptionLabels.map((label, idx) => {
@@ -969,6 +999,9 @@ export default function NewDraftPage() {
                         : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
                     }`}
                   >
+                    <span aria-hidden="true" className="mr-2">
+                      🔮
+                    </span>
                     Prognose
                   </button>
                   <button
@@ -980,13 +1013,16 @@ export default function NewDraftPage() {
                         : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
                     }`}
                   >
+                    <span aria-hidden="true" className="mr-2">
+                      💬
+                    </span>
                     Meinungs-Umfrage
                   </button>
                 </div>
                 <p className="text-xs text-slate-400">
                   {pollKind === "prognose"
-                    ? "Prognose: wird später aufgelöst (für Punkte & Ranking)."
-                    : "Meinungs-Umfrage: endet nur (ohne Auflösung & ohne Punkte)."}
+                    ? "Prognose: später Auflösung (mit Quelle) und Punkte fürs Ranking."
+                    : "Meinungs-Umfrage: nur Abstimmungsende, keine Auflösung und keine Punkte."}
                 </p>
               </div>
 
@@ -1002,6 +1038,9 @@ export default function NewDraftPage() {
                         : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
                     }`}
                   >
+                    <span aria-hidden="true" className="mr-2">
+                      ✅
+                    </span>
                     Ja/Nein
                   </button>
                   <button
@@ -1013,16 +1052,22 @@ export default function NewDraftPage() {
                         : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
                     }`}
                   >
+                    <span aria-hidden="true" className="mr-2">
+                      📊
+                    </span>
                     Optionen (2–6)
                   </button>
                 </div>
                 <p className="text-xs text-slate-400">
+                  {answerMode === "options"
+                    ? "Optionen: 2–6 feste Antworten (Single-Choice). Du definierst sie direkt unten."
+                    : "Ja/Nein: schnelle Abstimmung mit zwei Antworten."}{" "}
                   Nach dem Veröffentlichen sind die Antwortoptionen fix und können nicht mehr geändert werden.
                 </p>
               </div>
 
               {answerMode === "options" ? (
-                <div className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <div className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3 list-enter">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-white">Antwortoptionen</span>
                     <button
@@ -1061,9 +1106,17 @@ export default function NewDraftPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-slate-400">
-                    Mindestens 2, maximal 6. "Keine Ahnung/Enthaltung" kann einfach eine Option sein.
-                  </p>
+                  {pollOptionsValidation.ok ? (
+                    <p className="text-xs text-slate-400">
+                      Mindestens 2, maximal 6. „Keine Ahnung/Enthaltung“ kann einfach eine Option sein.
+                    </p>
+                  ) : (
+                    <div className="rounded-xl border border-rose-300/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-50/90">
+                      {pollOptionsValidation.errors.map((msg) => (
+                        <div key={msg}>{msg}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>
