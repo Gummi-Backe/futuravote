@@ -157,6 +157,8 @@ export default function NewDraftPage() {
   const isResolvable = pollKind === "prognose";
   const [answerMode, setAnswerMode] = useState<AnswerMode>("binary");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [showTypeHelp, setShowTypeHelp] = useState(false);
+  const [showAnswerModeHelp, setShowAnswerModeHelp] = useState(false);
 
   const [resolutionCriteria, setResolutionCriteria] = useState("");
   const [resolutionSource, setResolutionSource] = useState("");
@@ -988,7 +990,23 @@ export default function NewDraftPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-100">Typ</label>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-slate-100">Typ</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTypeHelp((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40"
+                    aria-expanded={showTypeHelp}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[11px] text-slate-100"
+                    >
+                      ?
+                    </span>
+                    Was ist das?
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -1024,10 +1042,45 @@ export default function NewDraftPage() {
                     ? "Prognose: später Auflösung (mit Quelle) und Punkte fürs Ranking."
                     : "Meinungs-Umfrage: nur Abstimmungsende, keine Auflösung und keine Punkte."}
                 </p>
+                {showTypeHelp ? (
+                  <div className="list-enter rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    <div className="font-semibold text-white">Kurz erklärt</div>
+                    <ul className="mt-1 space-y-1 text-slate-200">
+                      <li>
+                        <span className="font-semibold">Prognose</span>: Es gibt später ein echtes Ergebnis mit Quelle
+                        (Auflösung). Richtige Stimmen geben Punkte.
+                      </li>
+                      <li>
+                        <span className="font-semibold">Meinungs-Umfrage</span>: Reines Stimmungsbild. Es gibt nur ein
+                        Abstimmungsende, aber keine Auflösung und keine Punkte.
+                      </li>
+                    </ul>
+                    <div className="mt-2 text-slate-300">
+                      <span className="font-semibold">Beispiele</span>: „Kommt es bis 31.12.2026 zu …?“ (Prognose) ·
+                      „Wie bewerten Sie …?“ (Meinungs-Umfrage)
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-100">Antwortmodus</label>
+              <div className="space-y-2 border-t border-white/10 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-sm font-medium text-slate-100">Antwortmodus</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAnswerModeHelp((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40"
+                    aria-expanded={showAnswerModeHelp}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[11px] text-slate-100"
+                    >
+                      ?
+                    </span>
+                    Hilfe
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -1064,6 +1117,32 @@ export default function NewDraftPage() {
                     : "Ja/Nein: schnelle Abstimmung mit zwei Antworten."}{" "}
                   Nach dem Veröffentlichen sind die Antwortoptionen fix und können nicht mehr geändert werden.
                 </p>
+                {pollKind === "prognose" && answerMode === "options" ? (
+                  <p className="text-xs text-slate-300">
+                    <span className="font-semibold text-white">Prognose + Optionen:</span> Später wird genau{" "}
+                    <span className="font-semibold">eine Gewinner-Option</span> mit Quelle aufgelöst – dafür gibt es
+                    Punkte im Ranking.
+                  </p>
+                ) : null}
+                {showAnswerModeHelp ? (
+                  <div className="list-enter rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    <div className="font-semibold text-white">Kurz erklärt</div>
+                    <ul className="mt-1 space-y-1 text-slate-200">
+                      <li>
+                        <span className="font-semibold">Ja/Nein</span>: Schnell, eindeutig. Gut für klassische
+                        Prognosen.
+                      </li>
+                      <li>
+                        <span className="font-semibold">Optionen</span>: 2–6 feste Antworten. Ideal für Wahlen,
+                        Ranglisten oder Bewertungen.
+                      </li>
+                    </ul>
+                    <div className="mt-2 text-slate-300">
+                      <span className="font-semibold">Beispiele</span>: „Gewinnt Partei A/B/C?“ (Optionen) · „Kommt es
+                      dazu: Ja/Nein?“ (Ja/Nein)
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {answerMode === "options" ? (
@@ -1105,6 +1184,9 @@ export default function NewDraftPage() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {pollOptionsValidation.filledCount}/6 ausgefüllt · mindestens 2 erforderlich
                   </div>
                   {pollOptionsValidation.ok ? (
                     <p className="text-xs text-slate-400">
