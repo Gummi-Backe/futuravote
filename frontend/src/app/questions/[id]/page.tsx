@@ -392,8 +392,10 @@ export default async function QuestionDetail(props: {
                 <div className="space-y-3">
                   {options.map((opt) => (
                     <div key={opt.id} className="space-y-1">
-                      <div className="flex items-center justify-between gap-3 text-sm text-slate-200">
-                        <span className="min-w-0 truncate">{opt.label}</span>
+                      <div className="flex items-start gap-3 text-sm text-slate-200">
+                        <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">
+                          {opt.label}
+                        </span>
                         <span className="shrink-0 font-semibold text-white">{opt.pct ?? 0}%</span>
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
