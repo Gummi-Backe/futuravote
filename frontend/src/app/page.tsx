@@ -168,18 +168,18 @@ function EventCard({
   const isOptions = answerMode === "options";
   const votedChoice = question.userChoice;
   const voted = isOptions ? Boolean(question.userOptionId) : Boolean(votedChoice);
-  const votedLabel = isOptions
-    ? question.userOptionId
+  const votedTooltip = voted
+    ? isOptions
       ? (() => {
           const label = question.options?.find((o) => o.id === question.userOptionId)?.label;
-          return label ? `Abgestimmt: ${label}` : "Abgestimmt";
+          return label ? `Du hast abgestimmt: ${label}` : "Du hast abgestimmt";
         })()
-      : null
-    : votedChoice
-      ? votedChoice === "yes"
-        ? "Abgestimmt: Ja"
-        : "Abgestimmt: Nein"
-      : null;
+      : votedChoice === "yes"
+        ? "Du hast abgestimmt: Ja"
+        : votedChoice === "no"
+          ? "Du hast abgestimmt: Nein"
+          : "Du hast abgestimmt"
+    : null;
   const voteLocked = voted;
   const isClosingSoon = question.status === "closingSoon";
   const hasChoice = votedChoice === "yes" || votedChoice === "no";
@@ -199,7 +199,7 @@ function EventCard({
   return (
     <article
       className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 mx-auto ${
-        voted ? "border-emerald-300/50 shadow-emerald-400/30" : ""
+        voted ? "ring-1 ring-emerald-300/25 border-emerald-300/35 shadow-emerald-400/25" : ""
       } ${
         isClosingSoon ? "border-amber-300/60 shadow-amber-400/30" : ""
       }`}
@@ -223,11 +223,15 @@ function EventCard({
               {badge.label}
             </span>
           )}
-          {votedLabel && (
-            <span className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
-              {votedLabel}
+          {votedTooltip ? (
+            <span
+              title={votedTooltip}
+              aria-label={votedTooltip}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-500/15 text-[12px] font-bold text-emerald-50"
+            >
+              ✓
             </span>
-          )}
+          ) : null}
           {question.status === "trending" && (
             <span className="flex items-center gap-1 text-xs text-rose-200">
               <span className="h-2 w-2 animate-pulse rounded-full bg-rose-300" />

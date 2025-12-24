@@ -139,12 +139,22 @@ function DraftActivityCard({ draft }: { draft: Draft }) {
 }
 
 function QuestionActivityCard({ question }: { question: QuestionWithUserVote }) {
-  const votedLabel =
-    question.userChoice === "yes"
-      ? "Abgestimmt: Ja"
-      : question.userChoice === "no"
-        ? "Abgestimmt: Nein"
-        : null;
+  const answerMode = question.answerMode ?? "binary";
+  const isOptions = answerMode === "options";
+  const voted = isOptions ? Boolean((question as any).userOptionId) : Boolean(question.userChoice);
+  const votedTooltip = voted
+    ? isOptions
+      ? (() => {
+          const optionId = String((question as any).userOptionId ?? "");
+          const label = optionId ? (question as any).options?.find((o: any) => o.id === optionId)?.label : null;
+          return label ? `Du hast abgestimmt: ${label}` : "Du hast abgestimmt";
+        })()
+      : question.userChoice === "yes"
+        ? "Du hast abgestimmt: Ja"
+        : question.userChoice === "no"
+          ? "Du hast abgestimmt: Nein"
+          : "Du hast abgestimmt"
+    : null;
 
   const badge =
     question.resolvedOutcome === "yes" || question.resolvedOutcome === "no"
@@ -171,11 +181,15 @@ function QuestionActivityCard({ question }: { question: QuestionWithUserVote }) 
         </div>
         <div className="flex flex-col items-end gap-2">
           {badge && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>{badge.label}</span>}
-          {votedLabel && (
-            <span className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-100">
-              {votedLabel}
+          {votedTooltip ? (
+            <span
+              title={votedTooltip}
+              aria-label={votedTooltip}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/35 bg-emerald-500/15 text-[12px] font-bold text-emerald-50"
+            >
+              ✓
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -370,4 +384,3 @@ export function ProfilAktivitaetClient() {
     </main>
   );
 }
-
