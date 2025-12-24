@@ -636,6 +636,7 @@ type HomeCache = {
   activeCategory: string | null;
   activeRegion: string | null;
   searchQuery: string;
+  typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
   questions: Question[];
@@ -658,6 +659,7 @@ export default function Home() {
   const [activeRegion, setActiveRegion] = useState<string | null>(() => homeCache?.activeRegion ?? null);
   const [searchInput, setSearchInput] = useState<string>(() => homeCache?.searchQuery ?? "");
   const [searchQuery, setSearchQuery] = useState<string>(() => homeCache?.searchQuery ?? "");
+  const [typeFilter, setTypeFilter] = useState<HomeCache["typeFilter"]>(() => homeCache?.typeFilter ?? "all");
   const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
   const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
   const [loading, setLoading] = useState(() => !homeCache);
@@ -831,6 +833,7 @@ export default function Home() {
       activeCategory,
       activeRegion,
       searchQuery,
+      typeFilter,
       draftStatusFilter,
       showReviewOnly,
       questions,
@@ -847,6 +850,7 @@ export default function Home() {
     activeCategory,
     activeRegion,
     searchQuery,
+    typeFilter,
     draftStatusFilter,
     showReviewOnly,
     questions,
@@ -1061,9 +1065,14 @@ export default function Home() {
       }
     }
 
+    if (typeFilter !== "all") {
+      const wantResolvable = typeFilter === "prognose";
+      result = result.filter((q) => (q.isResolvable === false ? false : true) === wantResolvable);
+    }
+
     // Reihenfolge so lassen, wie sie vom Server kommt.
     return result;
-  }, [activeCategory, activeRegion, questions]);
+  }, [activeCategory, activeRegion, questions, typeFilter]);
 
   const visibleQuestions = useMemo(
     () => filteredQuestions.slice(0, visibleQuestionCount),
@@ -1097,7 +1106,7 @@ export default function Home() {
 
   useEffect(() => {
     setVisibleQuestionCount(QUESTIONS_PAGE_SIZE);
-  }, [activeTab, activeCategory, activeRegion, searchQuery]);
+  }, [activeTab, activeCategory, activeRegion, searchQuery, typeFilter]);
 
   useEffect(() => {
     setVisibleDraftCount(DRAFTS_PAGE_SIZE);
@@ -1673,6 +1682,57 @@ export default function Home() {
             >
               {showReviewOnly ? "Zur\u00fcck zum Feed" : "Review"}
             </button>
+
+            {!showReviewOnly ? (
+              <div className="flex items-center rounded-xl border border-white/25 bg-white/5 p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter("all");
+                    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:-translate-y-0.5 ${
+                    typeFilter === "all"
+                      ? "bg-emerald-500/25 text-white shadow-sm shadow-emerald-500/20"
+                      : "text-slate-100 hover:bg-white/5"
+                  }`}
+                  title="Alle"
+                >
+                  Alle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter("prognose");
+                    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:-translate-y-0.5 ${
+                    typeFilter === "prognose"
+                      ? "bg-emerald-500/25 text-white shadow-sm shadow-emerald-500/20"
+                      : "text-slate-100 hover:bg-white/5"
+                  }`}
+                  title="Nur Prognosen"
+                >
+                  Prognosen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter("meinung");
+                    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:-translate-y-0.5 ${
+                    typeFilter === "meinung"
+                      ? "bg-emerald-500/25 text-white shadow-sm shadow-emerald-500/20"
+                      : "text-slate-100 hover:bg-white/5"
+                  }`}
+                  title="Nur Meinungs-Umfragen"
+                >
+                  <span className="hidden sm:inline">Meinungs-Umfragen</span>
+                  <span className="sm:hidden">Umfragen</span>
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="sticky top-3 z-20 -mx-4 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 backdrop-blur md:static md:-mx-0 md:border-0 md:bg-transparent md:p-0">
