@@ -3,10 +3,10 @@ info:
   title: FutureVote GPT API (Write - Drafts)
   version: 0.1.0
   description: |
-    Write-Endpunkt für Custom GPT (Actions) um Drafts/Private Umfragen anzulegen.
-    Authentifizierung erfolgt später via OAuth Account-Linking.
+    Write-Endpunkt fuer Custom GPT (Actions) um Drafts/Private Umfragen anzulegen.
+    Authentifizierung erfolgt spaeter via OAuth Account-Linking.
 servers:
-  - url: https://www.future-vote.de
+  - url: https://gpt-write.future-vote.de
 paths:
   /api/drafts:
     post:
@@ -69,4 +69,3 @@ export function GET() {
     },
   });
 }
-
