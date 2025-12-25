@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { guardGptRateLimit, withCacheHeaders } from "../_lib";
 
 export const revalidate = 0;
 
 type ListStatus = "active" | "ended" | "all";
 
 export async function GET(request: Request) {
+  const limited = guardGptRateLimit(request);
+  if (limited) return limited;
+
   const supabase = getSupabaseAdminClient();
   const { searchParams } = new URL(request.url);
 
@@ -38,28 +42,32 @@ export async function GET(request: Request) {
     }
   }
 
-  const { data: rows } = await query;
+  try {
+    const { data: rows } = await query;
 
-  const items =
-    (rows as any[])?.map((row) => ({
-      id: String(row.id),
-      title: String(row.title ?? ""),
-      summary: typeof row.summary === "string" ? row.summary : null,
-      description: typeof row.description === "string" ? row.description : null,
-      category: typeof row.category === "string" ? row.category : null,
-      categoryIcon: typeof row.category_icon === "string" ? row.category_icon : null,
-      categoryColor: typeof row.category_color === "string" ? row.category_color : null,
-      region: typeof row.region === "string" ? row.region : null,
-      imageUrl: typeof row.image_url === "string" ? row.image_url : null,
-      closesAt: typeof row.closes_at === "string" ? row.closes_at : null,
-      createdAt: typeof row.created_at === "string" ? row.created_at : null,
-      answerMode: typeof row.answer_mode === "string" ? row.answer_mode : null,
-      isResolvable: typeof row.is_resolvable === "boolean" ? row.is_resolvable : null,
-    })) ?? [];
+    const items =
+      (rows as any[])?.map((row) => ({
+        id: String(row.id),
+        title: String(row.title ?? ""),
+        summary: typeof row.summary === "string" ? row.summary : null,
+        description: typeof row.description === "string" ? row.description : null,
+        category: typeof row.category === "string" ? row.category : null,
+        categoryIcon: typeof row.category_icon === "string" ? row.category_icon : null,
+        categoryColor: typeof row.category_color === "string" ? row.category_color : null,
+        region: typeof row.region === "string" ? row.region : null,
+        imageUrl: typeof row.image_url === "string" ? row.image_url : null,
+        closesAt: typeof row.closes_at === "string" ? row.closes_at : null,
+        createdAt: typeof row.created_at === "string" ? row.created_at : null,
+        answerMode: typeof row.answer_mode === "string" ? row.answer_mode : null,
+        isResolvable: typeof row.is_resolvable === "boolean" ? row.is_resolvable : null,
+      })) ?? [];
 
-  const nextCursor =
-    items.length > 0 && items[items.length - 1]?.createdAt ? String(items[items.length - 1].createdAt) : null;
+    const nextCursor =
+      items.length > 0 && items[items.length - 1]?.createdAt ? String(items[items.length - 1].createdAt) : null;
 
-  return NextResponse.json({ items, nextCursor });
+    return withCacheHeaders(NextResponse.json({ items, nextCursor }), 10);
+  } catch (error) {
+    console.warn("/api/gpt/questions failed", error);
+    return withCacheHeaders(NextResponse.json({ items: [], nextCursor: null, error: "temporarily_unavailable" }), 5);
+  }
 }
-
