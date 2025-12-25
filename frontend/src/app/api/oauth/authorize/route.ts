@@ -59,6 +59,7 @@ function validateAuthorizeParams(params: AuthorizeParams): { ok: true } | { ok: 
 }
 
 export async function GET(request: Request) {
+  try {
   const url = new URL(request.url);
   const params = readAuthorizeParams(url);
   const validation = validateAuthorizeParams(params);
@@ -125,9 +126,20 @@ export async function GET(request: Request) {
     status: 200,
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
   });
+  } catch (err: any) {
+    const msg = typeof err?.message === "string" ? err.message : "unknown";
+    return new NextResponse(
+      htmlPage(
+        "OAuth Fehler",
+        `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">${msg}</div></div>`
+      ),
+      { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
+    );
+  }
 }
 
 export async function POST(request: Request) {
+  try {
   const form = await request.formData();
   const decision = String(form.get("decision") ?? "");
   const clientId = String(form.get("client_id") ?? "");
@@ -203,6 +215,16 @@ export async function POST(request: Request) {
     u.searchParams.set("code", code);
     if (state) u.searchParams.set("state", state);
     return NextResponse.redirect(u.toString(), { status: 302 });
+  } catch (err: any) {
+    const msg = typeof err?.message === "string" ? err.message : "unknown";
+    return new NextResponse(
+      htmlPage(
+        "OAuth Fehler",
+        `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">${msg}</div></div>`
+      ),
+      { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
+    );
+  }
   } catch (err: any) {
     const msg = typeof err?.message === "string" ? err.message : "unknown";
     return new NextResponse(
