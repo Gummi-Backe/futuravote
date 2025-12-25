@@ -6,7 +6,7 @@ info:
     Read-only Endpunkte für einen Custom GPT (Actions). Liefert aktuelle öffentliche Fragen, Kategorien
     sowie die neuesten Votes/Reviews anonymisiert (ohne User-/Session-Daten).
 servers:
-  - url: https://YOUR_DOMAIN_HERE
+  - url: https://www.future-vote.de
 paths:
   /api/gpt/categories:
     get:
@@ -159,4 +159,3 @@ paths:
                   nextCursor:
                     type: string
                     nullable: true
-
