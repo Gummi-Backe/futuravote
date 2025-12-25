@@ -29,8 +29,14 @@ paths:
                 description: { type: string, nullable: true }
                 category: { type: string }
                 region: { type: string, nullable: true }
-                imageUrl: { type: string, nullable: true }
-                imageCredit: { type: string, nullable: true }
+                imageUrl:
+                  type: string
+                  nullable: true
+                  description: "Optional. Fuer GPT-OAuth wird ein Standardbild genutzt, wenn leer; externe URLs werden ggf. ignoriert."
+                imageCredit:
+                  type: string
+                  nullable: true
+                  description: "Optional. Wird fuer Standardbild automatisch gesetzt (falls konfiguriert)."
                 timeLeftHours: { type: number, nullable: true, description: "Standard: 72" }
                 closesAt: { type: string, nullable: true, description: "Optionales Enddatum (ISO)" }
                 visibility:

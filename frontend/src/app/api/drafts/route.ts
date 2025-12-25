@@ -36,6 +36,37 @@ function normalizeImageUrl(raw?: string | null): string | undefined {
   return trimmed;
 }
 
+function isAllowedGptImageUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") return false;
+
+    const allowed = (process.env.FV_GPT_ALLOWED_IMAGE_HOSTS ?? "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    if (allowed.length > 0) {
+      return allowed.includes(url.hostname);
+    }
+
+    const defaultUrl = normalizeImageUrl(process.env.FV_GPT_DEFAULT_IMAGE_URL);
+    if (defaultUrl) {
+      const defaultHost = new URL(defaultUrl).hostname;
+      if (url.hostname === defaultHost) return true;
+    }
+
+    // Fallback: erlaube Supabase Public Storage URLs (eigene Assets).
+    if (url.hostname.endsWith(".supabase.co") && url.pathname.includes("/storage/v1/object/public/")) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const cookieSessionId = cookieStore.get("fv_user")?.value ?? null;
@@ -91,6 +122,13 @@ export async function POST(request: Request) {
   const region = (body.region ?? "").trim() || undefined;
   let imageUrl = normalizeImageUrl(body.imageUrl);
   let imageCredit = (body.imageCredit ?? "").trim() || undefined;
+
+  // Fuer GPT/OAuth: Externe Bild-URLs (z.B. Unsplash) werden nicht akzeptiert.
+  // Wenn ein Bild gewuenscht ist, nutzen wir stattdessen das Standardbild aus FV_GPT_DEFAULT_IMAGE_URL.
+  if (isOauthGpt && imageUrl && !isAllowedGptImageUrl(imageUrl)) {
+    imageUrl = undefined;
+    imageCredit = undefined;
+  }
 
   // Fuer GPT/OAuth: wenn kein Bild uebergeben wurde, nutze ein Standardbild (z.B. eigenes KI-Logo in Supabase Storage).
   if (isOauthGpt && !imageUrl) {
