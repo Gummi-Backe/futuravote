@@ -82,7 +82,9 @@ export async function GET(request: Request) {
 
   if (!user) {
     const returnPath = `${url.pathname}${url.search}`;
-    return NextResponse.redirect(`/auth?next=${encodeURIComponent(returnPath)}`, { status: 302 });
+    const authUrl = new URL("/auth", request.url);
+    authUrl.searchParams.set("next", returnPath);
+    return NextResponse.redirect(authUrl.toString(), { status: 302 });
   }
 
   const scope = (params.scope ?? "").trim();
@@ -156,7 +158,9 @@ export async function POST(request: Request) {
     nextUrl.searchParams.set("code_challenge", codeChallenge);
     nextUrl.searchParams.set("code_challenge_method", codeChallengeMethod);
     const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
-    return NextResponse.redirect(`/auth?next=${encodeURIComponent(nextPath)}`, { status: 302 });
+    const authUrl = new URL("/auth", request.url);
+    authUrl.searchParams.set("next", nextPath);
+    return NextResponse.redirect(authUrl.toString(), { status: 302 });
   }
 
   if (decision !== "allow") {
