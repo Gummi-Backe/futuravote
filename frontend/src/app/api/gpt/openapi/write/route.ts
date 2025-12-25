@@ -53,6 +53,17 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  kind:
+                    type: string
+                    description: "draft|question"
+                  id:
+                    type: string
+                    description: "ID des erstellten Drafts oder der Question"
+                  message:
+                    type: string
+                    nullable: true
+                additionalProperties: true
         "400":
           description: Validierungsfehler
         "401":
