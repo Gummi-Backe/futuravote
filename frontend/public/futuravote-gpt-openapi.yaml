@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: FutureVote GPT API (Read-only)
+  version: 0.1.0
+  description: |
+    Read-only Endpunkte für einen Custom GPT (Actions). Liefert aktuelle öffentliche Fragen, Kategorien
+    sowie die neuesten Votes/Reviews anonymisiert (ohne User-/Session-Daten).
+servers:
+  - url: https://YOUR_DOMAIN_HERE
+paths:
+  /api/gpt/categories:
+    get:
+      summary: Kategorien abrufen (aus vorhandenen öffentlichen Fragen & Drafts)
+      responses:
+        "200":
+          description: Kategorienliste
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category: { type: string }
+                        icon: { type: string, nullable: true }
+                        color: { type: string, nullable: true }
+                        questionsCount: { type: integer }
+                        draftsCount: { type: integer }
+  /api/gpt/questions:
+    get:
+      summary: Neueste öffentliche Fragen abrufen (5er Pagination)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, minimum: 1, maximum: 20 }
+          description: Anzahl Items (Standard 5)
+        - in: query
+          name: cursor
+          schema: { type: string, nullable: true }
+          description: Cursor für nächste Seite (ISO Timestamp aus nextCursor)
+        - in: query
+          name: category
+          schema: { type: string, nullable: true }
+          description: Optionaler Kategorie-Filter (exakter Match)
+        - in: query
+          name: region
+          schema: { type: string, nullable: true }
+          description: Optionaler Regions-Filter (exakter Match)
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, ended, all]
+            default: active
+          description: active = noch offen; ended = beendet; all = beides
+      responses:
+        "200":
+          description: Liste + nextCursor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        summary: { type: string, nullable: true }
+                        description: { type: string, nullable: true }
+                        category: { type: string, nullable: true }
+                        categoryIcon: { type: string, nullable: true }
+                        categoryColor: { type: string, nullable: true }
+                        region: { type: string, nullable: true }
+                        imageUrl: { type: string, nullable: true }
+                        closesAt: { type: string, nullable: true }
+                        createdAt: { type: string, nullable: true }
+                        answerMode: { type: string, nullable: true }
+                        isResolvable: { type: boolean, nullable: true }
+                  nextCursor:
+                    type: string
+                    nullable: true
+  /api/gpt/votes/recent:
+    get:
+      summary: Neueste öffentliche Votes (anonymisiert, 5er Pagination)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, minimum: 1, maximum: 20 }
+        - in: query
+          name: cursor
+          schema: { type: string, nullable: true }
+          description: Cursor für nächste Seite (ISO Timestamp aus nextCursor)
+        - in: query
+          name: category
+          schema: { type: string, nullable: true }
+          description: Optionaler Kategorie-Filter (exakter Match)
+      responses:
+        "200":
+          description: Votes + nextCursor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        createdAt: { type: string, nullable: true }
+                        questionId: { type: string, nullable: true }
+                        questionTitle: { type: string, nullable: true }
+                        category: { type: string, nullable: true }
+                        answerMode: { type: string, nullable: true }
+                        choice: { type: string, nullable: true, description: "yes/no (bei Ja/Nein), sonst null" }
+                        optionLabel: { type: string, nullable: true, description: "bei Optionen, sonst null" }
+                  nextCursor:
+                    type: string
+                    nullable: true
+  /api/gpt/reviews/recent:
+    get:
+      summary: Neueste öffentliche Draft-Reviews (anonymisiert, 5er Pagination)
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 5, minimum: 1, maximum: 20 }
+        - in: query
+          name: cursor
+          schema: { type: string, nullable: true }
+          description: Cursor für nächste Seite (ISO Timestamp aus nextCursor)
+        - in: query
+          name: category
+          schema: { type: string, nullable: true }
+          description: Optionaler Kategorie-Filter (exakter Match)
+      responses:
+        "200":
+          description: Reviews + nextCursor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        createdAt: { type: string, nullable: true }
+                        draftId: { type: string, nullable: true }
+                        draftTitle: { type: string, nullable: true }
+                        category: { type: string, nullable: true }
+                        choice: { type: string, nullable: true, description: "good/bad" }
+                  nextCursor:
+                    type: string
+                    nullable: true
+
