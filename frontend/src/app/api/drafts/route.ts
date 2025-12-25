@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { getUserByOauthAccessTokenSupabase } from "@/app/data/dbSupabaseOauth";
 import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/data/dbSupabase";
 import type { AnswerMode, PollVisibility } from "@/app/data/mock";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
@@ -27,9 +28,38 @@ type DraftInput = {
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get("fv_user")?.value;
-  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-  if (!sessionId || !user) {
+  const cookieSessionId = cookieStore.get("fv_user")?.value ?? null;
+  let sessionId: string | null = cookieSessionId;
+  let user = cookieSessionId ? await getUserBySessionSupabase(cookieSessionId) : null;
+
+  if (!user) {
+    const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization") ?? "";
+    const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : null;
+
+    if (token) {
+      try {
+        user = await getUserByOauthAccessTokenSupabase(token);
+        if (user) {
+          sessionId = "oauth_gpt";
+        }
+      } catch (error: any) {
+        const msg = typeof error?.message === "string" ? error.message : "unknown";
+        if (msg.toLowerCase().includes("oauth_tokens")) {
+          return NextResponse.json(
+            { error: "OAuth ist noch nicht aktiviert. Bitte fuehre `supabase/oauth_gpt.sql` in Supabase aus." },
+            { status: 503 }
+          );
+        }
+        console.error("Draft OAuth lookup failed", error);
+        return NextResponse.json(
+          { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
+          { status: 401 }
+        );
+      }
+    }
+  }
+
+  if (!user) {
     return NextResponse.json(
       { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
       { status: 401 }
@@ -159,7 +189,7 @@ export async function POST(request: Request) {
     });
     await logAnalyticsEventServer({
       event: "create_private_poll",
-      sessionId,
+      sessionId: sessionId ?? "unknown",
       userId: user.id,
       path: "/drafts/new",
       meta: { visibility: "link_only" },
@@ -187,7 +217,7 @@ export async function POST(request: Request) {
   });
   await logAnalyticsEventServer({
     event: "create_draft",
-    sessionId,
+    sessionId: sessionId ?? "unknown",
     userId: user.id,
     path: "/drafts/new",
     meta: { visibility },

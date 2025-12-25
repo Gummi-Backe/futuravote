@@ -34,6 +34,7 @@ export default function AuthPage() {
   const [currentUser, setCurrentUser] = useState<AuthUser>(null);
   const [showTerms, setShowTerms] = useState(false);
   const [verifyInfo, setVerifyInfo] = useState<string | null>(null);
+  const [nextPath, setNextPath] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch("/api/auth/me")
@@ -46,6 +47,13 @@ export default function AuthPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const verify = params.get("verify");
+    const next = params.get("next");
+    if (typeof next === "string") {
+      const trimmed = next.trim();
+      if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+        setNextPath(trimmed);
+      }
+    }
     if (verify === "success") {
       setVerifyInfo("Deine E-Mail-Adresse wurde erfolgreich bestätigt.");
     } else if (verify === "invalid") {
@@ -56,7 +64,9 @@ export default function AuthPage() {
       setVerifyInfo("Es wurde kein Verifikations-Token übermittelt.");
     }
     if (verify) {
-      window.history.replaceState(null, "", "/auth");
+      // verify-Param entfernen, aber next-Param behalten (z.B. OAuth Return)
+      const keepNext = params.get("next");
+      window.history.replaceState(null, "", keepNext ? `/auth?next=${encodeURIComponent(keepNext)}` : "/auth");
     }
   }, []);
 
@@ -115,9 +125,8 @@ export default function AuthPage() {
 
       setCurrentUser(data.user ?? null);
       invalidateProfileCaches();
-      if (mode === "login") {
-        router.push("/");
-      }
+      const target = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/";
+      router.push(target);
     } catch (err) {
       console.error(err);
       setError("Netzwerkfehler. Bitte versuche es erneut.");
