@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
@@ -11,6 +10,25 @@ import {
 } from "../_lib";
 
 export const revalidate = 0;
+
+function getCookieValue(request: Request, name: string): string | null {
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(/;\s*/g);
+  for (const part of parts) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    const key = part.slice(0, eq);
+    if (key !== name) continue;
+    const value = part.slice(eq + 1);
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return null;
+}
 
 type AuthorizeParams = {
   response_type: string | null;
@@ -77,9 +95,8 @@ export async function GET(request: Request) {
     );
   }
 
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get("fv_user")?.value;
-  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
+    const sessionId = getCookieValue(request, "fv_user");
+    const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user) {
     const returnPath = `${url.pathname}${url.search}`;
@@ -157,9 +174,8 @@ export async function POST(request: Request) {
     return new NextResponse("invalid redirect_uri", { status: 400 });
   }
 
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get("fv_user")?.value;
-  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
+    const sessionId = getCookieValue(request, "fv_user");
+    const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
   if (!user) {
     const nextUrl = new URL("/api/oauth/authorize", request.url);
     nextUrl.searchParams.set("response_type", "code");
