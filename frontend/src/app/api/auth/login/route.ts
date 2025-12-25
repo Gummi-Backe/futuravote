@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     response.cookies.set("fv_user", sessionId, {
       path: "/",
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 24 * 30, // 30 Tage in Sekunden
     });

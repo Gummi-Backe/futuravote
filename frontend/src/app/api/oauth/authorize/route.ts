@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
-import {
-  getOAuthClientConfig,
-  htmlPage,
-  isAllowedRedirectUri,
-  randomToken,
-  sha256Hex,
-} from "../_lib";
+import { getOAuthClientConfig, isAllowedRedirectUri, randomToken, sha256Hex } from "../_lib";
 
 export const revalidate = 0;
+
+type AuthorizeParams = {
+  response_type: string | null;
+  response_mode: string | null;
+  client_id: string | null;
+  redirect_uri: string | null;
+  scope: string | null;
+  state: string | null;
+  code_challenge: string | null;
+  code_challenge_method: string | null;
+};
 
 function getCookieValue(request: Request, name: string): string | null {
   const cookieHeader = request.headers.get("cookie");
@@ -30,20 +35,11 @@ function getCookieValue(request: Request, name: string): string | null {
   return null;
 }
 
-type AuthorizeParams = {
-  response_type: string | null;
-  client_id: string | null;
-  redirect_uri: string | null;
-  scope: string | null;
-  state: string | null;
-  code_challenge: string | null;
-  code_challenge_method: string | null;
-};
-
 function readAuthorizeParams(url: URL): AuthorizeParams {
   const p = url.searchParams;
   return {
     response_type: p.get("response_type"),
+    response_mode: p.get("response_mode"),
     client_id: p.get("client_id"),
     redirect_uri: p.get("redirect_uri"),
     scope: p.get("scope"),
@@ -58,7 +54,9 @@ function buildRedirectError(redirectUri: string, state: string | null, error: st
   u.searchParams.set("error", error);
   if (description) u.searchParams.set("error_description", description);
   if (state) u.searchParams.set("state", state);
-  return NextResponse.redirect(u.toString(), { status: 302 });
+  const res = NextResponse.redirect(u.toString(), { status: 302 });
+  res.headers.set("Cache-Control", "no-store");
+  return res;
 }
 
 function validateAuthorizeParams(params: AuthorizeParams): { ok: true } | { ok: false; error: string } {
@@ -76,148 +74,34 @@ function validateAuthorizeParams(params: AuthorizeParams): { ok: true } | { ok: 
   return { ok: true };
 }
 
-function loginRequiredPage(authUrl: string): string {
-  const safeUrl = authUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-  return htmlPage(
-    "Anmeldung erforderlich",
-    `<div class="card">
-      <div class="title">Anmeldung erforderlich</div>
-      <div class="muted">Bitte logge dich bei FutureVote ein, um die Verknüpfung abzuschließen.</div>
-      <div class="row">
-        <a class="btn primary" href="${safeUrl}">Login öffnen</a>
-      </div>
-      <div class="muted" style="margin-top:12px">Falls kein neues Fenster aufgeht: Pop-ups für ChatGPT erlauben und erneut versuchen.</div>
-    </div>`
-  );
-}
-
 export async function GET(request: Request) {
-  try {
-    const url = new URL(request.url);
-    const params = readAuthorizeParams(url);
-    const validation = validateAuthorizeParams(params);
+  const url = new URL(request.url);
+  const params = readAuthorizeParams(url);
+  const validation = validateAuthorizeParams(params);
 
   if (!validation.ok) {
     if (params.redirect_uri && params.state) {
       return buildRedirectError(params.redirect_uri, params.state, "invalid_request", validation.error);
     }
-    return new NextResponse(
-      htmlPage(
-        "OAuth Fehler",
-        `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">${validation.error}</div></div>`
-      ),
-      { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } }
-    );
+    return new NextResponse(validation.error, { status: 400, headers: { "Cache-Control": "no-store" } });
   }
 
-    const sessionId = getCookieValue(request, "fv_user");
-    const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-
-    if (!user) {
-      const returnPath = `${url.pathname}${url.search}`;
-      const authUrl = new URL("/auth", request.url);
-      authUrl.searchParams.set("next", returnPath);
-      return new NextResponse(loginRequiredPage(authUrl.toString()), {
-        status: 200,
-        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
-      });
-    }
-
-  const scope = (params.scope ?? "").trim();
   const redirectUri = params.redirect_uri!;
   const state = params.state;
+  const scope = (params.scope ?? "").trim();
   const codeChallenge = params.code_challenge!;
   const codeChallengeMethod = params.code_challenge_method ?? "S256";
 
-  const body = `
-    <div class="card">
-      <div class="title">Zugriff erlauben?</div>
-      <div class="muted">Du bist eingeloggt als <span class="pill"><strong>${user.displayName}</strong> · <code>${user.email}</code></span></div>
-      <div class="muted" style="margin-top:10px">
-        <strong>FutureVote GPT</strong> möchte Aktionen in deinem Namen ausführen (z.B. Drafts erstellen) – nur nach deiner Bestätigung.
-      </div>
-      <div class="muted" style="margin-top:10px">
-        <div class="pill">Scope: <code>${scope || "(leer)"}</code></div>
-      </div>
-      <form method="post" action="/api/oauth/authorize">
-        <input type="hidden" name="client_id" value="${params.client_id!}" />
-        <input type="hidden" name="redirect_uri" value="${redirectUri}" />
-        <input type="hidden" name="state" value="${state ?? ""}" />
-        <input type="hidden" name="scope" value="${scope}" />
-        <input type="hidden" name="code_challenge" value="${codeChallenge}" />
-        <input type="hidden" name="code_challenge_method" value="${codeChallengeMethod}" />
-        <div class="row">
-          <button class="btn primary" type="submit" name="decision" value="allow">Erlauben</button>
-          <button class="btn danger" type="submit" name="decision" value="deny">Ablehnen</button>
-        </div>
-      </form>
-      <div class="muted" style="margin-top:12px">
-        Hinweis: Du kannst diese Verknüpfung später widerrufen (Disconnect), sobald wir die Profil-UI dafür ergänzen.
-      </div>
-    </div>
-  `;
+  const sessionId = getCookieValue(request, "fv_user");
+  const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
-  return new NextResponse(htmlPage("OAuth Zugriff", body), {
-    status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
-  });
-  } catch (err: any) {
-    const msg = typeof err?.message === "string" ? err.message : "unknown";
-    return new NextResponse(
-      htmlPage(
-        "OAuth Fehler",
-        `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">${msg}</div></div>`
-      ),
-      { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-  const form = await request.formData();
-  const decision = String(form.get("decision") ?? "");
-  const clientId = String(form.get("client_id") ?? "");
-  const redirectUri = String(form.get("redirect_uri") ?? "");
-  const state = String(form.get("state") ?? "") || null;
-  const scope = String(form.get("scope") ?? "") || "";
-  const codeChallenge = String(form.get("code_challenge") ?? "");
-  const codeChallengeMethod = String(form.get("code_challenge_method") ?? "S256");
-
-  const cfg = getOAuthClientConfig();
-  if (clientId !== cfg.clientId) {
-    return buildRedirectError(redirectUri, state, "invalid_request", "invalid client_id");
-  }
-  if (!isAllowedRedirectUri(redirectUri, cfg.allowedRedirectHosts)) {
-    return new NextResponse("invalid redirect_uri", { status: 400 });
-  }
-
-    const sessionId = getCookieValue(request, "fv_user");
-    const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-    if (!user) {
-      const nextUrl = new URL("/api/oauth/authorize", request.url);
-      nextUrl.searchParams.set("response_type", "code");
-      nextUrl.searchParams.set("client_id", clientId);
-      nextUrl.searchParams.set("redirect_uri", redirectUri);
-      if (state) nextUrl.searchParams.set("state", state);
-      if (scope) nextUrl.searchParams.set("scope", scope);
-      nextUrl.searchParams.set("code_challenge", codeChallenge);
-      nextUrl.searchParams.set("code_challenge_method", codeChallengeMethod);
-      const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
-      const authUrl = new URL("/auth", request.url);
-      authUrl.searchParams.set("next", nextPath);
-      return new NextResponse(loginRequiredPage(authUrl.toString()), {
-        status: 200,
-        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
-      });
-    }
-
-  if (decision !== "allow") {
-    return buildRedirectError(redirectUri, state, "access_denied");
-  }
-
-  if (!codeChallenge || codeChallengeMethod !== "S256") {
-    return buildRedirectError(redirectUri, state, "invalid_request", "missing/invalid code_challenge");
+  if (!user) {
+    const returnPath = `${url.pathname}${url.search}`;
+    const authUrl = new URL("/auth", url.origin);
+    authUrl.searchParams.set("next", returnPath);
+    const res = NextResponse.redirect(authUrl.toString(), { status: 302 });
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   }
 
   try {
@@ -229,7 +113,7 @@ export async function POST(request: Request) {
 
     const { error } = await supabase.from("oauth_authorization_codes").insert({
       code_hash: codeHash,
-      client_id: clientId,
+      client_id: params.client_id!,
       user_id: user.id,
       redirect_uri: redirectUri,
       scope,
@@ -239,37 +123,21 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return new NextResponse(
-        htmlPage(
-          "OAuth Fehler",
-          `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">DB Fehler: ${error.message}</div></div>`
-        ),
-        { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
-      );
+      return buildRedirectError(redirectUri, state, "server_error", `DB Fehler: ${error.message}`);
     }
 
     const u = new URL(redirectUri);
     u.searchParams.set("code", code);
     if (state) u.searchParams.set("state", state);
-    return NextResponse.redirect(u.toString(), { status: 302 });
+    const res = NextResponse.redirect(u.toString(), { status: 302 });
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   } catch (err: any) {
     const msg = typeof err?.message === "string" ? err.message : "unknown";
-    return new NextResponse(
-      htmlPage(
-        "OAuth Fehler",
-        `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">${msg}</div></div>`
-      ),
-      { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
-    );
+    return buildRedirectError(redirectUri, state, "server_error", msg);
   }
-  } catch (err: any) {
-    const msg = typeof err?.message === "string" ? err.message : "unknown";
-    return new NextResponse(
-      htmlPage(
-        "OAuth Fehler",
-        `<div class="card"><div class="title">OAuth Fehler</div><div class="muted">${msg}</div></div>`
-      ),
-      { status: 500, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
-    );
-  }
+}
+
+export async function POST() {
+  return new NextResponse("method_not_allowed", { status: 405, headers: { "Cache-Control": "no-store" } });
 }

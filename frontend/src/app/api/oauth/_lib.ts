@@ -14,6 +14,7 @@ export function getOAuthClientConfig(): OAuthClientConfig {
   const allowedRedirectHosts = [
     "chat.openai.com",
     "chatgpt.com",
+    "oaidal-auth.openai.com",
   ];
   return { clientId, clientSecret, allowedRedirectHosts };
 }
@@ -79,4 +80,3 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-

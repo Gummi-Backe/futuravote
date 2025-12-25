@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     response.cookies.set("fv_user", sessionId, {
       path: "/",
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       secure: process.env.NODE_ENV === "production",
     });
 

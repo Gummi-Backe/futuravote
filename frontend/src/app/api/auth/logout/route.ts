@@ -8,7 +8,7 @@ export async function POST() {
   response.cookies.set("fv_user", "", {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     secure: process.env.NODE_ENV === "production",
     maxAge: 0,
   });

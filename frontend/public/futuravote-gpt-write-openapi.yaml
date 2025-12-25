@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     Write-Endpunkt fuer Custom GPT (Actions) um Drafts/Private Umfragen anzulegen.
-    Authentifizierung erfolgt spaeter via OAuth Account-Linking.
+    Authentifizierung erfolgt via OAuth Account-Linking.
 servers:
   - url: https://gpt-write.future-vote.de
 paths:
@@ -12,6 +12,8 @@ paths:
     post:
       operationId: createDraft
       summary: Draft oder private Umfrage erstellen
+      security:
+        - oauth2: [drafts:write]
       description: |
         Erstellt:
         - bei visibility=public einen Draft (landet im Review),
@@ -70,3 +72,14 @@ paths:
           description: Nicht eingeloggt / OAuth fehlt
         "503":
           description: OAuth/DB nicht vorbereitet
+
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://gpt-write.future-vote.de/api/oauth/authorize
+          tokenUrl: https://gpt-write.future-vote.de/api/oauth/token
+          scopes:
+            "drafts:write": Drafts erstellen
