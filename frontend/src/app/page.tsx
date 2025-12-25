@@ -55,6 +55,28 @@ function formatDeadline(date: string) {
   return `Endet in ${days} Tagen`;
 }
 
+function formatTimeAgo(value: string): string | null {
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms)) return null;
+
+  const diffSec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (diffSec < 90) return "gerade eben";
+
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `vor ${diffMin} Min.`;
+
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `vor ${diffHr} Std.`;
+
+  const diffDays = Math.round(diffHr / 24);
+  if (diffDays < 14) return `vor ${diffDays} Tg.`;
+
+  const d = new Date(ms);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mm}.`;
+}
+
 function statusBadge(status?: Question["status"]) {
   if (status === "closingSoon") {
     return { label: "Endet bald", className: "bg-amber-500/15 text-amber-200" };
@@ -631,12 +653,18 @@ type CurrentUser =
   | { id: string; email: string; displayName: string; role?: "user" | "admin"; defaultRegion?: string | null }
   | null;
 
+type ActivitySummary = {
+  lastPublicVoteAt: string | null;
+  lastPublicReviewAt: string | null;
+};
+
 type HomeCache = {
   activeTab: string;
   activeCategory: string | null;
   activeRegion: string | null;
   searchQuery: string;
   typeFilter: "all" | "prognose" | "meinung";
+  activitySummary: ActivitySummary | null;
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
   questions: Question[];
@@ -660,6 +688,7 @@ export default function Home() {
   const [searchInput, setSearchInput] = useState<string>(() => homeCache?.searchQuery ?? "");
   const [searchQuery, setSearchQuery] = useState<string>(() => homeCache?.searchQuery ?? "");
   const [typeFilter, setTypeFilter] = useState<HomeCache["typeFilter"]>(() => homeCache?.typeFilter ?? "all");
+  const [activitySummary, setActivitySummary] = useState<ActivitySummary | null>(() => homeCache?.activitySummary ?? null);
   const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
   const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
   const [loading, setLoading] = useState(() => !homeCache);
@@ -676,6 +705,7 @@ export default function Home() {
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [showExtraRegions, setShowExtraRegions] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [showEarlyPhaseInfo, setShowEarlyPhaseInfo] = useState(false);
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">(
     () => homeCache?.draftStatusFilter ?? "open"
   );
@@ -827,6 +857,20 @@ export default function Home() {
     }
   }, [activeTab, activeCategory, activeRegion, searchQuery]);
 
+  const fetchActivitySummary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/activity");
+      if (!res.ok) return;
+      const data = await res.json();
+      setActivitySummary({
+        lastPublicVoteAt: typeof data?.lastPublicVoteAt === "string" ? data.lastPublicVoteAt : null,
+        lastPublicReviewAt: typeof data?.lastPublicReviewAt === "string" ? data.lastPublicReviewAt : null,
+      });
+    } catch {
+      // Ignorieren (UI blendet es dann einfach aus)
+    }
+  }, []);
+
   useEffect(() => {
     homeCache = {
       activeTab,
@@ -834,6 +878,7 @@ export default function Home() {
       activeRegion,
       searchQuery,
       typeFilter,
+      activitySummary,
       draftStatusFilter,
       showReviewOnly,
       questions,
@@ -851,6 +896,7 @@ export default function Home() {
     activeRegion,
     searchQuery,
     typeFilter,
+    activitySummary,
     draftStatusFilter,
     showReviewOnly,
     questions,
@@ -873,10 +919,11 @@ export default function Home() {
 
   useEffect(() => {
     fetchLatest();
+    fetchActivitySummary();
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [fetchLatest]);
+  }, [fetchLatest, fetchActivitySummary]);
 
   useEffect(() => {
     const FAVORITES_CACHE_TTL_MS = 30_000;
@@ -1517,6 +1564,45 @@ export default function Home() {
                 <p className="mt-1 max-w-2xl text-sm font-semibold text-emerald-100/90">
                   Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
                 </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEarlyPhaseInfo((v) => !v)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-emerald-200/40"
+                    aria-expanded={showEarlyPhaseInfo}
+                    title="Was bedeutet Frühphase?"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[11px] text-slate-100"
+                    >
+                      ?
+                    </span>
+                    Frühphase
+                  </button>
+
+                  {activitySummary?.lastPublicVoteAt ? (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold text-slate-200">
+                      🗳️ Letzte Stimme {formatTimeAgo(activitySummary.lastPublicVoteAt) ?? ""}
+                    </span>
+                  ) : null}
+                  {activitySummary?.lastPublicReviewAt ? (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold text-slate-200">
+                      🧪 Letztes Review {formatTimeAgo(activitySummary.lastPublicReviewAt) ?? ""}
+                    </span>
+                  ) : null}
+                </div>
+
+                {showEarlyPhaseInfo ? (
+                  <div className="list-enter mt-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200">
+                    <div className="font-semibold text-white">Du bist früh dabei</div>
+                    <p className="mt-1 text-slate-200">
+                      Frühe Stimmen prägen hier besonders stark, welche Themen sichtbar werden. Keine Fake-Zahlen – nur echte
+                      Community.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-1 flex-col items-end gap-2">
