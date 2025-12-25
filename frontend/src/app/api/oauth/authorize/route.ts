@@ -76,11 +76,26 @@ function validateAuthorizeParams(params: AuthorizeParams): { ok: true } | { ok: 
   return { ok: true };
 }
 
+function loginRequiredPage(authUrl: string): string {
+  const safeUrl = authUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  return htmlPage(
+    "Anmeldung erforderlich",
+    `<div class="card">
+      <div class="title">Anmeldung erforderlich</div>
+      <div class="muted">Bitte logge dich bei FutureVote ein, um die Verknüpfung abzuschließen.</div>
+      <div class="row">
+        <a class="btn primary" href="${safeUrl}">Login öffnen</a>
+      </div>
+      <div class="muted" style="margin-top:12px">Falls kein neues Fenster aufgeht: Pop-ups für ChatGPT erlauben und erneut versuchen.</div>
+    </div>`
+  );
+}
+
 export async function GET(request: Request) {
   try {
-  const url = new URL(request.url);
-  const params = readAuthorizeParams(url);
-  const validation = validateAuthorizeParams(params);
+    const url = new URL(request.url);
+    const params = readAuthorizeParams(url);
+    const validation = validateAuthorizeParams(params);
 
   if (!validation.ok) {
     if (params.redirect_uri && params.state) {
@@ -98,12 +113,15 @@ export async function GET(request: Request) {
     const sessionId = getCookieValue(request, "fv_user");
     const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
-  if (!user) {
-    const returnPath = `${url.pathname}${url.search}`;
-    const authUrl = new URL("/auth", request.url);
-    authUrl.searchParams.set("next", returnPath);
-    return NextResponse.redirect(authUrl.toString(), { status: 302 });
-  }
+    if (!user) {
+      const returnPath = `${url.pathname}${url.search}`;
+      const authUrl = new URL("/auth", request.url);
+      authUrl.searchParams.set("next", returnPath);
+      return new NextResponse(loginRequiredPage(authUrl.toString()), {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
 
   const scope = (params.scope ?? "").trim();
   const redirectUri = params.redirect_uri!;
@@ -176,20 +194,23 @@ export async function POST(request: Request) {
 
     const sessionId = getCookieValue(request, "fv_user");
     const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-  if (!user) {
-    const nextUrl = new URL("/api/oauth/authorize", request.url);
-    nextUrl.searchParams.set("response_type", "code");
-    nextUrl.searchParams.set("client_id", clientId);
-    nextUrl.searchParams.set("redirect_uri", redirectUri);
-    if (state) nextUrl.searchParams.set("state", state);
-    if (scope) nextUrl.searchParams.set("scope", scope);
-    nextUrl.searchParams.set("code_challenge", codeChallenge);
-    nextUrl.searchParams.set("code_challenge_method", codeChallengeMethod);
-    const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
-    const authUrl = new URL("/auth", request.url);
-    authUrl.searchParams.set("next", nextPath);
-    return NextResponse.redirect(authUrl.toString(), { status: 302 });
-  }
+    if (!user) {
+      const nextUrl = new URL("/api/oauth/authorize", request.url);
+      nextUrl.searchParams.set("response_type", "code");
+      nextUrl.searchParams.set("client_id", clientId);
+      nextUrl.searchParams.set("redirect_uri", redirectUri);
+      if (state) nextUrl.searchParams.set("state", state);
+      if (scope) nextUrl.searchParams.set("scope", scope);
+      nextUrl.searchParams.set("code_challenge", codeChallenge);
+      nextUrl.searchParams.set("code_challenge_method", codeChallengeMethod);
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
+      const authUrl = new URL("/auth", request.url);
+      authUrl.searchParams.set("next", nextPath);
+      return new NextResponse(loginRequiredPage(authUrl.toString()), {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
 
   if (decision !== "allow") {
     return buildRedirectError(redirectUri, state, "access_denied");
