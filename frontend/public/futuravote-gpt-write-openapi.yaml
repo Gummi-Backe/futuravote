@@ -62,6 +62,14 @@ paths:
                   id:
                     type: string
                     description: "ID des erstellten Drafts oder der Question"
+                  shareId:
+                    type: string
+                    nullable: true
+                    description: "Nur bei link_only: Share-ID fuer /p/:shareId"
+                  shareUrl:
+                    type: string
+                    nullable: true
+                    description: "Nur bei link_only: Abstimmungslink (/p/:shareId)"
                   message:
                     type: string
                     nullable: true

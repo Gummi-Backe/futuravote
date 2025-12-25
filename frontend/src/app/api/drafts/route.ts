@@ -8,6 +8,10 @@ import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
+function getBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de";
+}
+
 type DraftInput = {
   title?: string;
   description?: string;
@@ -194,7 +198,21 @@ export async function POST(request: Request) {
       path: "/drafts/new",
       meta: { visibility: "link_only" },
     });
-    return NextResponse.json({ question }, { status: 201 });
+
+    const baseUrl = getBaseUrl();
+    const shareId = question.shareId ?? null;
+    const shareUrl = shareId ? `${baseUrl}/p/${encodeURIComponent(shareId)}` : null;
+
+    return NextResponse.json(
+      {
+        kind: "question",
+        id: question.id,
+        shareId,
+        shareUrl,
+        question,
+      },
+      { status: 201 }
+    );
   }
 
   const draft = await createDraftInSupabase({
@@ -222,5 +240,12 @@ export async function POST(request: Request) {
     path: "/drafts/new",
     meta: { visibility },
   });
-  return NextResponse.json({ draft }, { status: 201 });
+  return NextResponse.json(
+    {
+      kind: "draft",
+      id: draft.id,
+      draft,
+    },
+    { status: 201 }
+  );
 }
