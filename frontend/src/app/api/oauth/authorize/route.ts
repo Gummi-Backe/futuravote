@@ -67,9 +67,14 @@ function validateAuthorizeParams(params: AuthorizeParams): { ok: true } | { ok: 
   if (!params.redirect_uri) return { ok: false, error: "missing redirect_uri" };
   if (!isAllowedRedirectUri(params.redirect_uri, cfg.allowedRedirectHosts)) return { ok: false, error: "invalid redirect_uri" };
 
-  if (!params.code_challenge) return { ok: false, error: "missing code_challenge" };
-  if (params.code_challenge_method && params.code_challenge_method !== "S256") {
-    return { ok: false, error: "unsupported code_challenge_method" };
+  // ChatGPT sendet in manchen OAuth-Varianten kein PKCE. Wenn ein Client-Secret gesetzt ist,
+  // erlauben wir den Flow ohne PKCE (Confidential Client). Ohne Secret bleibt PKCE Pflicht.
+  const pkceRequired = !cfg.clientSecret;
+  if (pkceRequired && !params.code_challenge) return { ok: false, error: "missing code_challenge" };
+  if (params.code_challenge) {
+    if (params.code_challenge_method && params.code_challenge_method !== "S256") {
+      return { ok: false, error: "unsupported code_challenge_method" };
+    }
   }
   return { ok: true };
 }
@@ -89,8 +94,8 @@ export async function GET(request: Request) {
   const redirectUri = params.redirect_uri!;
   const state = params.state;
   const scope = (params.scope ?? "").trim();
-  const codeChallenge = params.code_challenge!;
-  const codeChallengeMethod = params.code_challenge_method ?? "S256";
+  const codeChallenge = params.code_challenge;
+  const codeChallengeMethod = codeChallenge ? (params.code_challenge_method ?? "S256") : null;
 
   const sessionId = getCookieValue(request, "fv_user");
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;

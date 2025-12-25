@@ -17,7 +17,7 @@ type TokenRequest =
       redirect_uri: string;
       client_id: string;
       client_secret?: string;
-      code_verifier: string;
+      code_verifier?: string;
     }
   | {
       grant_type: "refresh_token";
@@ -46,7 +46,7 @@ async function readTokenRequest(request: Request): Promise<TokenRequest | null> 
         redirect_uri: String(form.get("redirect_uri") ?? ""),
         client_id: String(form.get("client_id") ?? ""),
         client_secret: form.get("client_secret") ? String(form.get("client_secret")) : undefined,
-        code_verifier: String(form.get("code_verifier") ?? ""),
+        code_verifier: form.get("code_verifier") ? String(form.get("code_verifier")) : undefined,
       };
     }
     if (grantType === "refresh_token") {
@@ -71,7 +71,7 @@ async function readTokenRequest(request: Request): Promise<TokenRequest | null> 
         redirect_uri: String(form.get("redirect_uri") ?? ""),
         client_id: String(form.get("client_id") ?? ""),
         client_secret: form.get("client_secret") ? String(form.get("client_secret")) : undefined,
-        code_verifier: String(form.get("code_verifier") ?? ""),
+        code_verifier: form.get("code_verifier") ? String(form.get("code_verifier")) : undefined,
       };
     }
     if (grantType === "refresh_token") {
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdminClient();
 
   if (body.grant_type === "authorization_code") {
-    if (!body.code || !body.redirect_uri || !body.code_verifier) return badRequest("missing code/redirect_uri/code_verifier");
+    if (!body.code || !body.redirect_uri) return badRequest("missing code/redirect_uri");
     if (!isAllowedRedirectUri(body.redirect_uri, cfg.allowedRedirectHosts)) return badRequest("invalid redirect_uri");
 
     const codeHash = sha256Hex(body.code);
@@ -133,11 +133,14 @@ export async function POST(request: Request) {
     if (String(row.client_id) !== cfg.clientId) return badRequest("invalid client");
     if (String(row.redirect_uri) !== body.redirect_uri) return badRequest("redirect_uri mismatch");
 
-    const method = String(row.code_challenge_method ?? "S256");
-    if (method !== "S256") return badRequest("unsupported code_challenge_method");
-    const expectedChallenge = String(row.code_challenge ?? "");
-    const computedChallenge = base64UrlSha256(body.code_verifier);
-    if (!expectedChallenge || computedChallenge !== expectedChallenge) return badRequest("invalid code_verifier");
+    const expectedChallenge = row.code_challenge === null || row.code_challenge === undefined ? null : String(row.code_challenge);
+    if (expectedChallenge) {
+      if (!body.code_verifier) return badRequest("missing code_verifier");
+      const method = String(row.code_challenge_method ?? "S256");
+      if (method !== "S256") return badRequest("unsupported code_challenge_method");
+      const computedChallenge = base64UrlSha256(body.code_verifier);
+      if (computedChallenge !== expectedChallenge) return badRequest("invalid code_verifier");
+    }
 
     // mark used
     await supabase
@@ -220,4 +223,3 @@ export async function POST(request: Request) {
 
   return badRequest("unsupported grant_type");
 }
-

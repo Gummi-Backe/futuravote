@@ -19,8 +19,9 @@ create table if not exists public.oauth_authorization_codes (
   user_id text not null references public.users(id) on delete cascade,
   redirect_uri text not null,
   scope text not null default '',
-  code_challenge text not null,
-  code_challenge_method text not null default 'S256' check (code_challenge_method in ('S256')),
+  -- PKCE ist optional (ChatGPT sendet teils kein code_challenge). Wenn vorhanden, muss S256 verwendet werden.
+  code_challenge text,
+  code_challenge_method text default 'S256' check (code_challenge_method in ('S256')),
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
   used_at timestamptz
@@ -58,4 +59,3 @@ alter table public.oauth_authorization_codes enable row level security;
 alter table public.oauth_tokens enable row level security;
 
 commit;
-
