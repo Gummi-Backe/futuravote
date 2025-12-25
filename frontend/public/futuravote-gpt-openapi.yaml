@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: FutureVote GPT API (Read-only)
   version: 0.1.0
@@ -10,6 +10,7 @@ servers:
 paths:
   /api/gpt/categories:
     get:
+      operationId: getCategories
       summary: Kategorien abrufen (aus vorhandenen öffentlichen Fragen & Drafts)
       responses:
         "200":
@@ -31,6 +32,7 @@ paths:
                         draftsCount: { type: integer }
   /api/gpt/questions:
     get:
+      operationId: listQuestions
       summary: Neueste öffentliche Fragen abrufen (5er Pagination)
       parameters:
         - in: query
@@ -87,6 +89,7 @@ paths:
                     nullable: true
   /api/gpt/votes/recent:
     get:
+      operationId: listRecentVotes
       summary: Neueste öffentliche Votes (anonymisiert, 5er Pagination)
       parameters:
         - in: query
@@ -125,6 +128,7 @@ paths:
                     nullable: true
   /api/gpt/reviews/recent:
     get:
+      operationId: listRecentReviews
       summary: Neueste öffentliche Draft-Reviews (anonymisiert, 5er Pagination)
       parameters:
         - in: query
