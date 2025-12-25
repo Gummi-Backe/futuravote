@@ -30,12 +30,19 @@ type DraftInput = {
   resolutionDeadline?: string;
 };
 
+function normalizeImageUrl(raw?: string | null): string | undefined {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed || trimmed.length <= 4 || trimmed.length >= 500) return undefined;
+  return trimmed;
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const cookieSessionId = cookieStore.get("fv_user")?.value ?? null;
   let sessionId: string | null = cookieSessionId;
   let user = cookieSessionId ? await getUserBySessionSupabase(cookieSessionId) : null;
 
+  let isOauthGpt = false;
   if (!user) {
     const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization") ?? "";
     const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : null;
@@ -45,6 +52,7 @@ export async function POST(request: Request) {
         user = await getUserByOauthAccessTokenSupabase(token);
         if (user) {
           sessionId = "oauth_gpt";
+          isOauthGpt = true;
         }
       } catch (error: any) {
         const msg = typeof error?.message === "string" ? error.message : "unknown";
@@ -81,10 +89,17 @@ export async function POST(request: Request) {
   const category = (body.category ?? "").trim();
   const description = (body.description ?? "").trim() || undefined;
   const region = (body.region ?? "").trim() || undefined;
-  const imageUrlRaw = (body.imageUrl ?? "").trim();
-  const imageUrl =
-    imageUrlRaw && imageUrlRaw.length > 4 && imageUrlRaw.length < 500 ? imageUrlRaw : undefined;
-  const imageCredit = (body.imageCredit ?? "").trim() || undefined;
+  let imageUrl = normalizeImageUrl(body.imageUrl);
+  let imageCredit = (body.imageCredit ?? "").trim() || undefined;
+
+  // Fuer GPT/OAuth: wenn kein Bild uebergeben wurde, nutze ein Standardbild (z.B. eigenes KI-Logo in Supabase Storage).
+  if (isOauthGpt && !imageUrl) {
+    imageUrl = normalizeImageUrl(process.env.FV_GPT_DEFAULT_IMAGE_URL);
+    if (!imageCredit) {
+      imageCredit = (process.env.FV_GPT_DEFAULT_IMAGE_CREDIT ?? "").trim() || undefined;
+    }
+  }
+
   const closesAtRaw = (body.closesAt ?? "").trim();
   const targetClosesAt =
     closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
