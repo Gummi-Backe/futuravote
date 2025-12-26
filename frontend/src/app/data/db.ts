@@ -258,6 +258,7 @@ function deleteImageFileIfPresent(imageUrl?: string | null) {
   if (!imageUrl) return;
   const lastSlash = imageUrl.lastIndexOf("/");
   const fileName = lastSlash >= 0 ? imageUrl.slice(lastSlash + 1) : imageUrl;
+  if (fileName === "KiLogoBild.jpg") return;
   if (!fileName) return;
   const filePath = path.join(IMAGES_DIR, fileName);
   try {

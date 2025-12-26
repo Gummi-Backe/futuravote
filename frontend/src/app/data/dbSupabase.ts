@@ -282,6 +282,9 @@ function deleteImageFileIfPresent(imageUrl?: string | null) {
           const [bucket, ...rest] = pathPart.split("/");
           const pathInBucket = rest.join("/");
           if (bucket === IMAGE_BUCKET && pathInBucket) {
+            // Nur echte, pro Frage hochgeladene Bilder löschen.
+            // Standard-/Shared-Bilder (z. B. question-images/anderebilder/...) dürfen nie gelöscht werden.
+            if (!pathInBucket.startsWith("questions/")) return;
             const supabase = getSupabaseServerClient();
             supabase.storage
               .from(IMAGE_BUCKET)
@@ -300,6 +303,7 @@ function deleteImageFileIfPresent(imageUrl?: string | null) {
     // Legacy: lokale Bilddatei loeschen (z.B. bei altem SQLite-Setup)
     const lastSlash = imageUrl.lastIndexOf("/");
     const fileName = lastSlash >= 0 ? imageUrl.slice(lastSlash + 1) : imageUrl;
+    if (fileName === "KiLogoBild.jpg") return;
     if (!fileName) return;
     const filePath = path.join(IMAGES_DIR, fileName);
 
