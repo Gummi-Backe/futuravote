@@ -163,9 +163,57 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteAcknowledge, setDeleteAcknowledge] = useState(false);
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const inflightRef = useRef(false);
   const hasDataRef = useRef(false);
   const initialModeRef = useRef<"foreground" | "background">("foreground");
+
+  const canDeleteAccount =
+    !!user &&
+    deleteAcknowledge &&
+    deletePassword.trim().length > 0 &&
+    deleteConfirmText.trim().toUpperCase() === "LÖSCHEN" &&
+    !deleteSubmitting;
+
+  const deleteAccount = useCallback(async () => {
+    if (!canDeleteAccount) return;
+    setDeleteError(null);
+    setDeleteSubmitting(true);
+    try {
+      const res = await fetch("/api/profil/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: deletePassword,
+          confirmText: deleteConfirmText,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) {
+        setDeleteError(typeof data?.error === "string" ? data.error : "Account konnte nicht gelöscht werden.");
+        return;
+      }
+
+      setDeleteSuccess(true);
+      try {
+        window.sessionStorage.removeItem(PROFILE_SUMMARY_CACHE_KEY);
+      } catch {
+        // ignore
+      }
+      router.push("/");
+    } catch {
+      setDeleteError("Netzwerkfehler. Bitte versuche es erneut.");
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }, [canDeleteAccount, deleteConfirmText, deletePassword, router]);
 
   useEffect(() => {
     hasDataRef.current = user !== null && stats !== null;
@@ -470,6 +518,90 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
           <EmailNotificationSettings />
 
           <ProfilePollTabs baseUrl={baseUrl} />
+
+          <div className="mt-8 rounded-3xl border border-rose-400/30 bg-rose-500/10 p-6 shadow-2xl shadow-rose-500/10 backdrop-blur">
+            <h2 className="text-lg font-bold text-rose-100">Account löschen</h2>
+            <p className="mt-2 text-sm text-slate-200">
+              Wenn du deinen Account löschst, werden deine personenbezogenen Daten dauerhaft entfernt. Öffentliche Inhalte (z. B.
+              Abstimmungen, Fragen oder Kommentare) können aus Gründen der Nachvollziehbarkeit anonymisiert bestehen bleiben (ohne Bezug
+              zu deiner Person).
+            </p>
+
+            {deleteSuccess ? (
+              <div className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                Account wurde gelöscht. Du wirst abgemeldet…
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <label className="flex items-start gap-2 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={deleteAcknowledge}
+                    onChange={(e) => setDeleteAcknowledge(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-white/40 bg-slate-900 text-rose-500 focus:ring-rose-400"
+                  />
+                  <span>
+                    Ich verstehe, dass das Löschen nicht rückgängig gemacht werden kann.
+                    <span className="block text-xs text-slate-400">Tipp: Wenn du unsicher bist, melde dich vorher per Feedback.</span>
+                  </span>
+                </label>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-slate-100" htmlFor="deletePassword">
+                      Passwort bestätigen
+                    </label>
+                    <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 shadow-inner shadow-black/40">
+                      <input
+                        id="deletePassword"
+                        type={showDeletePassword ? "text" : "password"}
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        className="w-full bg-transparent text-sm text-white outline-none"
+                        placeholder="Dein Passwort"
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDeletePassword((prev) => !prev)}
+                        className="text-xs font-semibold text-slate-300 hover:text-slate-100"
+                      >
+                        {showDeletePassword ? "Verbergen" : "Anzeigen"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-semibold text-slate-100" htmlFor="deleteConfirmText">
+                      Zur Bestätigung tippen
+                    </label>
+                    <input
+                      id="deleteConfirmText"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-rose-300"
+                      placeholder="LÖSCHEN"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <p className="text-xs text-slate-400">Bitte exakt: LÖSCHEN</p>
+                  </div>
+                </div>
+
+                {deleteError ? <p className="text-sm font-semibold text-rose-200">{deleteError}</p> : null}
+
+                <button
+                  type="button"
+                  onClick={deleteAccount}
+                  disabled={!canDeleteAccount}
+                  className="w-full rounded-xl border border-rose-300/40 bg-rose-500/20 px-4 py-3 text-sm font-bold text-rose-100 shadow-lg shadow-rose-500/10 transition hover:-translate-y-0.5 hover:bg-rose-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deleteSubmitting ? "Lösche Account…" : "Account endgültig löschen"}
+                </button>
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </main>

@@ -89,6 +89,22 @@ export async function getUserPasswordHashByEmailSupabase(email: string): Promise
   return (data as any)?.password_hash ?? null;
 }
 
+export async function getUserPasswordHashByIdSupabase(userId: string): Promise<string | null> {
+  const supabase = getSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("password_hash")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase getUserPasswordHashById fehlgeschlagen: ${error.message}`);
+  }
+
+  return (data as any)?.password_hash ?? null;
+}
+
 
 export async function createEmailVerificationTokenSupabase(
   userId: string,
