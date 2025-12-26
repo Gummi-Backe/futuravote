@@ -1,11 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export default function PasswordResetRequestPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +15,7 @@ export default function PasswordResetRequestPage() {
 
     const trimmed = email.trim().toLowerCase();
     if (!trimmed || !trimmed.includes("@")) {
-      setError("Bitte gib eine gueltige E-Mail-Adresse ein.");
+      setError("Bitte gib eine gültige E-Mail-Adresse ein.");
       return;
     }
 
@@ -54,20 +52,17 @@ export default function PasswordResetRequestPage() {
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-16 pt-10">
-        <SmartBackButton
-          fallbackHref="/auth"
-          label="← Zurück"
-        />
+        <SmartBackButton fallbackHref="/auth" label="← Zurück" />
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Passwort vergessen</h1>
           <p className="mt-1 text-sm text-slate-300">
-            Gib deine E-Mail-Adresse ein. Wenn ein Account existiert, senden wir dir einen Link zum Zuruecksetzen.
+            Gib deine E-Mail-Adresse ein. Wenn ein Account existiert, senden wir dir einen Link zum Zurücksetzen.
           </p>
 
           {success ? (
             <div className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-              Wenn ein Account existiert, wurde ein Reset-Link verschickt. Bitte pruefe auch den Spam-Ordner.
+              Wenn ein Account existiert, wurde ein Reset-Link verschickt. Bitte prüfe auch den Spam-Ordner.
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="mt-4 space-y-4">

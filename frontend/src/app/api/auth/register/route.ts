@@ -84,7 +84,7 @@ export async function POST(request: Request) {
       });
     } catch (verificationError) {
       console.error("Konnte Verifikations-E-Mail nicht senden:", verificationError);
-      // Registrierung soll trotzdem funktionieren; Verifikation kann spaeter erneut angestossen werden.
+      // Registrierung soll trotzdem funktionieren; Verifikation kann später erneut angestoßen werden.
     }
     const sessionId = await createUserSessionSupabase(user.id);
 

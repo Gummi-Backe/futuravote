@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { token?: string; password?: string; passwordConfirm?: string };
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const token = (body.token ?? "").trim();
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Das Passwort muss mindestens 8 Zeichen lang sein." }, { status: 400 });
   }
   if (password !== passwordConfirm) {
-    return NextResponse.json({ error: "Die Passwoerter stimmen nicht ueberein." }, { status: 400 });
+    return NextResponse.json({ error: "Die Passwörter stimmen nicht überein." }, { status: 400 });
   }
 
   try {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: "Der Link ist ungueltig oder abgelaufen." },
+        { error: "Der Link ist ungültig oder abgelaufen." },
         { status: 400 }
       );
     }
@@ -46,6 +46,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Password reset confirm failed", error);
-    return NextResponse.json({ error: "Passwort konnte nicht zurueckgesetzt werden." }, { status: 500 });
+    return NextResponse.json({ error: "Passwort konnte nicht zurückgesetzt werden." }, { status: 500 });
   }
 }

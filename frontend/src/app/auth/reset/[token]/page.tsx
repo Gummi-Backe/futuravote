@@ -36,7 +36,7 @@ export default function PasswordResetTokenPage() {
       return;
     }
     if (password !== passwordConfirm) {
-      setError("Die Passwoerter stimmen nicht ueberein.");
+      setError("Die Passwörter stimmen nicht überein.");
       return;
     }
 
@@ -50,7 +50,7 @@ export default function PasswordResetTokenPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError((data as any)?.error ?? "Passwort konnte nicht zurueckgesetzt werden.");
+        setError((data as any)?.error ?? "Passwort konnte nicht zurückgesetzt werden.");
         return;
       }
 
@@ -65,17 +65,14 @@ export default function PasswordResetTokenPage() {
   return (
     <main className="page-enter min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-16 pt-10">
-        <SmartBackButton
-          fallbackHref="/auth"
-          label="← Zurück"
-        />
+        <SmartBackButton fallbackHref="/auth" label="← Zurück" />
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Neues Passwort setzen</h1>
 
           {!token && !success && (
             <div className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-              Token fehlt. Bitte oeffne den Reset-Link aus deiner E-Mail erneut.
+              Token fehlt. Bitte öffne den Reset-Link aus deiner E-Mail erneut.
             </div>
           )}
 
@@ -117,7 +114,7 @@ export default function PasswordResetTokenPage() {
 
               <div className="space-y-1">
                 <label htmlFor="passwordConfirm" className="text-sm font-medium text-slate-100">
-                  Passwort bestaetigen
+                  Passwort bestätigen
                 </label>
                 <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 shadow-inner shadow-black/40">
                   <input

@@ -13,12 +13,12 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { email?: string };
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const email = (body.email ?? "").trim().toLowerCase();
   if (!email || !email.includes("@")) {
-    return NextResponse.json({ error: "Bitte gib eine gueltige E-Mail-Adresse ein." }, { status: 400 });
+    return NextResponse.json({ error: "Bitte gib eine gültige E-Mail-Adresse ein." }, { status: 400 });
   }
 
   const forwarded = request.headers.get("x-forwarded-for") ?? "";
