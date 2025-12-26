@@ -358,7 +358,7 @@ function EventCard({
                     if (!voteLocked && !isSubmitting) onVoteOption?.(opt.id);
                   }}
                   disabled={voteLocked || Boolean(isSubmitting)}
-                  aria-label={`Option waehlen: ${opt.label}`}
+                  aria-label={`Option wählen: ${opt.label}`}
                   className={`group flex w-full items-center gap-1.5 rounded-md border p-[2px] text-left transition ${
                     isSelected
                       ? "border-emerald-200/85 bg-emerald-500/20 shadow-[0_0_0_1px_rgba(52,211,153,0.25),0_0_18px_rgba(52,211,153,0.12)]"
@@ -1423,7 +1423,7 @@ export default function Home() {
   const handleAdminDraftAction = useCallback(
     async (draftId: string, action: "accept" | "reject" | "delete") => {
       if (!currentUser || currentUser.role !== "admin") {
-        showToast("Nur Admins koennen diese Aktion ausfuehren.", "error");
+        showToast("Nur Admins können diese Aktion ausführen.", "error");
         return;
       }
       setDraftSubmittingId(draftId);

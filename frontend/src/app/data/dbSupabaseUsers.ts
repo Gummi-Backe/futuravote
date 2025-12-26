@@ -67,7 +67,7 @@ export async function createUserSupabase(input: {
     throw new Error(`Supabase createUser fehlgeschlagen: ${error.message}`);
   }
   if (!data) {
-    throw new Error("Supabase createUser lieferte keine Daten zurueck.");
+    throw new Error("Supabase createUser lieferte keine Daten zurück.");
   }
 
   return mapUser(data as DbUser);
@@ -291,7 +291,7 @@ export async function updateUserDefaultRegionSupabase(
     throw new Error(`Supabase updateUserDefaultRegion fehlgeschlagen: ${error.message}`);
   }
   if (!data) {
-    throw new Error("Supabase updateUserDefaultRegion lieferte keine Daten zurueck.");
+    throw new Error("Supabase updateUserDefaultRegion lieferte keine Daten zurück.");
   }
 
   return mapUser(data as DbUser);

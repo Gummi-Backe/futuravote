@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as ReportBody;
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const kind = body.kind;
@@ -40,13 +40,13 @@ export async function POST(request: Request) {
   const pageUrl = typeof body.pageUrl === "string" ? body.pageUrl.trim().slice(0, 500) : null;
 
   if (kind !== "question" && kind !== "draft") {
-    return NextResponse.json({ error: "Ungueltiger Typ." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Typ." }, { status: 400 });
   }
   if (!itemId) {
     return NextResponse.json({ error: "ID fehlt." }, { status: 400 });
   }
   if (!reason || !["spam", "abuse", "hate", "misinfo", "copyright", "other"].includes(reason)) {
-    return NextResponse.json({ error: "Ungueltiger Grund." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Grund." }, { status: 400 });
   }
 
   const cookieStore = await cookies();
@@ -108,4 +108,3 @@ export async function POST(request: Request) {
   response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
   return response;
 }
-

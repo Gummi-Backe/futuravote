@@ -100,7 +100,7 @@ function unauthorized(message: string) {
 export async function POST(request: Request) {
   const cfg = getOAuthClientConfig();
   const body = await readTokenRequest(request);
-  if (!body) return badRequest("Ungueltiger Body");
+  if (!body) return badRequest("Ungültiger Body");
 
   if (body.client_id !== cfg.clientId) return unauthorized("ungueltige client_id");
   if (cfg.clientSecret && body.client_secret !== cfg.clientSecret) return unauthorized("ungueltiges client_secret");

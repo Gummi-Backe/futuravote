@@ -124,7 +124,7 @@ body {
 
 /* Verhindert, dass extrem lange Woerter Karten breiter machen.
    Normale Woerter bleiben ungetrennt, nur wenn sie alleine nicht
-   in die Zeile passen, duerfen sie umbrochen werden. */
+   in die Zeile passen, dürfen sie umbrochen werden. */
 .card-title-wrap {
   overflow-wrap: anywhere;
   word-break: break-word;

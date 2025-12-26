@@ -222,7 +222,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
   const user = await getUserBySessionSupabase(sessionId).catch(() => null);
   if (!user) return NextResponse.json({ error: "Bitte einloggen." }, { status: 401 });
-  if (!user.emailVerified) return NextResponse.json({ error: "Bitte zuerst E-Mail bestaetigen." }, { status: 403 });
+  if (!user.emailVerified) return NextResponse.json({ error: "Bitte zuerst E-Mail bestätigen." }, { status: 403 });
 
   const ended = String(question.closesAt).slice(0, 10) < todayUtcDateIso();
   const resolvedOutcome = question.resolvedOutcome === "yes" || question.resolvedOutcome === "no" ? question.resolvedOutcome : null;
@@ -234,7 +234,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   const sourceUrl = normalizeSourceUrl(body?.sourceUrl);
   const note = normalizeNote(body?.note);
 
-  if (!outcome) return NextResponse.json({ error: "Bitte Ja oder Nein auswaehlen." }, { status: 400 });
+  if (!outcome) return NextResponse.json({ error: "Bitte Ja oder Nein auswählen." }, { status: 400 });
   if (!sourceUrl) return NextResponse.json({ error: "Bitte eine gueltige Quelle (URL) angeben." }, { status: 400 });
 
   const supabase = getSupabaseAdminClient();

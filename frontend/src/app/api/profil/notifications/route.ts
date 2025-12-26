@@ -137,7 +137,7 @@ export async function GET() {
     return NextResponse.json({ ok: true, prefs });
   } catch {
     // Falls die Tabelle noch nicht existiert (Setup nicht ausgefuehrt),
-    // liefern wir Default-Prefs zurueck, damit die App weiterhin funktioniert.
+    // liefern wir Default-Prefs zurück, damit die App weiterhin funktioniert.
     return NextResponse.json({ ok: true, prefs: DEFAULT_PREFS, note: "notification_preferences missing? using defaults" });
   }
 }
@@ -150,7 +150,7 @@ export async function PUT(request: Request) {
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) {
-    return NextResponse.json({ error: "Ungueltige Anfrage." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
   }
 
   const next: NotificationPrefs = {

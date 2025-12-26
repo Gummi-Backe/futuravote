@@ -59,8 +59,8 @@ export async function PATCH(request: Request) {
       region = null;
     }
   } catch {
-    // Ungueltiger Body -> Region nicht aendern
-    return NextResponse.json({ error: "Ungueltige Anfrage." }, { status: 400 });
+    // Ungültiger Body -> Region nicht ändern
+    return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
   }
 
   try {

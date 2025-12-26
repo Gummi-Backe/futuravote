@@ -1722,7 +1722,7 @@ export async function createDraftInSupabase(input: {
     throw new Error(`Supabase createDraft fehlgeschlagen: ${error.message}`);
   }
   if (!data) {
-    throw new Error("Supabase createDraft hat kein Row-Objekt zurueckgegeben.");
+    throw new Error("Supabase createDraft hat kein Row-Objekt zurückgegeben.");
   }
 
   const draftRow = data as DraftRow;
@@ -1856,7 +1856,7 @@ export async function createLinkOnlyQuestionInSupabase(input: {
     throw new Error(`Supabase createLinkOnlyQuestion fehlgeschlagen: ${error.message}`);
   }
   if (!data) {
-    throw new Error("Supabase createLinkOnlyQuestion hat kein Row-Objekt zurueckgegeben.");
+    throw new Error("Supabase createLinkOnlyQuestion hat kein Row-Objekt zurückgegeben.");
   }
 
   const questionRow = data as QuestionRow;
@@ -2273,7 +2273,7 @@ export async function adminResolveQuestionInSupabase(input: {
   const resolvedOptionId = input.resolvedOptionId ? String(input.resolvedOptionId).trim() : null;
 
   if (outcome && resolvedOptionId) {
-    throw new Error("adminResolveQuestionInSupabase: outcome und resolvedOptionId duerfen nicht gleichzeitig gesetzt sein.");
+    throw new Error("adminResolveQuestionInSupabase: outcome und resolvedOptionId dürfen nicht gleichzeitig gesetzt sein.");
   }
 
   const resolvedAt = outcome || resolvedOptionId ? new Date().toISOString() : null;

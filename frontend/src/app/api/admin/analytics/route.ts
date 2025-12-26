@@ -16,7 +16,7 @@ export async function GET() {
   const user = sessionId ? await getUserBySessionSupabase(sessionId).catch(() => null) : null;
 
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
+    return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
   }
 
   const supabase = getSupabaseAdminClient();
@@ -113,4 +113,3 @@ export async function GET() {
     return NextResponse.json({ error: "Analytics konnten nicht geladen werden." }, { status: 500 });
   }
 }
-

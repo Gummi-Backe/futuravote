@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
   if (file.size > MAX_UPLOAD_BYTES) {
     return NextResponse.json(
-      { error: "Die Datei ist zu gross. Bitte waehle ein kleineres Bild (max. 8 MB)." },
+      { error: "Die Datei ist zu groß. Bitte wähle ein kleineres Bild (max. 8 MB)." },
       { status: 413 }
     );
   }
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   if (!ALLOWED_MIME_TYPES.has(fileType)) {
     const shownType = fileType || "unbekannt";
     return NextResponse.json(
-      { error: `Ungueltiges Bildformat (${shownType}). Bitte nutze JPG, PNG oder WebP.` },
+      { error: `Ungültiges Bildformat (${shownType}). Bitte nutze JPG, PNG oder WebP.` },
       { status: 415 }
     );
   }

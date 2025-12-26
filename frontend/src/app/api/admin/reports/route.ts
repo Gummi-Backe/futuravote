@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
+    return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
   }
 
   const url = new URL(request.url);
@@ -53,14 +53,14 @@ export async function PATCH(request: Request) {
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Nur Admins duerfen diese Aktion ausfuehren." }, { status: 403 });
+    return NextResponse.json({ error: "Nur Admins dürfen diese Aktion ausführen." }, { status: 403 });
   }
 
   let body: UpdateBody;
   try {
     body = (await request.json()) as UpdateBody;
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const id = body.id?.trim();
@@ -69,7 +69,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Report-ID fehlt." }, { status: 400 });
   }
   if (status !== "open" && status !== "resolved" && status !== "dismissed") {
-    return NextResponse.json({ error: "Ungueltiger Status." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Status." }, { status: 400 });
   }
 
   const supabase = getSupabaseAdminClient();
@@ -86,4 +86,3 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({ ok: true, report: data }, { status: 200 });
 }
-

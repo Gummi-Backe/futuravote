@@ -6,7 +6,7 @@ let supabaseAdmin: SupabaseClient | null = null;
 
 /**
  * Supabase-Client fuer serverseitige DB-Operationen.
- * Verwendet bevorzugt den Service-Role-Key und faellt sonst auf den anon-Key zurueck.
+ * Verwendet bevorzugt den Service-Role-Key und fällt sonst auf den anon-Key zurück.
  * Der Service-Role-Key darf niemals im Client landen.
  */
 export function getSupabaseAdminClient(): SupabaseClient {

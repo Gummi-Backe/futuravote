@@ -26,7 +26,7 @@ export function AhaMicrocopyToast() {
     return () => window.removeEventListener("fv:aha", onAha);
   }, []);
 
-  // Kein Auto-Close: Nutzer soll in Ruhe lesen koennen.
+  // Kein Auto-Close: Nutzer soll in Ruhe lesen können.
 
   const closesAtLabel = useMemo(() => formatClosesAt(payload.closesAt), [payload.closesAt]);
 

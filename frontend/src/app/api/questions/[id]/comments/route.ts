@@ -69,7 +69,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   const user = await getUserBySessionSupabase(sessionId).catch(() => null);
   if (!user) return NextResponse.json({ error: "Bitte einloggen." }, { status: 401 });
   if (!user.emailVerified) {
-    return NextResponse.json({ error: "Bitte zuerst E-Mail bestaetigen." }, { status: 403 });
+    return NextResponse.json({ error: "Bitte zuerst E-Mail bestätigen." }, { status: 403 });
   }
 
   const now = Date.now();
@@ -115,4 +115,3 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Kommentar konnte nicht gespeichert werden." }, { status: 500 });
   }
 }
-

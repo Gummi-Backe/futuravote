@@ -390,14 +390,14 @@ export async function POST(request: Request) {
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
+    return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
   }
 
   let body: Body;
   try {
     body = (await request.json()) as Body;
   } catch {
-    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
   const theme = (body.theme ?? "").trim();

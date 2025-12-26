@@ -197,7 +197,7 @@ export default async function SharedPollPage(props: {
                   Privat (nur per Link)
                 </span>
                 <p className="text-sm text-emerald-50/90">
-                  Teile den Link. Nur du siehst diesen Hinweis - alle anderen koennen nur abstimmen.
+                  Teile den Link. Nur du siehst diesen Hinweis – alle anderen können nur abstimmen.
                 </p>
               </div>
 

@@ -15,7 +15,7 @@ type AdminDraftBody = {
 };
 
 export async function GET() {
-  return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
+  return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
 }
 export async function POST(request: Request) {
   const cookieStore = await cookies();

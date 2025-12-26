@@ -152,7 +152,7 @@ export function CommentsSection({
         </div>
       ) : !canPost ? (
         <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-50">
-          Bitte bestaetige zuerst deine E-Mail, um kommentieren zu koennen.
+          Bitte bestätige zuerst deine E-Mail, um kommentieren zu können.
         </div>
       ) : (
         <div className="mt-4 rounded-3xl border border-white/10 bg-black/20 p-4">
@@ -282,4 +282,3 @@ export function CommentsSection({
     </section>
   );
 }
-

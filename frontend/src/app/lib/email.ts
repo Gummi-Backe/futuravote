@@ -33,11 +33,11 @@ export async function sendVerificationEmail(options: {
 }): Promise<void> {
   const transport = getTransporter();
 
-  const subject = "Bitte bestaetige deine E-Mail-Adresse fuer Future-Vote";
+  const subject = "Bitte bestätige deine E-Mail-Adresse für Future-Vote";
   const text = [
     `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
     "",
-    "bitte bestaetige deine E-Mail-Adresse, indem du auf den folgenden Link klickst:",
+    "bitte bestätige deine E-Mail-Adresse, indem du auf den folgenden Link klickst:",
     options.verificationUrl,
     "",
     "Wenn du keinen Account bei Future-Vote angelegt hast, kannst du diese E-Mail ignorieren.",
@@ -71,23 +71,23 @@ export async function sendPasswordResetEmail(options: {
 }): Promise<void> {
   const transport = getTransporter();
 
-  const subject = "Passwort zuruecksetzen fuer Future-Vote";
+  const subject = "Passwort zurücksetzen für Future-Vote";
   const text = [
     `Hallo ${options.displayName || "Future-Vote Nutzer"},`,
     "",
-    "du hast (oder jemand anderes hat) ein Zuruecksetzen deines Passworts angefordert.",
+    "du hast (oder jemand anderes hat) ein Zurücksetzen deines Passworts angefordert.",
     "Klicke auf den folgenden Link, um ein neues Passwort zu setzen:",
     options.resetUrl,
     "",
-    "Der Link ist nur kurze Zeit gueltig. Wenn du das nicht warst, ignoriere diese E-Mail.",
+    "Der Link ist nur kurze Zeit gültig. Wenn du das nicht warst, ignoriere diese E-Mail.",
   ].join("\n");
 
   const html = `
     <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
-    <p>du hast (oder jemand anderes hat) ein Zuruecksetzen deines Passworts angefordert.</p>
+    <p>du hast (oder jemand anderes hat) ein Zurücksetzen deines Passworts angefordert.</p>
     <p>Klicke auf den folgenden Link, um ein neues Passwort zu setzen:</p>
     <p><a href="${options.resetUrl}">${options.resetUrl}</a></p>
-    <p><strong>Hinweis:</strong> Der Link ist nur kurze Zeit gueltig. Wenn du das nicht warst, ignoriere diese E-Mail.</p>
+    <p><strong>Hinweis:</strong> Der Link ist nur kurze Zeit gültig. Wenn du das nicht warst, ignoriere diese E-Mail.</p>
   `;
 
   if (!transport) {

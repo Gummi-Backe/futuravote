@@ -227,7 +227,7 @@ export async function GET(request: Request) {
       answerMode === "options"
         ? [
             "",
-            "Antwortoptionen (du MUSST eine dieser IDs waehlen oder null):",
+            "Antwortoptionen (du MUSST eine dieser IDs wählen oder null):",
             ...optionsList.map((o: any) => `- ${String(o.id)} | ${String(o.label ?? "")}`),
           ]
         : [];
