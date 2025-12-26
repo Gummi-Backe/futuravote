@@ -42,11 +42,66 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
+function extractMissingColumnName(error: unknown): string | null {
+  const message = String((error as any)?.message ?? "");
+  const match = message.match(/Could not find the '([^']+)' column/i);
+  return match?.[1] ? String(match[1]) : null;
+}
+
 async function getUserFromCookie() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   if (!sessionId) return null;
   return getUserBySessionSupabase(sessionId);
+}
+
+async function selectPrefsRow(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  userId: string
+): Promise<Record<string, unknown> | null> {
+  const columns = [
+    "all_emails_enabled",
+    "private_poll_results",
+    "private_poll_ending_soon",
+    "creator_public_question_ended",
+    "creator_public_question_resolved",
+    "creator_draft_accepted",
+    "creator_draft_rejected",
+  ];
+
+  const remaining = [...columns];
+  for (let i = 0; i < columns.length; i += 1) {
+    const select = remaining.join(", ");
+    const { data, error } = await supabase.from("notification_preferences").select(select).eq("user_id", userId).maybeSingle();
+    if (!error) return (data ?? null) as any;
+    if (!isMissingColumnSchemaCacheError(error)) throw error;
+    const missing = extractMissingColumnName(error);
+    if (!missing) throw error;
+    const idx = remaining.indexOf(missing);
+    if (idx === -1) throw error;
+    remaining.splice(idx, 1);
+  }
+  return null;
+}
+
+async function upsertWithMissingColumnRetry(
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  payload: Record<string, unknown>
+) {
+  const remaining: Record<string, unknown> = { ...payload };
+  const removed = new Set<string>();
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { error } = await supabase.from("notification_preferences").upsert(remaining, { onConflict: "user_id" });
+    if (!error) return { removed };
+    if (!isMissingColumnSchemaCacheError(error)) throw error;
+    const missing = extractMissingColumnName(error);
+    if (!missing || removed.has(missing) || !(missing in remaining)) throw error;
+    delete (remaining as any)[missing];
+    removed.add(missing);
+  }
+
+  throw new Error("Konnte Einstellungen nicht speichern (zu viele fehlende Spalten).");
 }
 
 export async function GET() {
@@ -58,31 +113,7 @@ export async function GET() {
   const supabase = getSupabaseAdminClient();
 
   try {
-    const selectFull =
-      "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected";
-    const selectLegacy =
-      "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved";
-
-    let data: any = null;
-    {
-      const { data: row, error } = await supabase
-        .from("notification_preferences")
-        .select(selectFull)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (error) {
-        if (!isMissingColumnSchemaCacheError(error)) throw error;
-        const { data: legacyRow, error: legacyErr } = await supabase
-          .from("notification_preferences")
-          .select(selectLegacy)
-          .eq("user_id", user.id)
-          .maybeSingle();
-        if (legacyErr) throw legacyErr;
-        data = legacyRow;
-      } else {
-        data = row;
-      }
-    }
+    const data = (await selectPrefsRow(supabase, user.id)) as any;
 
     const prefs: NotificationPrefs = {
       allEmailsEnabled: normalizeBoolean((data as any)?.all_emails_enabled, DEFAULT_PREFS.allEmailsEnabled),
@@ -138,7 +169,7 @@ export async function PUT(request: Request) {
   const supabase = getSupabaseAdminClient();
 
   try {
-    const payloadFull = {
+    const payloadFull: Record<string, unknown> = {
       user_id: user.id,
       all_emails_enabled: next.allEmailsEnabled,
       private_poll_results: next.privatePollResults,
@@ -149,31 +180,15 @@ export async function PUT(request: Request) {
       creator_draft_rejected: next.creatorDraftRejected,
       updated_at: new Date().toISOString(),
     };
-    const payloadLegacy = {
-      user_id: user.id,
-      all_emails_enabled: next.allEmailsEnabled,
-      private_poll_results: next.privatePollResults,
-      private_poll_ending_soon: next.privatePollEndingSoon,
-      creator_public_question_ended: next.creatorPublicQuestionEnded,
-      creator_public_question_resolved: next.creatorPublicQuestionResolved,
-      updated_at: new Date().toISOString(),
-    };
 
-    const { error } = await supabase.from("notification_preferences").upsert(payloadFull, { onConflict: "user_id" });
-    if (!error) return NextResponse.json({ ok: true, prefs: next });
+    const { removed } = await upsertWithMissingColumnRetry(supabase, payloadFull);
 
-    if (!isMissingColumnSchemaCacheError(error)) throw error;
+    const note =
+      removed.size > 0
+        ? `Hinweis: In Supabase fehlen Spalten (${Array.from(removed).join(", ")}). Bitte 'supabase/notification_preferences.sql' ausführen.`
+        : undefined;
 
-    const { error: legacyErr } = await supabase
-      .from("notification_preferences")
-      .upsert(payloadLegacy, { onConflict: "user_id" });
-    if (legacyErr) throw legacyErr;
-
-    return NextResponse.json({
-      ok: true,
-      prefs: next,
-      note: "DB schema missing creator_draft_* columns; saved legacy notification_preferences. Run supabase/notification_preferences.sql.",
-    });
+    return NextResponse.json({ ok: true, prefs: next, note });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Konnte Einstellungen nicht speichern." }, { status: 500 });
   }
