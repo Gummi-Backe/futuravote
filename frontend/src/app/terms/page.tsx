@@ -12,7 +12,6 @@ export default function TermsPage() {
         <SmartBackButton
           fallbackHref="/"
           label="← Zurück"
-          className="self-start text-sm text-emerald-100 hover:text-emerald-200"
         />
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">

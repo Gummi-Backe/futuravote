@@ -95,7 +95,6 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
         <SmartBackButton
           fallbackHref="/profil?tab=drafts"
           label="← Zurück zum Profil"
-          className="text-sm text-slate-200 hover:text-white bg-transparent p-0"
         />
 
         <section className="mt-6 space-y-3">

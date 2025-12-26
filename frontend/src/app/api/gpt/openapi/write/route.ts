@@ -23,37 +23,9 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title: { type: string }
-                description: { type: string, nullable: true }
-                category: { type: string }
-                region: { type: string, nullable: true }
-                imageUrl:
-                  type: string
-                  nullable: true
-                  description: "Optional. Fuer GPT-OAuth wird ein Standardbild genutzt, wenn leer; externe URLs werden ggf. ignoriert."
-                imageCredit:
-                  type: string
-                  nullable: true
-                  description: "Optional. Wird fuer Standardbild automatisch gesetzt (falls konfiguriert)."
-                timeLeftHours: { type: number, nullable: true, description: "Standard: 72" }
-                closesAt: { type: string, nullable: true, description: "Optionales Enddatum (ISO)" }
-                visibility:
-                  type: string
-                  enum: [public, link_only]
-                answerMode:
-                  type: string
-                  enum: [binary, options]
-                isResolvable: { type: boolean, nullable: true, description: "true=Prognose, false=Meinungs-Umfrage" }
-                options:
-                  type: array
-                  nullable: true
-                  items: { type: string }
-                resolutionCriteria: { type: string, nullable: true }
-                resolutionSource: { type: string, nullable: true }
-                resolutionDeadline: { type: string, nullable: true, description: "ISO Datum/Uhrzeit" }
-              required: [title, category]
+              oneOf:
+                - $ref: "#/components/schemas/CreateDraftPublicResolvable"
+                - $ref: "#/components/schemas/CreateDraft"
       responses:
         "201":
           description: Draft oder Question erstellt
@@ -88,7 +60,56 @@ paths:
           description: OAuth/DB nicht vorbereitet
 
 components:
-  schemas: {}
+  schemas:
+    CreateDraft:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string, nullable: true }
+        category: { type: string }
+        region: { type: string, nullable: true }
+        imageUrl:
+          type: string
+          nullable: true
+          description: "Optional. Fuer GPT-OAuth wird ein Standardbild genutzt, wenn leer; externe URLs werden ggf. ignoriert."
+        imageCredit:
+          type: string
+          nullable: true
+          description: "Optional. Wird fuer Standardbild automatisch gesetzt (falls konfiguriert)."
+        timeLeftHours: { type: number, nullable: true, description: "Standard: 72" }
+        closesAt: { type: string, nullable: true, description: "Optionales Enddatum (ISO). Empfohlen fuer oeffentliche Prognosen." }
+        visibility:
+          type: string
+          enum: [public, link_only]
+        answerMode:
+          type: string
+          enum: [binary, options]
+        isResolvable: { type: boolean, nullable: true, description: "true=Prognose, false=Meinungs-Umfrage" }
+        options:
+          type: array
+          nullable: true
+          items: { type: string }
+        resolutionCriteria:
+          type: string
+          nullable: true
+          description: "Required wenn visibility=public und isResolvable=true."
+        resolutionSource:
+          type: string
+          nullable: true
+          description: "Required wenn visibility=public und isResolvable=true."
+        resolutionDeadline:
+          type: string
+          nullable: true
+          description: "Required wenn visibility=public und isResolvable=true (ISO Datum/Uhrzeit). Server setzt sonst automatisch closesAt+31 Tage."
+      required: [title, category]
+    CreateDraftPublicResolvable:
+      allOf:
+        - $ref: "#/components/schemas/CreateDraft"
+        - type: object
+          properties:
+            visibility: { type: string, enum: [public] }
+            isResolvable: { type: boolean, enum: [true] }
+          required: [visibility, isResolvable, resolutionCriteria, resolutionSource, resolutionDeadline]
   securitySchemes:
     oauth2:
       type: oauth2

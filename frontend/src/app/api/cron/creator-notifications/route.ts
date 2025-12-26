@@ -14,6 +14,18 @@ function isVercelCron(request: Request): boolean {
   return header === "1" || header === "true";
 }
 
+function isMissingColumnSchemaCacheError(error: unknown): boolean {
+  const e = error as any;
+  const code = typeof e?.code === "string" ? e.code : "";
+  const message = typeof e?.message === "string" ? e.message : "";
+  return (
+    code === "PGRST204" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("Could not find")
+  );
+}
+
 function getSiteUrl(requestUrl: string) {
   const envBase = process.env.NEXT_PUBLIC_BASE_URL?.trim();
   if (envBase) return envBase.replace(/\/+$/, "");
@@ -43,14 +55,30 @@ async function getPrefs(
   creatorDraftRejected: boolean;
 }> {
   try {
-    const { data, error } = await supabase
-      .from("notification_preferences")
-      .select(
-        "all_emails_enabled, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected"
-      )
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (error) throw error;
+    const selectFull =
+      "all_emails_enabled, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected";
+    const selectLegacy = "all_emails_enabled, creator_public_question_ended, creator_public_question_resolved";
+
+    let data: any = null;
+    {
+      const { data: row, error } = await supabase
+        .from("notification_preferences")
+        .select(selectFull)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) {
+        if (!isMissingColumnSchemaCacheError(error)) throw error;
+        const { data: legacyRow, error: legacyErr } = await supabase
+          .from("notification_preferences")
+          .select(selectLegacy)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (legacyErr) throw legacyErr;
+        data = legacyRow;
+      } else {
+        data = row;
+      }
+    }
     return {
       allEmailsEnabled: typeof (data as any)?.all_emails_enabled === "boolean" ? (data as any).all_emails_enabled : true,
       creatorPublicQuestionEnded:

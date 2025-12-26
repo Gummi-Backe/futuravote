@@ -36,6 +36,24 @@ function normalizeImageUrl(raw?: string | null): string | undefined {
   return trimmed;
 }
 
+function addDaysIso(iso: string, days: number): string | null {
+  const baseMs = Date.parse(iso);
+  if (!Number.isFinite(baseMs)) return null;
+  const nextMs = baseMs + days * 24 * 60 * 60 * 1000;
+  return new Date(nextMs).toISOString();
+}
+
+function computeDefaultResolutionDeadlineIso({
+  closesAtIso,
+  timeLeftHours,
+}: {
+  closesAtIso?: string;
+  timeLeftHours: number;
+}): string {
+  const baseIso = closesAtIso && !Number.isNaN(Date.parse(closesAtIso)) ? closesAtIso : new Date(Date.now() + timeLeftHours * 60 * 60 * 1000).toISOString();
+  return addDaysIso(baseIso, 31) ?? new Date(Date.now() + (timeLeftHours * 60 * 60 + 31 * 24 * 60 * 60) * 1000).toISOString();
+}
+
 function isAllowedGptImageUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);
@@ -151,7 +169,7 @@ export async function POST(request: Request) {
   const isResolvable = typeof body.isResolvable === "boolean" ? body.isResolvable : true;
   const resolutionCriteriaToSave = isResolvable ? resolutionCriteria : undefined;
   const resolutionSourceToSave = isResolvable ? resolutionSource : undefined;
-  const resolutionDeadlineToSave = isResolvable ? resolutionDeadline : undefined;
+  let resolutionDeadlineToSave = isResolvable ? resolutionDeadline : undefined;
 
   let options: string[] | undefined = undefined;
   if (answerMode === "options") {
@@ -190,6 +208,20 @@ export async function POST(request: Request) {
   const visibility: PollVisibility =
     body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
 
+  const timeLeftHours =
+    typeof body.timeLeftHours === "number" && Number.isFinite(body.timeLeftHours) && body.timeLeftHours > 0
+      ? body.timeLeftHours
+      : 72;
+
+  // Fail-safe: Bei oeffentlichen Prognosen soll es keine "missing resolutionDeadline" Fehler geben.
+  // Wenn kein Datum uebergeben wurde, setzen wir automatisch eine Pruef-Deadline 31 Tage nach dem Enddatum.
+  if (visibility === "public" && isResolvable && !resolutionDeadlineToSave) {
+    resolutionDeadlineToSave = computeDefaultResolutionDeadlineIso({
+      closesAtIso: targetClosesAt,
+      timeLeftHours,
+    });
+  }
+
   if (visibility === "public" && isResolvable) {
     if (!resolutionCriteria) {
       return NextResponse.json(
@@ -203,7 +235,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    if (!resolutionDeadline) {
+    if (!resolutionDeadlineToSave) {
       return NextResponse.json(
         { error: "Bitte setze eine Aufloesungs-Deadline (Datum/Uhrzeit)." },
         { status: 400 }
@@ -220,11 +252,6 @@ export async function POST(request: Request) {
       );
     }
   }
-
-  const timeLeftHours =
-    typeof body.timeLeftHours === "number" && Number.isFinite(body.timeLeftHours) && body.timeLeftHours > 0
-      ? body.timeLeftHours
-      : 72;
 
   if (visibility === "link_only") {
     const question = await createLinkOnlyQuestionInSupabase({

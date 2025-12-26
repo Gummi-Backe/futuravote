@@ -119,7 +119,7 @@ export function HelpButton() {
       },
       {
         id: "review",
-        title: "Review‑Bereich (Drafts)",
+        title: "Review-Bereich (Drafts)",
         body: (
           <div className="space-y-2 text-sm text-slate-200">
             <p>
@@ -210,6 +210,94 @@ export function HelpButton() {
             </p>
             <p>
               Wähle einen Grund aus und gib optional einen kurzen Hinweis. So hilfst du dabei, die Qualität im Feed hoch zu halten.
+            </p>
+          </div>
+        ),
+      },
+      {
+        id: "install",
+        title: "App installieren (optional)",
+        body: (
+          <div className="space-y-2 text-sm text-slate-200">
+            <p>
+              Du kannst Future-Vote optional wie eine App auf deinem Gerät ablegen. Das ist kein Muss, aber praktisch: Du bekommst ein
+              App-Icon und Future-Vote öffnet sich schneller in einem eigenen Fenster.
+            </p>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-semibold text-slate-100">Android (Edge)</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-slate-300">
+                  <li>Unten rechts auf das Menü tippen (drei Striche).</li>
+                  <li>Falls nötig: im Menü einmal nach links wischen, bis die Kachel mit der Installation sichtbar ist.</li>
+                  <li>
+                    <span className="font-semibold text-white">Zu Smartphone hinzufügen</span> antippen.
+                  </li>
+                  <li>Im Dialog auf <span className="font-semibold text-white">Installieren</span> tippen.</li>
+                </ol>
+                <p className="mt-2 text-[11px] text-slate-300">
+                  Alternative (je nach Browser-Version): <span className="font-semibold text-white">⋮</span> oben rechts &rarr;{" "}
+                  <span className="font-semibold text-white">App installieren</span>.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-semibold text-slate-100">Android (Chrome)</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-slate-300">
+                  <li>Oben rechts auf <span className="font-semibold text-white">⋮</span> tippen.</li>
+                  <li>
+                    <span className="font-semibold text-white">App installieren</span> wählen (oder{" "}
+                    <span className="font-semibold text-white">Zum Startbildschirm hinzufügen</span>).
+                  </li>
+                  <li>Im Dialog auf <span className="font-semibold text-white">Installieren</span> tippen.</li>
+                </ol>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-semibold text-slate-100">iPhone/iPad (Safari)</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-slate-300">
+                  <li>Unten auf <span className="font-semibold text-white">Teilen</span> tippen (Quadrat mit Pfeil).</li>
+                  <li>
+                    <span className="font-semibold text-white">Zum Home-Bildschirm</span> auswählen.
+                  </li>
+                  <li>Oben rechts auf <span className="font-semibold text-white">Hinzufügen</span> tippen.</li>
+                </ol>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-semibold text-slate-100">Desktop (Edge)</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-slate-300">
+                  <li>Oben rechts auf <span className="font-semibold text-white">⋯</span> klicken.</li>
+                  <li>
+                    <span className="font-semibold text-white">Apps</span> &rarr;{" "}
+                    <span className="font-semibold text-white">Installieren Sie Future-Vote</span> anklicken.
+                  </li>
+                  <li>Dialog bestätigen.</li>
+                </ol>
+                <p className="mt-2 text-[11px] text-slate-300">
+                  Tipp: Wenn in der Adressleiste ein Install-Icon angezeigt wird, kannst du auch darüber installieren.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-semibold text-slate-100">Desktop (Chrome)</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-slate-300">
+                  <li>Oben rechts auf <span className="font-semibold text-white">⋮</span> klicken.</li>
+                  <li>
+                    <span className="font-semibold text-white">App installieren</span> bzw.{" "}
+                    <span className="font-semibold text-white">Installieren: Future-Vote</span> auswählen.
+                  </li>
+                  <li>Dialog bestätigen.</li>
+                </ol>
+                <p className="mt-2 text-[11px] text-slate-300">
+                  Tipp: Oft gibt es zusätzlich ein Install-Icon rechts in der Adressleiste. Wenn es da ist, geht es am schnellsten darüber.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Hinweis: Wenn du keinen Install-Button siehst, bietet dein Browser das für diese Seite gerade nicht an (oder es ist bereits
+              installiert).
             </p>
           </div>
         ),

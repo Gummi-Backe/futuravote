@@ -157,7 +157,6 @@ export default function ReportsClient() {
         <SmartBackButton
           fallbackHref="/"
           label="← Zurück"
-          className="text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
         />
       </div>
 

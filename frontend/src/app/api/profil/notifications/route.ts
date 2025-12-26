@@ -25,6 +25,18 @@ const DEFAULT_PREFS: NotificationPrefs = {
   creatorDraftRejected: true,
 };
 
+function isMissingColumnSchemaCacheError(error: unknown): boolean {
+  const e = error as any;
+  const code = typeof e?.code === "string" ? e.code : "";
+  const message = typeof e?.message === "string" ? e.message : "";
+  return (
+    code === "PGRST204" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("Could not find")
+  );
+}
+
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   if (typeof value === "boolean") return value;
   return fallback;
@@ -46,15 +58,31 @@ export async function GET() {
   const supabase = getSupabaseAdminClient();
 
   try {
-    const { data, error } = await supabase
-      .from("notification_preferences")
-      .select(
-        "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected"
-      )
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const selectFull =
+      "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected";
+    const selectLegacy =
+      "all_emails_enabled, private_poll_results, private_poll_ending_soon, creator_public_question_ended, creator_public_question_resolved";
 
-    if (error) throw error;
+    let data: any = null;
+    {
+      const { data: row, error } = await supabase
+        .from("notification_preferences")
+        .select(selectFull)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) {
+        if (!isMissingColumnSchemaCacheError(error)) throw error;
+        const { data: legacyRow, error: legacyErr } = await supabase
+          .from("notification_preferences")
+          .select(selectLegacy)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (legacyErr) throw legacyErr;
+        data = legacyRow;
+      } else {
+        data = row;
+      }
+    }
 
     const prefs: NotificationPrefs = {
       allEmailsEnabled: normalizeBoolean((data as any)?.all_emails_enabled, DEFAULT_PREFS.allEmailsEnabled),
@@ -110,24 +138,42 @@ export async function PUT(request: Request) {
   const supabase = getSupabaseAdminClient();
 
   try {
-    const { error } = await supabase.from("notification_preferences").upsert(
-      {
-        user_id: user.id,
-        all_emails_enabled: next.allEmailsEnabled,
-        private_poll_results: next.privatePollResults,
-        private_poll_ending_soon: next.privatePollEndingSoon,
-        creator_public_question_ended: next.creatorPublicQuestionEnded,
-        creator_public_question_resolved: next.creatorPublicQuestionResolved,
-        creator_draft_accepted: next.creatorDraftAccepted,
-        creator_draft_rejected: next.creatorDraftRejected,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    const payloadFull = {
+      user_id: user.id,
+      all_emails_enabled: next.allEmailsEnabled,
+      private_poll_results: next.privatePollResults,
+      private_poll_ending_soon: next.privatePollEndingSoon,
+      creator_public_question_ended: next.creatorPublicQuestionEnded,
+      creator_public_question_resolved: next.creatorPublicQuestionResolved,
+      creator_draft_accepted: next.creatorDraftAccepted,
+      creator_draft_rejected: next.creatorDraftRejected,
+      updated_at: new Date().toISOString(),
+    };
+    const payloadLegacy = {
+      user_id: user.id,
+      all_emails_enabled: next.allEmailsEnabled,
+      private_poll_results: next.privatePollResults,
+      private_poll_ending_soon: next.privatePollEndingSoon,
+      creator_public_question_ended: next.creatorPublicQuestionEnded,
+      creator_public_question_resolved: next.creatorPublicQuestionResolved,
+      updated_at: new Date().toISOString(),
+    };
 
-    if (error) throw error;
+    const { error } = await supabase.from("notification_preferences").upsert(payloadFull, { onConflict: "user_id" });
+    if (!error) return NextResponse.json({ ok: true, prefs: next });
 
-    return NextResponse.json({ ok: true, prefs: next });
+    if (!isMissingColumnSchemaCacheError(error)) throw error;
+
+    const { error: legacyErr } = await supabase
+      .from("notification_preferences")
+      .upsert(payloadLegacy, { onConflict: "user_id" });
+    if (legacyErr) throw legacyErr;
+
+    return NextResponse.json({
+      ok: true,
+      prefs: next,
+      note: "DB schema missing creator_draft_* columns; saved legacy notification_preferences. Run supabase/notification_preferences.sql.",
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Konnte Einstellungen nicht speichern." }, { status: 500 });
   }

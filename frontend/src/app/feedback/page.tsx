@@ -14,8 +14,7 @@ export default function FeedbackPage() {
       <div className="mx-auto max-w-3xl">
         <SmartBackButton
           fallbackHref="/"
-          label="Zurück"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+          label="← Zurück"
         />
 
         <header className="mt-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
@@ -33,4 +32,3 @@ export default function FeedbackPage() {
     </main>
   );
 }
-

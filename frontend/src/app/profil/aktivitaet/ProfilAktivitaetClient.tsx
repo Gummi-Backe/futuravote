@@ -336,7 +336,6 @@ export function ProfilAktivitaetClient() {
         <SmartBackButton
           fallbackHref="/profil"
           label="← Zurück zum Profil"
-          className="self-start text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
         />
 
         <header className="mt-2 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">

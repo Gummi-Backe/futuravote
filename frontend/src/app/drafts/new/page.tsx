@@ -884,7 +884,6 @@ export default function NewDraftPage() {
         <SmartBackButton
           fallbackHref="/"
           label="← Zurück"
-          className="inline-flex items-center text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
         />
 
         <section className="mt-4 rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">

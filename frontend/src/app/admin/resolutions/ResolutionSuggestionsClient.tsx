@@ -139,7 +139,7 @@ export default function ResolutionSuggestionsClient() {
             Täglicher Cron legt KI-Vorschläge an; zusätzlich können Nutzer nach Ende einer Frage das Ergebnis mit Quellen vorschlagen.
           </p>
         </div>
-        <SmartBackButton fallbackHref="/admin" label="← Zurück" className="bg-transparent p-0 text-sm text-emerald-100 hover:text-emerald-200" />
+        <SmartBackButton fallbackHref="/admin" label="← Zurück" />
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">

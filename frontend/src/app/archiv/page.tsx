@@ -355,7 +355,6 @@ export default async function ArchivPage(props: {
         <SmartBackButton
           fallbackHref="/"
           label="← Zurück"
-          className="text-sm text-emerald-100 hover:text-emerald-200 bg-transparent p-0"
         />
 
         <header className="mt-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">

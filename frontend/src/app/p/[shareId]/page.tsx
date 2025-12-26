@@ -186,7 +186,6 @@ export default async function SharedPollPage(props: {
           <SmartBackButton
             fallbackHref={backFallbackHref}
             label={backLabel}
-            className="text-sm text-slate-200 hover:text-white bg-transparent p-0"
           />
         </div>
 

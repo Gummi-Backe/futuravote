@@ -148,6 +148,7 @@ function EventCard({
   onVote,
   onVoteOption,
   isSubmitting,
+  onOpenDetails,
   showFavorite,
   isFavorited,
   onToggleFavorite,
@@ -307,6 +308,19 @@ function EventCard({
             >
               {question.title}
             </h3>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Link
+                href={`/questions/${encodeURIComponent(question.id)}`}
+                onClick={(e) => {
+                  if (!onOpenDetails) return;
+                  e.preventDefault();
+                  onOpenDetails(`/questions/${encodeURIComponent(question.id)}`);
+                }}
+                className="inline-flex min-w-[9.5rem] items-center justify-center rounded-full border border-white/20 bg-white/10 px-5 py-1.5 text-sm font-semibold leading-none text-white shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/15"
+              >
+                Details ansehen
+              </Link>
+            </div>
           </div>
         </div>
         <div className="flex flex-col gap-2 rounded-2xl bg-black/25 px-4 py-3 text-xs text-slate-200 sm:flex-row sm:items-center sm:justify-between">
@@ -423,11 +437,6 @@ function EventCard({
         </div>
       )}
 
-      <div className="flex items-center justify-between text-xs text-slate-300">
-        <Link href={`/questions/${question.id}`} className="text-emerald-100 hover:text-emerald-200">
-          Details ansehen →
-        </Link>
-      </div>
     </article>
   );
 }

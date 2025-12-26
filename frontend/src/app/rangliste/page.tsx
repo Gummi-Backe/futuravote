@@ -202,7 +202,6 @@ export default async function RanglistePage({
             <SmartBackButton
               fallbackHref="/"
               label="← Zurück"
-              className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-transparent p-0"
             />
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">Rangliste</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-200">
