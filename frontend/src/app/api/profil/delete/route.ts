@@ -76,7 +76,10 @@ export async function POST(request: Request) {
   }
 
   const password = String(body.password ?? "");
-  const confirmText = String(body.confirmText ?? "").trim().toUpperCase();
+  const confirmText = String(body.confirmText ?? "")
+    .trim()
+    .toUpperCase()
+    .replaceAll("OE", "Ö");
 
   if (!password) {
     return NextResponse.json({ error: "Bitte Passwort eingeben." }, { status: 400 });

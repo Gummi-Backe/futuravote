@@ -211,6 +211,11 @@ export default function DatenschutzPage() {
               <p className="mt-2 text-slate-200">
                 Außerdem hast du das Recht, dich bei einer Datenschutzaufsichtsbehörde zu beschweren.
               </p>
+              <p className="mt-2 text-slate-200">
+                Du kannst dein Konto außerdem jederzeit selbst im Profil unter <span className="font-semibold text-white">„Account löschen“</span>{" "}
+                löschen. Dabei werden personenbezogene Kontodaten entfernt; öffentliche Inhalte (z. B. Fragen oder Abstimmungen) können aus
+                Gründen der Nachvollziehbarkeit anonymisiert bestehen bleiben.
+              </p>
             </section>
 
             <section>

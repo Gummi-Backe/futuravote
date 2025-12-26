@@ -178,7 +178,7 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
     !!user &&
     deleteAcknowledge &&
     deletePassword.trim().length > 0 &&
-    deleteConfirmText.trim().toUpperCase() === "LÖSCHEN" &&
+    deleteConfirmText.trim().toUpperCase().replaceAll("OE", "Ö") === "LÖSCHEN" &&
     !deleteSubmitting;
 
   const deleteAccount = useCallback(async () => {
@@ -546,7 +546,7 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
                   </span>
                 </label>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-4">
                   <div className="space-y-1">
                     <label className="text-sm font-semibold text-slate-100" htmlFor="deletePassword">
                       Passwort bestätigen
@@ -564,16 +564,48 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
                       <button
                         type="button"
                         onClick={() => setShowDeletePassword((prev) => !prev)}
-                        className="text-xs font-semibold text-slate-300 hover:text-slate-100"
+                        className="rounded-lg p-1 text-slate-300 hover:text-slate-100"
+                        aria-label={showDeletePassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                        title={showDeletePassword ? "Passwort verbergen" : "Passwort anzeigen"}
                       >
-                        {showDeletePassword ? "Verbergen" : "Anzeigen"}
+                        <span className="sr-only">{showDeletePassword ? "Passwort verbergen" : "Passwort anzeigen"}</span>
+                        {showDeletePassword ? (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-5 w-5"
+                          >
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                            <path d="M14.12 14.12a3 3 0 0 1-4.24-4.24" />
+                            <path d="m3 3 18 18" />
+                          </svg>
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-5 w-5"
+                          >
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-sm font-semibold text-slate-100" htmlFor="deleteConfirmText">
-                      Zur Bestätigung tippen
+                      Zur Bestätigung tippe genau das Wort „LÖSCHEN“ (mit Ö)
                     </label>
                     <input
                       id="deleteConfirmText"
@@ -585,7 +617,9 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
                       autoCorrect="off"
                       spellCheck={false}
                     />
-                    <p className="text-xs text-slate-400">Bitte exakt: LÖSCHEN</p>
+                    <p className="text-xs text-slate-300">
+                      Tipp: Bitte exakt <span className="font-semibold text-slate-100">LÖSCHEN</span> eintippen (mit Ö).
+                    </p>
                   </div>
                 </div>
 

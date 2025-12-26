@@ -48,6 +48,11 @@ export function TermsContent() {
             vertraulich zu behandeln. Du bist dafür verantwortlich, was über deinen Account auf der Plattform passiert.
           </p>
           <p className="mt-1">Bestimmte Aktionen können eine verifizierte E-Mail-Adresse erfordern.</p>
+          <p className="mt-1">
+            Du kannst dein Konto jederzeit in deinem Profil unter <span className="font-semibold">„Account löschen“</span> löschen. Dabei
+            werden personenbezogene Kontodaten entfernt; öffentliche Inhalte (z. B. Fragen oder Abstimmungen) können anonymisiert bestehen
+            bleiben.
+          </p>
         </section>
 
         <section>

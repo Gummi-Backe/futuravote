@@ -72,6 +72,13 @@ export default function RegelnPage() {
               <li>Wenn dir etwas auffällt: Nutze den „Melden“-Button in den Details.</li>
             </ul>
           </InfoCard>
+
+          <InfoCard title="6) Account löschen">
+            <p>
+              Du kannst dein Konto jederzeit selbst im Profil unter <span className="font-semibold">„Account löschen“</span> löschen. Dabei
+              werden personenbezogene Kontodaten entfernt; öffentliche Inhalte können anonymisiert bestehen bleiben.
+            </p>
+          </InfoCard>
         </div>
       </div>
     </main>
