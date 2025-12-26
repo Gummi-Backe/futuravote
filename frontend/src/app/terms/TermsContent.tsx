@@ -6,9 +6,8 @@ export function TermsContent() {
       <h1 className="text-2xl font-bold text-white">Nutzungsbedingungen für Future-Vote</h1>
 
       <p className="mt-2 text-sm text-slate-300">
-        Diese Nutzungsbedingungen regeln die Nutzung der Plattform{" "}
-        <span className="font-semibold">Future-Vote</span> (nachfolgend „Plattform“). Mit der Nutzung der Plattform
-        erklärst du dich mit diesen Bedingungen einverstanden.
+        Diese Nutzungsbedingungen regeln die Nutzung der Plattform <span className="font-semibold">Future-Vote</span>{" "}
+        (nachfolgend „Plattform“). Mit der Nutzung der Plattform erklärst du dich mit diesen Bedingungen einverstanden.
       </p>
 
       <div className="mt-5 space-y-4 text-sm leading-relaxed text-slate-200">
@@ -26,37 +25,35 @@ export function TermsContent() {
         <section>
           <h2 className="text-base font-semibold text-white">2. Zweck der Plattform</h2>
           <p className="mt-1">
-            Future-Vote ist eine Community-Plattform für Prognosefragen mit Ja/Nein-Abstimmungen. Neue Fragen werden
-            zunächst im Review-Bereich bewertet und können anschließend öffentlich im Feed erscheinen oder als private
-            Umfrage nur per Link geteilt werden.
+            Future-Vote ist eine Community-Plattform für Prognosen und Meinungsumfragen. Nutzerinnen und Nutzer können
+            abstimmen, Inhalte melden und (mit Konto) eigene Fragen vorschlagen. Öffentliche Fragen sind im Feed sichtbar.
+            Private Umfragen sind nur über einen Link erreichbar.
           </p>
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-white">3. Nutzung ohne Login / Cookies</h2>
+          <h2 className="text-base font-semibold text-white">3. Nutzung ohne Login</h2>
           <p className="mt-1">
-            Bestimmte Funktionen (z. B. Abstimmen) sind ohne Login möglich. Dafür nutzt die Plattform technische
-            Identifikatoren (z. B. Cookies), um Mehrfachabstimmungen zu verhindern und deinen Abstimmungsstatus anzuzeigen.
-            Wenn du Cookies/Website-Daten löschst oder den Browser wechselst, kann dieser Status verloren gehen.
+            Bestimmte Funktionen (z. B. Abstimmen oder Reviews) sind ohne Login möglich. Dafür nutzt die Plattform
+            technische Kennungen (z. B. Cookies), um Mehrfachabstimmungen zu verhindern und deinen Abstimmungsstatus
+            anzuzeigen. Wenn du Website-Daten löschst oder den Browser wechselst, kann dieser Status verloren gehen.
           </p>
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-white">4. Registrierung und Account</h2>
+          <h2 className="text-base font-semibold text-white">4. Registrierung und Konto</h2>
           <p className="mt-1">
-            Für das Einreichen neuer Fragen sowie für Kommentare und Favoriten ist ein Account erforderlich. Du
-            verpflichtest dich, bei der Registrierung korrekte Angaben zu machen und deine Zugangsdaten vertraulich zu
-            behandeln. Du bist dafür verantwortlich, was über deinen Account auf der Plattform passiert.
+            Für das Einreichen neuer Fragen (Drafts) sowie für Kommentare, Favoriten und Profilfunktionen ist ein Konto
+            erforderlich. Du verpflichtest dich, bei der Registrierung korrekte Angaben zu machen und deine Zugangsdaten
+            vertraulich zu behandeln. Du bist dafür verantwortlich, was über deinen Account auf der Plattform passiert.
           </p>
-          <p className="mt-1">
-            Bestimmte Aktionen (z. B. das Einreichen neuer Fragen) können eine verifizierte E‑Mail-Adresse erfordern.
-          </p>
+          <p className="mt-1">Bestimmte Aktionen können eine verifizierte E-Mail-Adresse erfordern.</p>
         </section>
 
         <section>
           <h2 className="text-base font-semibold text-white">5. Inhalte der Nutzerinnen und Nutzer</h2>
           <p className="mt-1">
-            Nutzerinnen und Nutzer können Inhalte einstellen (z. B. Fragen, Beschreibungen, Kommentare, Quellenlinks und
+            Nutzerinnen und Nutzer können Inhalte einstellen (z. B. Fragen, Beschreibungen, Kommentare, Quellenlinks und
             Bilder). Du bist allein dafür verantwortlich, dass deine Inhalte rechtmäßig sind und keine Rechte Dritter
             verletzen.
           </p>
@@ -75,8 +72,8 @@ export function TermsContent() {
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Nur eigene Bilder oder Bilder mit entsprechender Lizenz verwenden.</li>
-            <li>Keine Bilder aus dem Internet verwenden, für die keine Erlaubnis/Lizenz vorliegt.</li>
-            <li>Rechte abgebildeter Personen respektieren (z. B. keine unerlaubten Fotos von Dritten).</li>
+            <li>Keine Bilder aus dem Internet verwenden, für die keine Erlaubnis oder Lizenz vorliegt.</li>
+            <li>Rechte abgebildeter Personen respektieren (z. B. keine unerlaubten Fotos von Dritten).</li>
           </ul>
         </section>
 
@@ -105,9 +102,9 @@ export function TermsContent() {
           <h2 className="text-base font-semibold text-white">9. Moderation, Meldungen und Maßnahmen</h2>
           <p className="mt-1">
             Nutzerinnen und Nutzer können Inhalte melden. Der Betreiber kann Inhalte ganz oder teilweise entfernen,
-            Inhalte vorübergehend ausblenden (Quarantäne), Accounts temporär oder dauerhaft sperren und andere geeignete
-            Maßnahmen ergreifen, wenn Hinweise auf Rechtsverstöße oder Verstöße gegen diese Nutzungsbedingungen vorliegen.
-            Ein Anspruch auf Veröffentlichung oder dauerhafte Verfügbarkeit von Inhalten besteht nicht.
+            Inhalte vorübergehend ausblenden, Accounts temporär oder dauerhaft sperren und andere geeignete Maßnahmen
+            ergreifen, wenn Hinweise auf Rechtsverstöße oder Verstöße gegen diese Nutzungsbedingungen vorliegen. Ein
+            Anspruch auf Veröffentlichung oder dauerhafte Verfügbarkeit von Inhalten besteht nicht.
           </p>
         </section>
 
@@ -115,9 +112,9 @@ export function TermsContent() {
           <h2 className="text-base font-semibold text-white">10. Auflösung von Fragen / Ergebnisdarstellung</h2>
           <p className="mt-1">
             Öffentliche Fragen haben eine Deadline und Auflösungsregeln. Nach Ablauf kann das tatsächliche Ergebnis
-            (Ja/Nein) inklusive Quelle/Notiz im Archiv angezeigt werden. Zur Unterstützung können automatisierte Systeme
-            (z. B. KI) Quellen vorschlagen; die finale Entscheidung über die Eintragung des Ergebnisses liegt beim
-            Betreiber.
+            (Ja/Nein) inklusive Quelle oder Notiz im Archiv angezeigt werden. Zur Unterstützung können automatisierte
+            Systeme (z. B. KI) Quellen vorschlagen; die finale Entscheidung über die Eintragung des Ergebnisses liegt
+            beim Betreiber.
           </p>
         </section>
 
@@ -125,8 +122,8 @@ export function TermsContent() {
           <h2 className="text-base font-semibold text-white">11. Keine Gewähr für Inhalte und Prognosen</h2>
           <p className="mt-1">
             Fragen, Prognosen, Kommentare und Auswertungen stammen überwiegend von der Community. Sie stellen keine
-            fachliche Beratung dar. Der Betreiber übernimmt keine Gewähr für Richtigkeit, Vollständigkeit oder Aktualität
-            der Inhalte.
+            fachliche Beratung dar. Der Betreiber übernimmt keine Gewähr für Richtigkeit, Vollständigkeit oder
+            Aktualität der Inhalte.
           </p>
         </section>
 

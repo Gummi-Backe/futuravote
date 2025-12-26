@@ -8,10 +8,7 @@ export default function ImpressumPage() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 pb-16 pt-10 text-slate-50">
       <div className="mx-auto flex max-w-3xl flex-col gap-6">
-        <SmartBackButton
-          fallbackHref="/"
-          label="← Zurück"
-        />
+        <SmartBackButton fallbackHref="/" label="← Zurück" />
 
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Impressum</h1>
@@ -40,7 +37,7 @@ export default function ImpressumPage() {
             </section>
 
             <section>
-              <h2 className="text-base font-semibold text-white">Verantwortlich für Inhalte</h2>
+              <h2 className="text-base font-semibold text-white">Verantwortlich für Inhalte (§ 18 Abs. 2 MStV)</h2>
               <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-slate-200">
                 <p className="font-semibold text-white">Roland Kerner</p>
                 <p>Marabustr. 2</p>
