@@ -29,9 +29,38 @@ export default function ImpressumPage() {
               <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-slate-200">
                 <p>
                   E-Mail:{" "}
-                  <a className="text-emerald-100 hover:text-emerald-200" href="mailto:r.kerner.developer@gmail.com">
-                    r.kerner.developer@gmail.com
+                  <a className="text-emerald-100 hover:text-emerald-200" href="mailto:webmaster@future-vote.de">
+                    webmaster@future-vote.de
                   </a>
+                </p>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-base font-semibold text-white">Umsatzsteuer-ID</h2>
+              <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-slate-200">
+                <p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: nicht vorhanden.</p>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-base font-semibold text-white">Streitbeilegung</h2>
+              <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-slate-200">
+                <p>
+                  Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:{" "}
+                  <a
+                    className="text-emerald-100 hover:text-emerald-200"
+                    href="https://ec.europa.eu/consumers/odr/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    https://ec.europa.eu/consumers/odr/
+                  </a>
+                  .
+                </p>
+                <p className="mt-2">
+                  Ich bin nicht verpflichtet und nicht bereit, an einem Streitbeilegungsverfahren vor einer
+                  Verbraucherschlichtungsstelle teilzunehmen.
                 </p>
               </div>
             </section>

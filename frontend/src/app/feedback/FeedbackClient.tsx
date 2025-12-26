@@ -26,7 +26,7 @@ export function FeedbackClient() {
   const [contactEmail, setContactEmail] = useState<string>("");
   const [copied, setCopied] = useState(false);
 
-  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "r.kerner.developer@gmail.com";
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() || "webmaster@future-vote.de";
   const formUrl = process.env.NEXT_PUBLIC_FEEDBACK_FORM_URL?.trim() || "";
 
   useEffect(() => {
@@ -140,4 +140,3 @@ export function FeedbackClient() {
     </div>
   );
 }
-

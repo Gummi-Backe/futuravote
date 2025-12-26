@@ -13,8 +13,8 @@ export default function DatenschutzPage() {
         <section className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl shadow-emerald-500/20 backdrop-blur">
           <h1 className="text-2xl font-bold text-white">Datenschutzerklärung</h1>
           <p className="mt-2 text-sm text-slate-300">
-            Mit dieser Erklärung informieren wir dich darüber, welche personenbezogenen Daten wir bei der Nutzung von
-            Future-Vote verarbeiten, zu welchen Zwecken und welche Rechte du hast.
+            Mit dieser Erklärung informiere ich dich darüber, welche personenbezogenen Daten ich bei der Nutzung von
+            Future-Vote verarbeite, zu welchen Zwecken und welche Rechte du hast.
           </p>
 
           <div className="mt-6 space-y-6 text-sm text-slate-100">
@@ -27,8 +27,8 @@ export default function DatenschutzPage() {
                 <p>Deutschland</p>
                 <p className="mt-2">
                   E-Mail:{" "}
-                  <a className="text-emerald-100 hover:text-emerald-200" href="mailto:r.kerner.developer@gmail.com">
-                    r.kerner.developer@gmail.com
+                  <a className="text-emerald-100 hover:text-emerald-200" href="mailto:webmaster@future-vote.de">
+                    webmaster@future-vote.de
                   </a>
                 </p>
               </div>
@@ -46,7 +46,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">3. Hosting und Server-Logfiles</h2>
               <p className="mt-2 text-slate-200">
-                Wir hosten die Website bei <span className="font-semibold text-white">Vercel</span>. Beim Aufruf der Website
+                Ich hoste die Website bei <span className="font-semibold text-white">Vercel</span>. Beim Aufruf der Website
                 werden technisch notwendige Daten verarbeitet (z. B. IP-Adresse, Zeitpunkt, aufgerufene Seite, User-Agent,
                 Referrer, Fehlercodes), um die Website auszuliefern und die Sicherheit zu gewährleisten.
               </p>
@@ -59,7 +59,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">4. Datenbank und Speicherung (Supabase)</h2>
               <p className="mt-2 text-slate-200">
-                Wir nutzen <span className="font-semibold text-white">Supabase</span> (Datenbank/Storage), um Inhalte und
+                Ich nutze <span className="font-semibold text-white">Supabase</span> (Datenbank/Storage), um Inhalte und
                 Nutzungsdaten zu speichern. Unsere primäre Datenbank läuft in der Region{" "}
                 <span className="font-semibold text-white">Central EU (Frankfurt)</span> (AWS). Je nach Funktion können
                 dabei insbesondere folgende Daten gespeichert werden: Kontodaten (E-Mail, Anzeigename, Passwort-Hash),
@@ -75,7 +75,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">5. E-Mail-Versand (Systemmails)</h2>
               <p className="mt-2 text-slate-200">
-                Für Systemmails (z. B. E-Mail-Verifikation, Passwort zurücksetzen) nutzen wir einen SMTP-Dienst von{" "}
+                Für Systemmails (z. B. E-Mail-Verifikation, Passwort zurücksetzen) nutze ich einen SMTP-Dienst von{" "}
                 <span className="font-semibold text-white">Strato</span>. Dabei werden deine E-Mail-Adresse und die für den
                 jeweiligen Versand nötigen Inhalte verarbeitet.
               </p>
@@ -108,10 +108,17 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">7. Registrierung, Login und Nutzerkonto</h2>
               <p className="mt-2 text-slate-200">
-                Wenn du ein Konto erstellst oder dich anmeldest, verarbeiten wir insbesondere: E-Mail-Adresse, Anzeigename,
-                Passwort (nur als Hash gespeichert), Account-Rolle (z. B. Admin) und Zeitstempel. Zur Absicherung können
-                wir bei bestimmten Vorgängen (z. B. Passwort-Reset) technische Daten kurzzeitig zur Missbrauchserkennung
+                Wenn du ein Konto erstellst oder dich anmeldest, verarbeite ich insbesondere: E-Mail-Adresse, Anzeigename,
+                Passwort (nur als Hash gespeichert), Account-Rolle (z. B. Admin) und Zeitstempel. Zur Absicherung kann
+                ich bei bestimmten Vorgängen (z. B. Passwort-Reset) technische Daten kurzzeitig zur Missbrauchserkennung
                 verarbeiten (z. B. IP-Adresse in Server-Logs bzw. temporär zur Rate-Limit-Prüfung).
+              </p>
+              <p className="mt-2 text-slate-200">
+                Optional kannst du dein Future-Vote-Konto mit <span className="font-semibold text-white">ChatGPT</span> verbinden
+                (Account-Linking via OAuth), um z. B. Drafts oder private Umfragen direkt aus ChatGPT heraus zu erstellen. Dabei werden
+                die dafür notwendigen Inhalte (z. B. Titel, Beschreibung, Kategorie, Einstellungen) an Future-Vote übermittelt und dort
+                gespeichert. Für die Verbindung werden OAuth-Informationen (z. B. Autorisierungscode/Token und Scope) verarbeitet.
+                Die Nutzung der ChatGPT-Plattform erfolgt zusätzlich nach den Datenschutzbestimmungen des jeweiligen Anbieters.
               </p>
               <p className="mt-2 text-slate-300">Rechtsgrundlage: Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;b DSGVO.</p>
             </section>
@@ -119,7 +126,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">8. Inhalte, Abstimmungen, Reviews, Kommentare</h2>
               <p className="mt-2 text-slate-200">
-                Je nach Nutzung speichern wir Inhalte und Interaktionen (z. B. Frage-Titel/Beschreibung, Abstimmungen,
+                Je nach Nutzung speichere ich Inhalte und Interaktionen (z. B. Frage-Titel/Beschreibung, Abstimmungen,
                 Reviews, Kommentare, Favoriten). Um Abstimmungen ohne Login zu ermöglichen, werden Interaktionen außerdem
                 einer anonymen Session-Kennung zugeordnet.
               </p>
@@ -132,7 +139,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">9. Feedback und Kontakt</h2>
               <p className="mt-2 text-slate-200">
-                Wenn du uns Feedback sendest, verarbeiten wir die von dir übermittelten Inhalte. Optional können
+                Wenn du mir Feedback sendest, verarbeite ich die von dir übermittelten Inhalte. Optional können
                 technische Informationen (z. B. URL, Browser) mitgesendet werden, um Fehler schneller nachzuvollziehen.
               </p>
               <p className="mt-2 text-slate-300">Rechtsgrundlage: Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;f DSGVO.</p>
@@ -141,9 +148,9 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">10. Analytics (interne Statistik)</h2>
               <p className="mt-2 text-slate-200">
-                Wir erfassen einfache Nutzungsereignisse (z. B. Seitenaufrufe, Votes, Shares, Registrierungen) als interne
-                Statistik in unserer Datenbank (Supabase). Dabei speichern wir insbesondere Ereignisname, Zeitpunkt, Pfad
-                und eine Session-ID. Wir verwenden diese Daten, um die Plattform zu verbessern und Missbrauch zu erkennen.
+                Ich erfasse einfache Nutzungsereignisse (z. B. Seitenaufrufe, Votes, Shares, Registrierungen) als interne
+                Statistik in meiner Datenbank (Supabase). Dabei speichere ich insbesondere Ereignisname, Zeitpunkt, Pfad
+                und eine Session-ID. Ich verwende diese Daten, um die Plattform zu verbessern und Missbrauch zu erkennen.
               </p>
               <p className="mt-2 text-slate-300">Rechtsgrundlage: Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;f DSGVO.</p>
             </section>
@@ -163,7 +170,7 @@ export default function DatenschutzPage() {
 
             <section>
               <h2 className="text-base font-semibold text-white">12. Empfänger / Dienstleister</h2>
-              <p className="mt-2 text-slate-200">Wir setzen Dienstleister ein, die Daten in unserem Auftrag verarbeiten, z. B.:</p>
+              <p className="mt-2 text-slate-200">Ich setze Dienstleister ein, die Daten in meinem Auftrag verarbeiten, z. B.:</p>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-slate-200">
                 <li>
                   <span className="font-semibold text-white">Vercel</span> (Hosting).
@@ -175,6 +182,9 @@ export default function DatenschutzPage() {
                   <span className="font-semibold text-white">Strato</span> (E-Mail-Versand via SMTP).
                 </li>
                 <li>
+                  <span className="font-semibold text-white">ChatGPT / OpenAI</span> (optional, wenn du dein Konto mit ChatGPT verbindest).
+                </li>
+                <li>
                   <span className="font-semibold text-white">KI-Dienste</span> (nur Admin-Funktionen, falls genutzt).
                 </li>
               </ul>
@@ -182,7 +192,7 @@ export default function DatenschutzPage() {
                 Fehler-Tracking (Sentry) ist in der aktuellen Produktivkonfiguration nicht aktiviert.
               </p>
               <p className="mt-2 text-slate-300">
-                Je nach Dienstleister können Daten in Drittländern verarbeitet werden. In solchen Fällen stellen wir –
+                Je nach Dienstleister können Daten in Drittländern verarbeitet werden. In solchen Fällen stelle ich –
                 soweit erforderlich – geeignete Garantien bereit (z. B. Standardvertragsklauseln).
               </p>
             </section>
@@ -190,7 +200,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">13. Speicherdauer</h2>
               <p className="mt-2 text-slate-200">
-                Wir speichern Daten grundsätzlich nur so lange, wie es für die jeweiligen Zwecke erforderlich ist oder
+                Ich speichere Daten grundsätzlich nur so lange, wie es für die jeweiligen Zwecke erforderlich ist oder
                 gesetzliche Aufbewahrungspflichten bestehen.
               </p>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-slate-200">
@@ -221,7 +231,7 @@ export default function DatenschutzPage() {
             <section>
               <h2 className="text-base font-semibold text-white">15. Änderungen</h2>
               <p className="mt-2 text-slate-200">
-                Wir passen diese Datenschutzerklärung an, wenn sich Funktionen oder rechtliche Anforderungen ändern.
+                Ich passe diese Datenschutzerklärung an, wenn sich Funktionen oder rechtliche Anforderungen ändern.
                 Stand: Dezember 2025.
               </p>
             </section>
