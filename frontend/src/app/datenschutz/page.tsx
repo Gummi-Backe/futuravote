@@ -60,9 +60,11 @@ export default function DatenschutzPage() {
               <h2 className="text-base font-semibold text-white">4. Datenbank und Speicherung (Supabase)</h2>
               <p className="mt-2 text-slate-200">
                 Wir nutzen <span className="font-semibold text-white">Supabase</span> (Datenbank/Storage), um Inhalte und
-                Nutzungsdaten zu speichern. Je nach Funktion können dabei insbesondere folgende Daten gespeichert werden:
-                Kontodaten (E-Mail, Anzeigename, Passwort-Hash), Fragen/Drafts, Abstimmungen/Reviews, Kommentare,
-                Meldungen, Zeitstempel sowie technische Kennungen (Session-IDs).
+                Nutzungsdaten zu speichern. Unsere primäre Datenbank läuft in der Region{" "}
+                <span className="font-semibold text-white">Central EU (Frankfurt)</span> (AWS). Je nach Funktion können
+                dabei insbesondere folgende Daten gespeichert werden: Kontodaten (E-Mail, Anzeigename, Passwort-Hash),
+                Fragen/Drafts, Abstimmungen/Reviews, Kommentare, Meldungen, Zeitstempel sowie technische Kennungen
+                (Session-IDs).
               </p>
               <p className="mt-2 text-slate-300">
                 Rechtsgrundlage: Art.&nbsp;6 Abs.&nbsp;1 lit.&nbsp;b DSGVO (Bereitstellung der Plattform) und Art.&nbsp;6
@@ -167,7 +169,7 @@ export default function DatenschutzPage() {
                   <span className="font-semibold text-white">Vercel</span> (Hosting).
                 </li>
                 <li>
-                  <span className="font-semibold text-white">Supabase</span> (Datenbank/Storage).
+                  <span className="font-semibold text-white">Supabase</span> (Datenbank/Storage, Region: Central EU (Frankfurt)).
                 </li>
                 <li>
                   <span className="font-semibold text-white">Strato</span> (E-Mail-Versand via SMTP).
