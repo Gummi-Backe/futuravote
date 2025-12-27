@@ -508,15 +508,17 @@ export default async function QuestionDetail(props: {
           <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
             <h3 className="text-sm font-semibold text-white">Meta &amp; Stats</h3>
             <div className="grid grid-cols-2 gap-3">
-              <StatsCard
-                label="Votes (absolut)"
-                value={totalVotes.toString()}
-                hint={
-                  answerMode === "binary"
-                    ? `Ja ${yesVotes} / Nein ${noVotes}`
-                    : options.map((opt) => `${opt.label}: ${opt.votesCount ?? 0}`).join(" · ")
-                }
-              />
+              <div className="col-span-2">
+                <StatsCard
+                  label="Votes (absolut)"
+                  value={totalVotes.toString()}
+                  hint={
+                    answerMode === "binary"
+                      ? `Ja ${yesVotes} / Nein ${noVotes}`
+                      : options.map((opt) => `${opt.label}: ${opt.votesCount ?? 0}`).join(" · ")
+                  }
+                />
+              </div>
               <StatsCard
                 label="Views"
                 value={views.toString()}
