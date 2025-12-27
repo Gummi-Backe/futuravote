@@ -367,6 +367,98 @@ export default async function QuestionDetail(props: {
           </div>
         ) : null}
 
+        {isResolvable ? (
+          <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-white">Auflösung</h3>
+              {resolvedLabel ? (
+                <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
+                  Entschieden: {resolvedLabel}
+                </span>
+              ) : (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                  Ausstehend
+                </span>
+              )}
+            </div>
+
+            {question.resolutionCriteria ? (
+              <p className="mt-3 text-sm text-slate-200 sm:text-base">{question.resolutionCriteria}</p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">Noch keine Auflösungs-Regeln hinterlegt.</p>
+            )}
+
+            <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {question.resolutionSource ? (
+                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quelle</p>
+                  <div className="mt-1 min-w-0">
+                    {/^https?:\/\//i.test(question.resolutionSource) ? (
+                      <a
+                        href={question.resolutionSource}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block max-w-full break-all [overflow-wrap:anywhere] font-semibold text-emerald-100 hover:text-emerald-200"
+                      >
+                        {question.resolutionSource}
+                      </a>
+                    ) : (
+                      <span className="font-semibold text-slate-100">{question.resolutionSource}</span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {resolutionDeadlineLabel ? (
+                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Deadline</p>
+                  <p className="mt-1 font-semibold text-slate-100">{resolutionDeadlineLabel}</p>
+                </div>
+              ) : null}
+
+              {resolvedAtLabel ? (
+                <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Entschieden am</p>
+                  <p className="mt-1 font-semibold text-slate-100">{resolvedAtLabel}</p>
+                </div>
+              ) : null}
+            </div>
+
+            {question.resolvedSource || question.resolvedNote ? (
+              <div className="mt-4 min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ergebnis</p>
+                {question.resolvedSource ? (
+                  <p className="mt-1 break-all [overflow-wrap:anywhere] font-semibold text-slate-100">
+                    {question.resolvedSource}
+                  </p>
+                ) : null}
+                {question.resolvedNote ? (
+                  <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-slate-200">
+                    {question.resolvedNote}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!resolvedLabel && ended && answerMode === "binary" ? (
+              <CommunityResolutionProposals questionId={id} isLoggedIn={Boolean(currentUser)} canPost={Boolean(currentUser?.emailVerified)} />
+            ) : null}
+          </section>
+        ) : null}
+
+        <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
+          <h3 className="text-base font-semibold text-white">Abstimmen</h3>
+          <DetailVoteButtons
+            className="mt-4 space-y-3"
+            questionId={id}
+            closesAt={question.closesAt}
+            answerMode={answerMode}
+            options={options}
+            initialChoice={question.userChoice === "yes" || question.userChoice === "no" ? question.userChoice : null}
+            initialOptionId={question.userOptionId ?? null}
+          />
+        </section>
+
         <section className="mt-6 grid gap-6 sm:mt-8 md:grid-cols-3">
           <div className="md:col-span-2 flex min-h-0 flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
             {answerMode === "binary" ? (
@@ -458,102 +550,6 @@ export default async function QuestionDetail(props: {
             </div>
           </div>
         </section>
-
-        {isResolvable ? (
-          <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-white">Auflösung</h3>
-            {resolvedLabel ? (
-              <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
-                Entschieden: {resolvedLabel}
-              </span>
-            ) : (
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-                Ausstehend
-              </span>
-            )}
-          </div>
-
-          {question.resolutionCriteria ? (
-            <p className="mt-3 text-sm text-slate-200 sm:text-base">{question.resolutionCriteria}</p>
-          ) : (
-            <p className="mt-3 text-sm text-slate-400">Noch keine Auflösungs-Regeln hinterlegt.</p>
-          )}
-
-          <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {question.resolutionSource ? (
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quelle</p>
-                <div className="mt-1 min-w-0">
-                  {/^https?:\/\//i.test(question.resolutionSource) ? (
-                    <a
-                      href={question.resolutionSource}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block max-w-full break-all [overflow-wrap:anywhere] font-semibold text-emerald-100 hover:text-emerald-200"
-                    >
-                      {question.resolutionSource}
-                    </a>
-                  ) : (
-                    <span className="font-semibold text-slate-100">{question.resolutionSource}</span>
-                  )}
-                </div>
-              </div>
-            ) : null}
-
-            {resolutionDeadlineLabel ? (
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Deadline</p>
-                <p className="mt-1 font-semibold text-slate-100">{resolutionDeadlineLabel}</p>
-              </div>
-            ) : null}
-
-            {resolvedAtLabel ? (
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Entschieden am</p>
-                <p className="mt-1 font-semibold text-slate-100">{resolvedAtLabel}</p>
-              </div>
-            ) : null}
-          </div>
-
-          {question.resolvedSource || question.resolvedNote ? (
-            <div className="mt-4 min-w-0 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ergebnis</p>
-              {question.resolvedSource ? (
-                <p className="mt-1 break-all [overflow-wrap:anywhere] font-semibold text-slate-100">
-                  {question.resolvedSource}
-                </p>
-              ) : null}
-              {question.resolvedNote ? (
-                <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-slate-200">
-                  {question.resolvedNote}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {!resolvedLabel && ended && answerMode === "binary" ? (
-            <CommunityResolutionProposals
-              questionId={id}
-              isLoggedIn={Boolean(currentUser)}
-              canPost={Boolean(currentUser?.emailVerified)}
-            />
-          ) : null}
-          </section>
-        ) : null}
-
-        <DetailVoteButtons
-          questionId={id}
-          closesAt={question.closesAt}
-          answerMode={answerMode}
-          options={options}
-          initialChoice={
-            question.userChoice === "yes" || question.userChoice === "no"
-              ? question.userChoice
-              : null
-          }
-          initialOptionId={question.userOptionId ?? null}
-        />
 
         <CommentsSection questionId={id} isLoggedIn={Boolean(currentUser)} canPost={Boolean(currentUser?.emailVerified)} />
       </div>

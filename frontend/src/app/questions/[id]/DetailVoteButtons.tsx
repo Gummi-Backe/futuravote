@@ -15,6 +15,7 @@ export function DetailVoteButtons({
   answerMode,
   options,
   closesAt,
+  className,
 }: {
   questionId: string;
   initialChoice: Choice | null;
@@ -22,6 +23,7 @@ export function DetailVoteButtons({
   answerMode?: "binary" | "options";
   options?: PollOption[] | null;
   closesAt?: string | null;
+  className?: string;
 }) {
   const router = useRouter();
   const [choice, setChoice] = useState<Choice | null>(initialChoice);
@@ -116,7 +118,7 @@ export function DetailVoteButtons({
       : null;
 
   return (
-    <div className="mt-8 space-y-3">
+    <div className={className ?? "mt-8 space-y-3"}>
       {effectiveAnswerMode === "binary" ? (
         <section className="grid gap-4 sm:grid-cols-2">
           <button
