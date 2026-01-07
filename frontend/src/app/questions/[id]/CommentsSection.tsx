@@ -134,7 +134,7 @@ export function CommentsSection({
         <div>
           <h2 className="text-lg font-semibold text-white">Diskussion</h2>
           <p className="mt-1 text-xs text-slate-300">
-            Kurz, sachlich, gerne mit Quelle. Das hilft, spaeter sauber aufzulosen.
+            Kurz, sachlich, gerne mit Quelle. Das hilft, später sauber aufzulösen.
           </p>
         </div>
         <button
