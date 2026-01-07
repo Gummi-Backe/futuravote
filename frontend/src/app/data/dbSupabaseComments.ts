@@ -23,7 +23,6 @@ type CommentRow = {
   body: string;
   source_url: string | null;
   created_at: string;
-  users?: { display_name?: string | null } | null;
 };
 
 function normalizeStance(input: string | null | undefined): CommentStance {
@@ -35,18 +34,37 @@ export async function listQuestionComments(questionId: string, limit = 50): Prom
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("question_comments")
-    .select("id,question_id,user_id,stance,body,source_url,created_at,users(display_name)")
+    .select("id,question_id,user_id,stance,body,source_url,created_at")
     .eq("question_id", questionId)
     .order("created_at", { ascending: true })
     .limit(Math.max(1, Math.min(200, limit)));
 
   if (error) throw error;
 
-  return ((data ?? []) as CommentRow[]).map((row) => ({
+  const rows = (data ?? []) as CommentRow[];
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
+
+  const displayNameByUserId = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: users, error: usersError } = await supabase
+      .from("users")
+      .select("id,display_name")
+      .in("id", userIds);
+
+    if (usersError) throw usersError;
+
+    ((users ?? []) as any[]).forEach((u) => {
+      const id = String(u.id ?? "");
+      const name = String(u.display_name ?? "").trim();
+      if (id) displayNameByUserId.set(id, name || "User");
+    });
+  }
+
+  return rows.map((row) => ({
     id: row.id,
     questionId: row.question_id,
     userId: row.user_id,
-    authorName: row.users?.display_name?.trim() || "User",
+    authorName: displayNameByUserId.get(row.user_id) || "User",
     stance: normalizeStance(row.stance),
     body: row.body,
     sourceUrl: row.source_url ?? null,
@@ -73,22 +91,31 @@ export async function addQuestionComment(input: {
       body: input.body,
       source_url: input.sourceUrl,
     })
-    .select("id,question_id,user_id,stance,body,source_url,created_at,users(display_name)")
+    .select("id,question_id,user_id,stance,body,source_url,created_at")
     .maybeSingle();
 
   if (error) throw error;
   if (!data) throw new Error("Kommentar konnte nicht gespeichert werden.");
 
   const row = data as CommentRow;
+
+  let authorName = "User";
+  const { data: userRow, error: userError } = await supabase
+    .from("users")
+    .select("display_name")
+    .eq("id", row.user_id)
+    .maybeSingle();
+  if (userError) throw userError;
+  authorName = String((userRow as any)?.display_name ?? "").trim() || "User";
+
   return {
     id: row.id,
     questionId: row.question_id,
     userId: row.user_id,
-    authorName: row.users?.display_name?.trim() || "User",
+    authorName,
     stance: normalizeStance(row.stance),
     body: row.body,
     sourceUrl: row.source_url ?? null,
     createdAt: row.created_at,
   };
 }
-
