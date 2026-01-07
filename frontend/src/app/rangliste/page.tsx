@@ -13,7 +13,7 @@ export const revalidate = 30;
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de"),
   title: "Rangliste - Future-Vote",
-  description: "Rangliste für Treffer (richtige Prognosen) und Community-Beiträge auf Future‑Vote.",
+  description: "Rangliste für Treffer (richtige Prognosen) und Community‑Beiträge auf Future‑Vote.",
   alternates: { canonical: "/rangliste" },
 };
 
@@ -21,6 +21,13 @@ function clampInt(value: unknown, fallback: number, min: number, max: number) {
   const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function medalForRank(rankIndex: number): { label: "Gold" | "Silber" | "Bronze"; className: string } | null {
+  if (rankIndex === 0) return { label: "Gold", className: "bg-amber-500/20 text-amber-200" };
+  if (rankIndex === 1) return { label: "Silber", className: "bg-slate-400/20 text-slate-200" };
+  if (rankIndex === 2) return { label: "Bronze", className: "bg-orange-500/20 text-orange-200" };
+  return null;
 }
 
 export default async function RanglistePage({
@@ -35,9 +42,8 @@ export default async function RanglistePage({
   const minSamples = 5;
   const limit = 25;
 
-  const treffer = view === "treffer"
-    ? await getTrefferLeaderboard({ days, category, minSamples, limit })
-    : { resolvedCount: 0, leaders: [] };
+  const treffer =
+    view === "treffer" ? await getTrefferLeaderboard({ days, category, minSamples, limit }) : { resolvedCount: 0, leaders: [] };
   const communityLeaders = view === "community" ? await getCommunityLeaderboard({ category, limit }) : [];
 
   const shown = treffer.leaders;
@@ -59,10 +65,7 @@ export default async function RanglistePage({
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <SmartBackButton
-              fallbackHref="/"
-              label="← Zurück"
-            />
+            <SmartBackButton fallbackHref="/" label="← Zurück" />
             <h1 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">Rangliste</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-200">
               {view === "treffer" ? (
@@ -73,8 +76,8 @@ export default async function RanglistePage({
                 </>
               ) : (
                 <>
-                  Hier zählen <span className="font-semibold text-white">Beiträge</span> zur Community: angenommene Vorschläge,
-                  Kommentare und Auflösungs‑Vorschläge (bei Prognosen).
+                  Hier zählen <span className="font-semibold text-white">Beiträge</span> zur Community: angenommene Vorschläge, Kommentare und
+                  Auflösungs‑Vorschläge (bei Prognosen).
                 </>
               )}
             </p>
@@ -202,42 +205,38 @@ export default async function RanglistePage({
                         </tr>
                       </thead>
                       <tbody>
-                        {shown.map((row, idx) => (
-                          <tr key={row.userId} className="border-t border-white/10">
-                            <td className="px-4 py-3 font-semibold text-slate-200">{idx + 1}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white">{row.displayName}</span>
-                                {row.tier !== "none" && (
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                      row.tier === "gold"
-                                        ? "bg-amber-500/20 text-amber-200"
-                                        : row.tier === "silver"
-                                          ? "bg-slate-400/20 text-slate-200"
-                                          : "bg-orange-500/20 text-orange-200"
-                                    }`}
-                                  >
-                                    {row.tier === "gold" ? "Gold" : row.tier === "silver" ? "Silber" : "Bronze"}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold text-emerald-200">{row.correct}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-rose-200">{row.incorrect}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-100">
-                              {row.accuracyPct}% <span className="text-xs font-normal text-slate-400">({row.total})</span>
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-100">{row.pointsTotal}</td>
-                          </tr>
-                        ))}
+                        {shown.map((row, idx) => {
+                          const medal = medalForRank(idx);
+                          return (
+                            <tr key={row.userId} className="border-t border-white/10">
+                              <td className="px-4 py-3 font-semibold text-slate-200">{idx + 1}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white">{row.displayName}</span>
+                                  {medal ? (
+                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${medal.className}`}>
+                                      {medal.label}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-emerald-200">{row.correct}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-rose-200">{row.incorrect}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-slate-100">
+                                {row.accuracyPct}% <span className="text-xs font-normal text-slate-400">({row.total})</span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-slate-100">{row.pointsTotal}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
                 )
               ) : communityLeaders.length === 0 ? (
                 <p className="mt-4 text-sm text-slate-300">
-                  Noch keine Community‑Beiträge im gewählten Filter. Sobald Nutzer Kommentare schreiben oder Vorschläge angenommen werden, erscheint hier die Rangliste.
+                  Noch keine Community‑Beiträge im gewählten Filter. Sobald Nutzer Kommentare schreiben oder Vorschläge angenommen werden,
+                  erscheint hier die Rangliste.
                 </p>
               ) : (
                 <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
@@ -253,48 +252,47 @@ export default async function RanglistePage({
                       </tr>
                     </thead>
                     <tbody>
-                      {communityLeaders.map((row, idx) => (
-                        <tr key={row.userId} className="border-t border-white/10">
-                          <td className="px-4 py-3 font-semibold text-slate-200">{idx + 1}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-white">{row.displayName}</span>
-                              {row.tier !== "none" && (
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                    row.tier === "gold"
-                                      ? "bg-amber-500/20 text-amber-200"
-                                      : row.tier === "silver"
-                                        ? "bg-slate-400/20 text-slate-200"
-                                        : "bg-orange-500/20 text-orange-200"
-                                  }`}
-                                >
-                                  {row.tier === "gold" ? "Gold" : row.tier === "silver" ? "Silber" : "Bronze"}
-                                </span>
-                              )}
-                              {row.emailVerifiedBonus ? (
-                                <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
-                                  Verifiziert
+                      {communityLeaders.map((row, idx) => {
+                        const medal = medalForRank(idx);
+                        return (
+                          <tr key={row.userId} className="border-t border-white/10">
+                            <td className="px-4 py-3 font-semibold text-slate-200">{idx + 1}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white">{row.displayName}</span>
+                                {medal ? (
+                                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${medal.className}`}>
+                                    {medal.label}
+                                  </span>
+                                ) : null}
+                                {row.emailVerifiedBonus ? (
+                                  <span className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
+                                    Verifiziert
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-100">{row.acceptedDrafts}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-100">
+                              {row.comments}
+                              {row.commentsWithSource > 0 ? (
+                                <span className="ml-1 text-xs font-normal text-slate-400">
+                                  ({row.commentsWithSource} mit Quelle)
                                 </span>
                               ) : null}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-100">{row.acceptedDrafts}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-100">
-                            {row.comments}
-                            {row.commentsWithSource > 0 ? (
-                              <span className="ml-1 text-xs font-normal text-slate-400">({row.commentsWithSource} mit Quelle)</span>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-100">
-                            {row.resolutionProposals}
-                            {row.appliedCommunitySuggestions > 0 ? (
-                              <span className="ml-1 text-xs font-normal text-slate-400">(+{row.appliedCommunitySuggestions} übernommen)</span>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-100">{row.pointsTotal}</td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-100">
+                              {row.resolutionProposals}
+                              {row.appliedCommunitySuggestions > 0 ? (
+                                <span className="ml-1 text-xs font-normal text-slate-400">
+                                  (+{row.appliedCommunitySuggestions} übernommen)
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-100">{row.pointsTotal}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -306,3 +304,4 @@ export default async function RanglistePage({
     </main>
   );
 }
+
