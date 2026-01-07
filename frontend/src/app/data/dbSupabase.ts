@@ -782,6 +782,7 @@ export async function getQuestionsPageFromSupabase(options: {
   const searchMode = searchTokens.length > 0;
 
   const now = new Date();
+  const todayIso = now.toISOString().split("T")[0];
   const lowVotesThreshold =
     tab === "new"
       ? await computeDynamicLowVotesThreshold({ supabase, now, category, region })
@@ -816,6 +817,8 @@ export async function getQuestionsPageFromSupabase(options: {
   const applyFilters = (query: any) => {
     query = query.not("status", "eq", "archived");
     query = query.eq("visibility", "public");
+    // Abgelaufene Fragen sollen nicht im Feed auftauchen.
+    query = query.gte("closes_at", todayIso);
 
     if (category) {
       query = query.eq("category", category);
