@@ -317,7 +317,7 @@ export function CommentsSection({
                 <button
                   type="button"
                   onClick={() => void voteOnComment(c.id, "up")}
-                  disabled={!isLoggedIn || voteSubmittingId === c.id}
+                  disabled={!isLoggedIn || Boolean(voteSubmittingId)}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
                     c.myVote === "up"
                       ? "border-emerald-200/60 bg-emerald-500/20 text-emerald-50"
@@ -355,7 +355,7 @@ export function CommentsSection({
                 <button
                   type="button"
                   onClick={() => void voteOnComment(c.id, "down")}
-                  disabled={!isLoggedIn || voteSubmittingId === c.id}
+                  disabled={!isLoggedIn || Boolean(voteSubmittingId)}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
                     c.myVote === "down"
                       ? "border-rose-200/60 bg-rose-500/15 text-rose-50"
