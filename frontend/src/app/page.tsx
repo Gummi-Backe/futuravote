@@ -19,7 +19,6 @@ const feedTabs = [
   { id: "top", label: "Top heute", icon: "🔥" },
   { id: "trending", label: "Trending", icon: "📈" },
   { id: "new", label: "Neu & unbewertet", icon: "🆕" },
-  { id: "unanswered", label: "Unbeantwortet", icon: "⭕" },
 ];
 
 function formatDraftTimeLeft(hours: number): string {
@@ -665,6 +664,7 @@ type HomeCache = {
   activeCategory: string | null;
   activeRegion: string | null;
   searchQuery: string;
+  guestVotedFilter: "exclude" | "only";
   typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
@@ -688,6 +688,9 @@ export default function Home() {
   const [activeRegion, setActiveRegion] = useState<string | null>(() => homeCache?.activeRegion ?? null);
   const [searchInput, setSearchInput] = useState<string>(() => homeCache?.searchQuery ?? "");
   const [searchQuery, setSearchQuery] = useState<string>(() => homeCache?.searchQuery ?? "");
+  const [guestVotedFilter, setGuestVotedFilter] = useState<HomeCache["guestVotedFilter"]>(
+    () => homeCache?.guestVotedFilter ?? "exclude"
+  );
   const [typeFilter, setTypeFilter] = useState<HomeCache["typeFilter"]>(() => homeCache?.typeFilter ?? "all");
   const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
   const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
@@ -733,6 +736,11 @@ export default function Home() {
     ],
     []
   );
+
+  useEffect(() => {
+    if (tabs.some((t) => t.id === activeTab)) return;
+    setActiveTab("all");
+  }, [tabs, activeTab]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -835,6 +843,7 @@ export default function Home() {
       params.set("pageSize", String(pageSize));
       params.set("include", "both");
       params.set("tab", activeTab);
+      if (!currentUser) params.set("voted", guestVotedFilter);
       if (activeCategory) params.set("category", activeCategory);
       if (activeRegion) params.set("region", activeRegion);
       if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
@@ -873,7 +882,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, activeCategory, activeRegion, searchQuery]);
+  }, [activeTab, activeCategory, activeRegion, searchQuery, currentUser, guestVotedFilter]);
 
   useEffect(() => {
     homeCache = {
@@ -881,6 +890,7 @@ export default function Home() {
       activeCategory,
       activeRegion,
       searchQuery,
+      guestVotedFilter,
       typeFilter,
       draftStatusFilter,
       showReviewOnly,
@@ -898,6 +908,7 @@ export default function Home() {
     activeCategory,
     activeRegion,
     searchQuery,
+    guestVotedFilter,
     typeFilter,
     draftStatusFilter,
     showReviewOnly,
@@ -1097,7 +1108,8 @@ export default function Home() {
 
   const filteredQuestions = useMemo(() => {
     // Die eigentliche Tab-Logik (Alle, Top, Endet bald, Neu & wenig bewertet,
-    // Noch nicht abgestimmt) wird serverseitig in /api/questions und
+    // sowie der Abstimmungs-Filter (bereits abgestimmt ausblenden / nur abgestimmt)
+    // wird serverseitig in /api/questions und
     // getQuestionsPageFromSupabase umgesetzt. Hier filtern wir nur noch nach
     // Kategorie und Region, falls sich diese ändern.
     let result = questions;
@@ -1194,6 +1206,7 @@ export default function Home() {
           params.set("include", "questions");
           if (questionsCursor) params.set("questionsCursor", questionsCursor);
           params.set("tab", activeTab);
+          if (!currentUser) params.set("voted", guestVotedFilter);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
           if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
@@ -1236,6 +1249,8 @@ export default function Home() {
     visibleQuestionCount,
     loadingMoreQuestions,
     searchQuery,
+    currentUser,
+    guestVotedFilter,
   ]);
 
   useEffect(() => {
@@ -1271,6 +1286,7 @@ export default function Home() {
           params.set("include", "drafts");
           if (draftsCursor) params.set("draftsCursor", draftsCursor);
           params.set("tab", activeTab);
+          if (!currentUser) params.set("voted", guestVotedFilter);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
           if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
@@ -1313,6 +1329,8 @@ export default function Home() {
     visibleDraftCount,
     loadingMoreDrafts,
     searchQuery,
+    currentUser,
+    guestVotedFilter,
   ]);
 
   const handleVote = useCallback(
@@ -1823,8 +1841,6 @@ export default function Home() {
                 const label =
                   tab.id === "new"
                     ? "Neu & wenig bewertet"
-                    : tab.id === "unanswered"
-                    ? "Noch nicht abgestimmt"
                     : tab.label;
                 return (
                   <button
@@ -1842,6 +1858,26 @@ export default function Home() {
                   </button>
                 );
               })}
+
+              {!currentUser ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setGuestVotedFilter((prev) => (prev === "exclude" ? "only" : "exclude"))
+                  }
+                  className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
+                    guestVotedFilter === "only"
+                      ? "border border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
+                      : "border border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                  }`}
+                  title="Klicke, um zwischen „Noch nicht abgestimmt“ und „Abgestimmt“ zu wechseln"
+                >
+                  <span aria-hidden="true">{guestVotedFilter === "only" ? "✅" : "⭕"}</span>
+                  <span className="font-semibold whitespace-nowrap">
+                    {guestVotedFilter === "only" ? "Abgestimmt" : "Noch nicht abgestimmt"}
+                  </span>
+                </button>
+              ) : null}
             </div>
 
             <div
@@ -1983,8 +2019,6 @@ export default function Home() {
                         const label =
                           tab.id === "new"
                             ? "Neu & wenig bewertet"
-                            : tab.id === "unanswered"
-                              ? "Noch nicht abgestimmt"
                               : tab.label;
                         return (
                           <button
@@ -2002,6 +2036,26 @@ export default function Home() {
                           </button>
                         );
                       })}
+
+                      {!currentUser ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setGuestVotedFilter((prev) => (prev === "exclude" ? "only" : "exclude"))
+                          }
+                          className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
+                            guestVotedFilter === "only"
+                              ? "border border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
+                              : "border border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                          }`}
+                          title="Klicke, um zwischen „Noch nicht abgestimmt“ und „Abgestimmt“ zu wechseln"
+                        >
+                          <span aria-hidden="true">{guestVotedFilter === "only" ? "✅" : "⭕"}</span>
+                          <span className="font-semibold whitespace-nowrap">
+                            {guestVotedFilter === "only" ? "Abgestimmt" : "Noch nicht abgestimmt"}
+                          </span>
+                        </button>
+                      ) : null}
                     </div>
 
                     <div className="flex items-center rounded-xl border border-white/25 bg-white/5 p-1">

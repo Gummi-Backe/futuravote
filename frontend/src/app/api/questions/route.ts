@@ -5,15 +5,20 @@ import {
   getDraftsPageFromSupabase,
   getQuestionsPageFromSupabase,
 } from "@/app/data/dbSupabase";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 
 export const revalidate = 0;
 
 type IncludeMode = "both" | "questions" | "drafts";
+type VotedFilter = "include" | "exclude" | "only";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const tab = searchParams.get("tab") ?? undefined;
+  const votedRaw = searchParams.get("voted");
+  const voted: VotedFilter | undefined =
+    votedRaw === "include" || votedRaw === "exclude" || votedRaw === "only" ? votedRaw : undefined;
   const category = searchParams.get("category");
   const region = searchParams.get("region");
   const qRaw = searchParams.get("q");
@@ -39,10 +44,20 @@ export async function GET(request: Request) {
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
 
+  const userSessionId = cookieStore.get("fv_user")?.value;
+  let userId: string | null = null;
+  if (userSessionId) {
+    const user = await getUserBySessionSupabase(userSessionId).catch(() => null);
+    if (user?.id) {
+      userId = user.id;
+    }
+  }
+
   const [questionsPage, draftsPage] = await Promise.all([
     includeQuestions
       ? getQuestionsPageFromSupabase({
           sessionId,
+          userId: userId ?? undefined,
           limit: pageSize,
           offset: questionsOffset,
           cursor: questionsCursor,
@@ -50,10 +65,12 @@ export async function GET(request: Request) {
           category,
           region,
           query: q,
+          voted,
         })
       : Promise.resolve({ items: [], total: 0, nextCursor: null }),
     includeDrafts
       ? getDraftsPageFromSupabase({
+          sessionId,
           limit: pageSize,
           offset: draftsOffset,
           cursor: draftsCursor,
@@ -61,6 +78,7 @@ export async function GET(request: Request) {
           region,
           status: "open",
           query: q,
+          voted,
         })
       : Promise.resolve({ items: [], total: 0, nextCursor: null }),
   ]);

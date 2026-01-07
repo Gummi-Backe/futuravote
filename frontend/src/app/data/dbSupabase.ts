@@ -713,6 +713,8 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
 
 export async function getQuestionsPageFromSupabase(options: {
   sessionId?: string;
+  userId?: string | null;
+  voted?: "include" | "exclude" | "only";
   limit: number;
   offset: number;
   cursor?: string | null;
@@ -721,7 +723,7 @@ export async function getQuestionsPageFromSupabase(options: {
   region?: string | null;
   query?: string | null;
 }): Promise<{ items: QuestionWithVotes[]; total: number; nextCursor: string | null }> {
-  const { sessionId, limit, offset, cursor, tab, category, region, query: titleQuery } = options;
+  const { sessionId, userId, voted, limit, offset, cursor, tab, category, region, query: titleQuery } = options;
   const supabase = getSupabaseAdminClient();
   const cursorMode = Boolean(cursor);
 
@@ -788,9 +790,14 @@ export async function getQuestionsPageFromSupabase(options: {
       ? await computeDynamicLowVotesThreshold({ supabase, now, category, region })
       : null;
 
-  // Votes der aktuellen Session einmalig laden (fuer userChoice und ggf. "unanswered")
+  const MAX_VOTED_IDS_FOR_FILTER = 800;
+  const votedFilter: "include" | "exclude" | "only" =
+    userId ? "exclude" : voted ?? "include";
+  const shouldFilterVoted = votedFilter !== "include";
+
+  // Votes der aktuellen Session einmalig laden (für userChoice und Filter)
   let sessionVotesMap = new Map<string, SessionVote>();
-  let votedQuestionIds: string[] = [];
+  let sessionVotedQuestionIds: string[] = [];
   if (sessionId) {
     const { data: votes, error: voteError } = await supabase
       .from("votes")
@@ -809,9 +816,46 @@ export async function getQuestionsPageFromSupabase(options: {
       ])
     );
 
-    if (tab === "unanswered") {
-      votedQuestionIds = voteRows.map((v) => v.question_id);
+    if (shouldFilterVoted) {
+      sessionVotedQuestionIds = voteRows.map((v) => v.question_id);
     }
+  }
+
+  let userVotedQuestionIds: string[] = [];
+  if (userId && shouldFilterVoted) {
+    const { data: userVotes, error: userVotesError } = await supabase
+      .from("votes")
+      .select("question_id, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_VOTED_IDS_FOR_FILTER);
+
+    if (userVotesError) {
+      throw new Error(`Supabase getQuestionsPage (UserVotes) fehlgeschlagen: ${userVotesError.message}`);
+    }
+
+    userVotedQuestionIds = ((userVotes as VoteRow[]) ?? []).map((v) => v.question_id);
+  }
+
+  const votedQuestionIdsForFilter: string[] = [];
+  if (shouldFilterVoted) {
+    const seen = new Set<string>();
+    const pushUnique = (ids: string[]) => {
+      for (const id of ids) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        votedQuestionIdsForFilter.push(id);
+        if (votedQuestionIdsForFilter.length >= MAX_VOTED_IDS_FOR_FILTER) break;
+      }
+    };
+
+    // Wichtig: userVotes zuerst, damit bei Limit immer die Nutzer-Votes bevorzugt werden.
+    pushUnique(userVotedQuestionIds);
+    pushUnique(sessionVotedQuestionIds);
+  }
+
+  if (votedFilter === "only" && votedQuestionIdsForFilter.length === 0) {
+    return { items: [], total: 0, nextCursor: null };
   }
 
   const applyFilters = (query: any) => {
@@ -857,9 +901,13 @@ export async function getQuestionsPageFromSupabase(options: {
       query = query.gte("closes_at", todayIso).lte("closes_at", maxDate);
     }
 
-    // "Noch nicht abgestimmt": nur Fragen ohne Vote in dieser Session
-    if (tab === "unanswered" && votedQuestionIds.length > 0) {
-      const inList = `(${votedQuestionIds.map((id) => `"${id}"`).join(",")})`;
+    if (votedFilter === "only" && votedQuestionIdsForFilter.length > 0) {
+      query = query.in("id", votedQuestionIdsForFilter);
+    }
+
+    // Bereits abgestimmte Fragen ausblenden (für eingeloggte Nutzer immer).
+    if (votedFilter === "exclude" && votedQuestionIdsForFilter.length > 0) {
+      const inList = `(${votedQuestionIdsForFilter.map((id) => `"${id}"`).join(",")})`;
       query = query.not("id", "in", inList);
     }
 
@@ -1471,6 +1519,7 @@ export async function getDraftsForCreatorFromSupabase(options: {
 }
 
 export async function getDraftsPageFromSupabase(options: {
+  sessionId?: string;
   limit: number;
   offset: number;
   cursor?: string | null;
@@ -1478,10 +1527,14 @@ export async function getDraftsPageFromSupabase(options: {
   region?: string | null;
   status?: "all" | "open" | "accepted" | "rejected";
   query?: string | null;
+  voted?: "include" | "exclude" | "only";
 }): Promise<{ items: Draft[]; total: number; nextCursor: string | null }> {
-  const { limit, offset, cursor, category, region, status, query: titleQuery } = options;
+  const { sessionId, limit, offset, cursor, category, region, status, query: titleQuery, voted } = options;
   const supabase = getSupabaseAdminClient();
   const cursorMode = Boolean(cursor);
+  const votedFilter: "include" | "exclude" | "only" = voted ?? "include";
+  const shouldFilterReviewedDrafts = votedFilter !== "include";
+  const MAX_REVIEWED_DRAFT_IDS_FOR_FILTER = 800;
 
   const stopwords = new Set([
     "der",
@@ -1539,6 +1592,31 @@ export async function getDraftsPageFromSupabase(options: {
   );
   const searchMode = searchTokens.length > 0;
 
+  let reviewedDraftIds: string[] = [];
+  if (shouldFilterReviewedDrafts && sessionId) {
+    const { data: reviews, error: reviewsError } = await supabase
+      .from("draft_reviews")
+      .select("draft_id, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false })
+      .limit(MAX_REVIEWED_DRAFT_IDS_FOR_FILTER);
+
+    if (reviewsError) {
+      const code = (reviewsError as any)?.code as string | undefined;
+      if (code !== "42P01") {
+        throw new Error(`Supabase getDraftsPage (DraftReviews) fehlgeschlagen: ${reviewsError.message}`);
+      }
+    } else {
+      reviewedDraftIds = ((reviews as any[]) ?? [])
+        .map((r) => String((r as any).draft_id ?? ""))
+        .filter((id) => id.length > 0);
+    }
+  }
+
+  if (votedFilter === "only" && reviewedDraftIds.length === 0) {
+    return { items: [], total: 0, nextCursor: null };
+  }
+
   const applyFilters = (query: any) => {
     query = query.eq("visibility", "public");
 
@@ -1555,6 +1633,15 @@ export async function getDraftsPageFromSupabase(options: {
         query = query.or("region.is.null,region.eq.Global");
       } else {
         query = query.eq("region", region);
+      }
+    }
+
+    if (shouldFilterReviewedDrafts && reviewedDraftIds.length > 0) {
+      if (votedFilter === "only") {
+        query = query.in("id", reviewedDraftIds);
+      } else if (votedFilter === "exclude") {
+        const inList = `(${reviewedDraftIds.map((id) => `"${id}"`).join(",")})`;
+        query = query.not("id", "in", inList);
       }
     }
 

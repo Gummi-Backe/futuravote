@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { triggerAhaMicrocopy } from "@/app/lib/ahaMicrocopy";
 import type { PollOption } from "@/app/data/mock";
@@ -30,14 +30,30 @@ export function DetailVoteButtons({
   const [optionId, setOptionId] = useState<string | null>(initialOptionId ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasChoice = choice === "yes" || choice === "no";
   const hasOption = typeof optionId === "string" && optionId.length > 0;
   const effectiveAnswerMode = answerMode === "options" ? "options" : "binary";
 
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, type });
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  };
+
   const handleVoteBinary = async (nextChoice: Choice) => {
     if (choice || submitting || effectiveAnswerMode !== "binary") return;
+    const prevChoice = choice;
     setSubmitting(true);
     setError(null);
+    setChoice(nextChoice);
 
     try {
       const res = await fetch("/api/votes", {
@@ -49,22 +65,28 @@ export function DetailVoteButtons({
       if (res.status === 429) {
         const data = (await res.json()) as { retryAfterMs?: number };
         const retry = Math.ceil(((data.retryAfterMs ?? 1000) as number) / 1000);
+        setChoice(prevChoice);
         setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
+        showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
         return;
       }
 
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setChoice(prevChoice);
         setError(data?.error || "Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
+        showToast(data?.error || "Deine Stimme konnte nicht gespeichert werden.", "error");
         return;
       }
 
       invalidateProfileCaches();
-      setChoice(nextChoice);
       triggerAhaMicrocopy({ closesAt: closesAt ?? null });
+      showToast(`Gespeichert: ${nextChoice === "yes" ? "Ja" : "Nein"}`, "success");
       router.refresh();
     } catch {
+      setChoice(prevChoice);
       setError("Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
+      showToast("Deine Stimme konnte nicht gespeichert werden.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -72,8 +94,10 @@ export function DetailVoteButtons({
 
   const handleVoteOption = async (nextOptionId: string) => {
     if (hasOption || submitting || effectiveAnswerMode !== "options") return;
+    const prevOptionId = optionId;
     setSubmitting(true);
     setError(null);
+    setOptionId(nextOptionId);
 
     try {
       const res = await fetch("/api/votes", {
@@ -85,22 +109,29 @@ export function DetailVoteButtons({
       if (res.status === 429) {
         const data = (await res.json()) as { retryAfterMs?: number };
         const retry = Math.ceil(((data.retryAfterMs ?? 1000) as number) / 1000);
+        setOptionId(prevOptionId);
         setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
+        showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
         return;
       }
 
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setOptionId(prevOptionId);
         setError(data?.error || "Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
+        showToast(data?.error || "Deine Stimme konnte nicht gespeichert werden.", "error");
         return;
       }
 
       invalidateProfileCaches();
-      setOptionId(nextOptionId);
       triggerAhaMicrocopy({ closesAt: closesAt ?? null });
+      const label = (options ?? []).find((o) => o.id === nextOptionId)?.label;
+      showToast(`Gespeichert: ${label ?? "Abgestimmt"}`, "success");
       router.refresh();
     } catch {
+      setOptionId(prevOptionId);
       setError("Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
+      showToast("Deine Stimme konnte nicht gespeichert werden.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -178,6 +209,14 @@ export function DetailVoteButtons({
       {votedLabel ? <p className="text-xs font-semibold text-emerald-200">{votedLabel}</p> : null}
       {votedOptionLabel ? <p className="text-xs font-semibold text-emerald-200">{votedOptionLabel}</p> : null}
       {error && <p className="text-xs text-rose-200">{error}</p>}
+
+      {toast ? (
+        <div className="toast-enter fixed bottom-4 right-4 z-50 rounded-2xl border border-white/15 bg-slate-900/90 px-4 py-3 shadow-lg shadow-black/40">
+          <div className={`text-sm font-semibold ${toast.type === "success" ? "text-emerald-200" : "text-rose-200"}`}>
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
