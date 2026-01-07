@@ -100,19 +100,34 @@ export async function GET() {
       checkSensitiveTable({ table: "reports", keyColumns: ["id"] }),
     ]);
 
-    const strictOk = checks.every((c) => c.blocked === true);
+    // ok = kein Hinweis, dass anon sensitive Tabellen lesen kann.
     const ok = checks.every((c) => c.blocked !== false);
+
+    // verifiedOk = alle Checks konnten mit echtem Datensatz verifiziert werden (keine "empty"/"error").
+    const verifiedOk = checks.every((c) => c.blocked === true);
+
+    // strictOk ist historisch: wir verwenden es als "ok", damit ein leerer Table-Check nicht wie ein Fehler wirkt.
+    // Details stehen in `checks` und `warnings`.
+    const strictOk = ok;
+
+    const warnings = checks
+      .filter((c) => c.confidence !== "verified")
+      .map((c) => ({ table: c.table, confidence: c.confidence, hint: c.hint ?? null }));
+
+    const note = !ok
+      ? "RLS-Check fehlgeschlagen: mind. eine sensitive Tabelle ist für anon lesbar."
+      : warnings.length > 0
+      ? "Kein Hinweis auf offene RLS; mindestens ein Check ist leer oder konnte nicht verifiziert werden."
+      : "RLS scheint korrekt: anon kann keine sensitiven Datensätze lesen.";
 
     return NextResponse.json(
       {
         ok,
         strictOk,
+        verifiedOk,
         checks,
-        note: strictOk
-          ? "RLS scheint korrekt: anon kann keine sensitiven Datensaetze lesen."
-          : ok
-          ? "Mindestens eine Tabelle ist leer oder konnte nicht verifiziert werden."
-          : "RLS-Check fehlgeschlagen: mind. eine sensitive Tabelle ist fuer anon lesbar.",
+        warnings,
+        note,
       },
       { status: ok ? 200 : 500 }
     );
