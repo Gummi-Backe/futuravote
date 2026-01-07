@@ -101,6 +101,8 @@ export default async function RanglistePage({
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
                 href={makeHref({ view: "treffer" })}
+                replace
+                scroll={false}
                 className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition ${
                   view === "treffer"
                     ? "border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
@@ -111,6 +113,8 @@ export default async function RanglistePage({
               </Link>
               <Link
                 href={makeHref({ view: "community" })}
+                replace
+                scroll={false}
                 className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition ${
                   view === "community"
                     ? "border-amber-200/60 bg-amber-500/20 text-white hover:-translate-y-0.5"
@@ -130,6 +134,8 @@ export default async function RanglistePage({
               <div className="flex flex-wrap gap-2">
                 <Link
                   href={makeHref({ category: "all" })}
+                  replace
+                  scroll={false}
                   className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition ${
                     category === "all"
                       ? "border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
@@ -144,6 +150,8 @@ export default async function RanglistePage({
                     <Link
                       key={cat.label}
                       href={makeHref({ category: cat.label })}
+                      replace
+                      scroll={false}
                       className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition ${
                         isActive
                           ? "border-emerald-300/60 bg-emerald-500/25 text-white hover:-translate-y-0.5"
@@ -168,6 +176,8 @@ export default async function RanglistePage({
                       <Link
                         key={d}
                         href={makeHref({ days: d })}
+                        replace
+                        scroll={false}
                         className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition ${
                           isActive
                             ? "border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"

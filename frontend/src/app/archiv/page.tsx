@@ -482,6 +482,8 @@ export default async function ArchivPage(props: {
                   <Link
                     key={t.key}
                     href={href}
+                    replace
+                    scroll={false}
                     className={`rounded-full border px-4 py-2 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
                       active
                         ? "border-emerald-300/60 bg-emerald-500/20 text-white"
@@ -674,14 +676,24 @@ export default async function ArchivPage(props: {
 
           <div className="mt-5 flex items-center justify-between gap-3">
             {prevHref ? (
-              <Link href={prevHref} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:border-emerald-200/40">
+              <Link
+                href={prevHref}
+                replace
+                scroll={false}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:border-emerald-200/40"
+              >
                 ← Zurück
               </Link>
             ) : (
               <span />
             )}
             {nextHref ? (
-              <Link href={nextHref} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:border-emerald-200/40">
+              <Link
+                href={nextHref}
+                replace
+                scroll={false}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:border-emerald-200/40"
+              >
                 Weiter →
               </Link>
             ) : (
