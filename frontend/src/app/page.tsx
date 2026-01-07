@@ -6,6 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type Draft, type Question } from "./data/mock";
 import { invalidateProfileCaches } from "./lib/profileCache";
 import { triggerAhaMicrocopy } from "./lib/ahaMicrocopy";
+import {
+  clearVoteCooldown,
+  FV_VOTE_COOLDOWN_DEFAULT_MS,
+  getVoteCooldownRemainingSeconds,
+  setVoteCooldownUntil,
+} from "./lib/voteCooldown";
 import { ReportButton } from "./components/ReportButton";
 import { FirstStepsOverlay } from "./components/FirstStepsOverlay";
 
@@ -1496,9 +1502,17 @@ export default function Home() {
 
   const handleVote = useCallback(
     async (questionId: string, choice: "yes" | "no") => {
-      const alreadyVoted = questions.find((q) => q.id === questionId)?.userChoice;
+      const cooldownSeconds = getVoteCooldownRemainingSeconds();
+      if (cooldownSeconds > 0) {
+        showToast(`Bitte warte ${cooldownSeconds} Sekunde(n), bevor du erneut votest.`, "error");
+        return;
+      }
+
+      const prevQuestion = questions.find((q) => q.id === questionId) ?? null;
+      const alreadyVoted = prevQuestion?.userChoice;
       if (alreadyVoted) return;
 
+      setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
       setSubmittingId(questionId);
       setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: choice } : q)));
       try {
@@ -1510,6 +1524,12 @@ export default function Home() {
         if (res.status === 429) {
           const { retryAfterMs } = (await res.json()) as { retryAfterMs?: number };
           const retry = Math.ceil(((retryAfterMs ?? 1000) as number) / 1000);
+          if (prevQuestion) {
+            setQuestions((prev) => prev.map((q) => (q.id === questionId ? prevQuestion : q)));
+          } else {
+            setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: undefined } : q)));
+          }
+          setVoteCooldownUntil(Date.now() + Math.max(0, retryAfterMs ?? 0));
           setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
           showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
           return;
@@ -1523,6 +1543,7 @@ export default function Home() {
         triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
         showToast("Deine Stimme wurde gezählt.", "success");
       } catch {
+        clearVoteCooldown();
         setError("Vote fehlgeschlagen. Bitte versuche es erneut.");
         showToast("Vote fehlgeschlagen. Bitte versuche es erneut.", "error");
         await fetchLatest();
@@ -1535,9 +1556,17 @@ export default function Home() {
 
   const handleVoteOption = useCallback(
     async (questionId: string, optionId: string) => {
-      const alreadyVoted = questions.find((q) => q.id === questionId)?.userOptionId;
+      const cooldownSeconds = getVoteCooldownRemainingSeconds();
+      if (cooldownSeconds > 0) {
+        showToast(`Bitte warte ${cooldownSeconds} Sekunde(n), bevor du erneut votest.`, "error");
+        return;
+      }
+
+      const prevQuestion = questions.find((q) => q.id === questionId) ?? null;
+      const alreadyVoted = prevQuestion?.userOptionId;
       if (alreadyVoted) return;
 
+      setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
       setSubmittingId(questionId);
       setQuestions((prev) =>
         prev.map((q) => {
@@ -1565,6 +1594,10 @@ export default function Home() {
         if (res.status === 429) {
           const { retryAfterMs } = (await res.json()) as { retryAfterMs?: number };
           const retry = Math.ceil(((retryAfterMs ?? 1000) as number) / 1000);
+          if (prevQuestion) {
+            setQuestions((prev) => prev.map((q) => (q.id === questionId ? prevQuestion : q)));
+          }
+          setVoteCooldownUntil(Date.now() + Math.max(0, retryAfterMs ?? 0));
           setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
           showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
           return;
@@ -1579,6 +1612,7 @@ export default function Home() {
         triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
         showToast("Deine Stimme wurde gezählt.", "success");
       } catch (e: unknown) {
+        clearVoteCooldown();
         const message = e instanceof Error ? e.message : "Vote fehlgeschlagen. Bitte versuche es erneut.";
         setError(message);
         showToast(message, "error");

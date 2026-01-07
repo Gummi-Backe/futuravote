@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { triggerAhaMicrocopy } from "@/app/lib/ahaMicrocopy";
+import {
+  clearVoteCooldown,
+  FV_VOTE_COOLDOWN_DEFAULT_MS,
+  getVoteCooldownRemainingSeconds,
+  setVoteCooldownUntil,
+} from "@/app/lib/voteCooldown";
 import type { PollOption } from "@/app/data/mock";
 
 type Choice = "yes" | "no";
@@ -50,10 +56,17 @@ export function DetailVoteButtons({
 
   const handleVoteBinary = async (nextChoice: Choice) => {
     if (choice || submitting || effectiveAnswerMode !== "binary") return;
+    const cooldownSeconds = getVoteCooldownRemainingSeconds();
+    if (cooldownSeconds > 0) {
+      setError(`Bitte warte ${cooldownSeconds} Sekunde(n), bevor du erneut votest.`);
+      showToast(`Bitte warte ${cooldownSeconds} Sekunde(n), bevor du erneut votest.`, "error");
+      return;
+    }
     const prevChoice = choice;
     setSubmitting(true);
     setError(null);
     setChoice(nextChoice);
+    setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
 
     try {
       const res = await fetch("/api/votes", {
@@ -66,6 +79,7 @@ export function DetailVoteButtons({
         const data = (await res.json()) as { retryAfterMs?: number };
         const retry = Math.ceil(((data.retryAfterMs ?? 1000) as number) / 1000);
         setChoice(prevChoice);
+        setVoteCooldownUntil(Date.now() + Math.max(0, data.retryAfterMs ?? 0));
         setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
         showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
         return;
@@ -74,6 +88,7 @@ export function DetailVoteButtons({
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         setChoice(prevChoice);
+        clearVoteCooldown();
         setError(data?.error || "Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
         showToast(data?.error || "Deine Stimme konnte nicht gespeichert werden.", "error");
         return;
@@ -85,6 +100,7 @@ export function DetailVoteButtons({
       router.refresh();
     } catch {
       setChoice(prevChoice);
+      clearVoteCooldown();
       setError("Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
       showToast("Deine Stimme konnte nicht gespeichert werden.", "error");
     } finally {
@@ -94,10 +110,17 @@ export function DetailVoteButtons({
 
   const handleVoteOption = async (nextOptionId: string) => {
     if (hasOption || submitting || effectiveAnswerMode !== "options") return;
+    const cooldownSeconds = getVoteCooldownRemainingSeconds();
+    if (cooldownSeconds > 0) {
+      setError(`Bitte warte ${cooldownSeconds} Sekunde(n), bevor du erneut votest.`);
+      showToast(`Bitte warte ${cooldownSeconds} Sekunde(n), bevor du erneut votest.`, "error");
+      return;
+    }
     const prevOptionId = optionId;
     setSubmitting(true);
     setError(null);
     setOptionId(nextOptionId);
+    setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
 
     try {
       const res = await fetch("/api/votes", {
@@ -110,6 +133,7 @@ export function DetailVoteButtons({
         const data = (await res.json()) as { retryAfterMs?: number };
         const retry = Math.ceil(((data.retryAfterMs ?? 1000) as number) / 1000);
         setOptionId(prevOptionId);
+        setVoteCooldownUntil(Date.now() + Math.max(0, data.retryAfterMs ?? 0));
         setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
         showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
         return;
@@ -118,6 +142,7 @@ export function DetailVoteButtons({
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         setOptionId(prevOptionId);
+        clearVoteCooldown();
         setError(data?.error || "Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
         showToast(data?.error || "Deine Stimme konnte nicht gespeichert werden.", "error");
         return;
@@ -130,6 +155,7 @@ export function DetailVoteButtons({
       router.refresh();
     } catch {
       setOptionId(prevOptionId);
+      clearVoteCooldown();
       setError("Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.");
       showToast("Deine Stimme konnte nicht gespeichert werden.", "error");
     } finally {
