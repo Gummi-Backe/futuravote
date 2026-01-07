@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type CommentStance = "yes" | "no" | "neutral";
@@ -147,8 +148,19 @@ export function CommentsSection({
       </div>
 
       {!isLoggedIn ? (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-slate-200">
-          Login ist erforderlich, um zu kommentieren.
+        <div className="mt-4 rounded-2xl border border-amber-300/35 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-50">
+            Login ist erforderlich, um zu kommentieren.
+          </p>
+          <p className="mt-1 text-xs text-amber-100/90">
+            Logge dich ein oder erstelle einen Account, dann kannst du deine Meinung hinzufügen.
+          </p>
+          <Link
+            href={`/auth?next=${encodeURIComponent(`/questions/${questionId}`)}`}
+            className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-amber-200/50 bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-50 shadow-lg shadow-amber-500/10 transition hover:-translate-y-0.5 hover:border-amber-200/70 hover:bg-amber-500/25"
+          >
+            Login / Registrieren
+          </Link>
         </div>
       ) : !canPost ? (
         <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-50">
