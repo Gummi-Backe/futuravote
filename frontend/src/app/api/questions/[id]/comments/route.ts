@@ -34,7 +34,8 @@ function normalizeSourceUrl(input: unknown): string | null {
   }
 }
 
-export async function GET(_request: Request, props: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
+  const debug = new URL(request.url).searchParams.get("debug") === "1";
   const resolved = await props.params;
   const id = resolved?.id;
   if (!id) return NextResponse.json({ error: "ID fehlt." }, { status: 400 });
@@ -123,6 +124,16 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
         {
           error:
             "Supabase table/view fehlt. Führe supabase/question_comments.sql und supabase/question_comment_votes.sql aus.",
+        },
+        { status: 500 }
+      );
+    }
+    if (debug) {
+      return NextResponse.json(
+        {
+          error: "Kommentare konnten nicht geladen werden.",
+          code: (e as any)?.code ?? null,
+          details: String((e as any)?.message ?? e),
         },
         { status: 500 }
       );
