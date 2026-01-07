@@ -792,7 +792,7 @@ export async function getQuestionsPageFromSupabase(options: {
 
   const MAX_VOTED_IDS_FOR_FILTER = 800;
   const votedFilter: "include" | "exclude" | "only" =
-    userId ? "exclude" : voted ?? "include";
+    voted ?? (userId ? "exclude" : "include");
   const shouldFilterVoted = votedFilter !== "include";
 
   // Votes der aktuellen Session einmalig laden (für userChoice und Filter)

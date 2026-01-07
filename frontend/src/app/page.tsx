@@ -669,10 +669,13 @@ type HomeCache = {
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
   questions: Question[];
+  answeredQuestions: Question[];
   drafts: Draft[];
   questionsCursor: string | null;
+  answeredQuestionsCursor: string | null;
   draftsCursor: string | null;
   questionsTotal: number | null;
+  answeredQuestionsTotal: number | null;
   draftsTotal: number | null;
   favoriteQuestions: Record<string, boolean>;
   favoritesUpdatedAt: number | null;
@@ -693,6 +696,7 @@ export default function Home() {
   );
   const [typeFilter, setTypeFilter] = useState<HomeCache["typeFilter"]>(() => homeCache?.typeFilter ?? "all");
   const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
+  const [answeredQuestions, setAnsweredQuestions] = useState<Question[]>(() => homeCache?.answeredQuestions ?? []);
   const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
   const [loading, setLoading] = useState(() => !homeCache);
   const [error, setError] = useState<string | null>(null);
@@ -715,8 +719,14 @@ export default function Home() {
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
   const [questionsCursor, setQuestionsCursor] = useState<string | null>(() => homeCache?.questionsCursor ?? null);
+  const [answeredQuestionsCursor, setAnsweredQuestionsCursor] = useState<string | null>(
+    () => homeCache?.answeredQuestionsCursor ?? null
+  );
   const [draftsCursor, setDraftsCursor] = useState<string | null>(() => homeCache?.draftsCursor ?? null);
   const [questionsTotal, setQuestionsTotal] = useState<number | null>(() => homeCache?.questionsTotal ?? null);
+  const [answeredQuestionsTotal, setAnsweredQuestionsTotal] = useState<number | null>(
+    () => homeCache?.answeredQuestionsTotal ?? null
+  );
   const [draftsTotal, setDraftsTotal] = useState<number | null>(() => homeCache?.draftsTotal ?? null);
   const [showReviewOnly, setShowReviewOnly] = useState(() => homeCache?.showReviewOnly ?? false);
   const [favoriteQuestions, setFavoriteQuestions] = useState<Record<string, boolean>>(
@@ -725,9 +735,13 @@ export default function Home() {
   const [favoritesUpdatedAt, setFavoritesUpdatedAt] = useState<number | null>(() => homeCache?.favoritesUpdatedAt ?? null);
   const [favoriteSubmittingId, setFavoriteSubmittingId] = useState<string | null>(null);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
+  const answeredQuestionsEndRef = useRef<HTMLDivElement | null>(null);
   const draftsEndRef = useRef<HTMLDivElement | null>(null);
   const [loadingMoreQuestions, setLoadingMoreQuestions] = useState(false);
+  const [loadingAnsweredQuestions, setLoadingAnsweredQuestions] = useState(false);
+  const [loadingMoreAnsweredQuestions, setLoadingMoreAnsweredQuestions] = useState(false);
   const [loadingMoreDrafts, setLoadingMoreDrafts] = useState(false);
+  const answeredLoadStateRef = useRef<{ inflight: boolean; loaded: boolean }>({ inflight: false, loaded: false });
   const tabs = useMemo(
     () => [
       ...feedTabs.slice(0, 2),
@@ -834,6 +848,59 @@ export default function Home() {
     [categoryOptions]
   );
 
+  const shouldShowAnsweredFallback = useMemo(() => {
+    if (currentUser) return true;
+    return guestVotedFilter === "exclude";
+  }, [currentUser, guestVotedFilter]);
+
+  const resetAnsweredQuestions = useCallback(() => {
+    setAnsweredQuestions([]);
+    setAnsweredQuestionsCursor(null);
+    setAnsweredQuestionsTotal(null);
+    answeredLoadStateRef.current = { inflight: false, loaded: false };
+  }, []);
+
+  const fetchAnsweredQuestionsFirstPage = useCallback(async () => {
+    if (!shouldShowAnsweredFallback) return;
+    if (answeredLoadStateRef.current.inflight || answeredLoadStateRef.current.loaded) return;
+    answeredLoadStateRef.current.inflight = true;
+
+    setLoadingAnsweredQuestions(true);
+    try {
+      const params = new URLSearchParams();
+      const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
+      const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
+      params.set("pageSize", String(pageSize));
+      params.set("include", "questions");
+      params.set("tab", activeTab);
+      params.set("voted", "only");
+      if (activeCategory) params.set("category", activeCategory);
+      if (activeRegion) params.set("region", activeRegion);
+      if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
+
+      const res = await fetch(`/api/questions?${params.toString()}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const initial: Question[] = data.questions ?? [];
+      const unique = Array.from(new Map(initial.map((q) => [q.id, q])).values());
+      setAnsweredQuestions(unique);
+      setAnsweredQuestionsCursor(typeof data.questionsNextCursor === "string" ? data.questionsNextCursor : null);
+      setAnsweredQuestionsTotal(typeof data.questionsTotal === "number" ? data.questionsTotal : null);
+      answeredLoadStateRef.current.loaded = true;
+    } catch {
+      // ignore
+    } finally {
+      setLoadingAnsweredQuestions(false);
+      answeredLoadStateRef.current.inflight = false;
+    }
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    searchQuery,
+    shouldShowAnsweredFallback,
+  ]);
+
   const fetchLatest = useCallback(async () => {
     setLoading(true);
     try {
@@ -869,10 +936,12 @@ export default function Home() {
       setDraftsCursor(typeof data.draftsNextCursor === "string" ? data.draftsNextCursor : null);
       setQuestionsTotal(typeof data.questionsTotal === "number" ? data.questionsTotal : null);
       setDraftsTotal(typeof data.draftsTotal === "number" ? data.draftsTotal : null);
+      resetAnsweredQuestions();
       setError(null);
       setToast(null);
     } catch {
       setQuestions([]);
+      resetAnsweredQuestions();
       setDrafts([]);
       setQuestionsCursor(null);
       setDraftsCursor(null);
@@ -882,7 +951,22 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, activeCategory, activeRegion, searchQuery, currentUser, guestVotedFilter]);
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    searchQuery,
+    currentUser,
+    guestVotedFilter,
+    resetAnsweredQuestions,
+  ]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!shouldShowAnsweredFallback) return;
+    if (questions.length > 0) return;
+    void fetchAnsweredQuestionsFirstPage();
+  }, [fetchAnsweredQuestionsFirstPage, loading, questions.length, shouldShowAnsweredFallback]);
 
   useEffect(() => {
     homeCache = {
@@ -895,10 +979,13 @@ export default function Home() {
       draftStatusFilter,
       showReviewOnly,
       questions,
+      answeredQuestions,
       drafts,
       questionsCursor,
+      answeredQuestionsCursor,
       draftsCursor,
       questionsTotal,
+      answeredQuestionsTotal,
       draftsTotal,
       favoriteQuestions,
       favoritesUpdatedAt,
@@ -913,10 +1000,13 @@ export default function Home() {
     draftStatusFilter,
     showReviewOnly,
     questions,
+    answeredQuestions,
     drafts,
     questionsCursor,
+    answeredQuestionsCursor,
     draftsCursor,
     questionsTotal,
+    answeredQuestionsTotal,
     draftsTotal,
     favoriteQuestions,
     favoritesUpdatedAt,
@@ -1191,6 +1281,9 @@ export default function Home() {
       const alreadyLoadedAll =
         !questionsCursor || (questionsTotal !== null && questions.length >= questionsTotal);
       if (alreadyLoadedAll || loadingMoreQuestions || questions.length === 0) {
+        if (alreadyLoadedAll && shouldShowAnsweredFallback) {
+          void fetchAnsweredQuestionsFirstPage();
+        }
         return;
       }
 
@@ -1251,6 +1344,74 @@ export default function Home() {
     searchQuery,
     currentUser,
     guestVotedFilter,
+    shouldShowAnsweredFallback,
+    fetchAnsweredQuestionsFirstPage,
+  ]);
+
+  useEffect(() => {
+    if (!answeredQuestionsEndRef.current) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    if (!shouldShowAnsweredFallback) return;
+    if (!answeredQuestionsCursor) return;
+    if (loadingMoreAnsweredQuestions) return;
+
+    const target = answeredQuestionsEndRef.current;
+    const observer = new IntersectionObserver((entries) => {
+      const [entry] = entries;
+      if (!entry.isIntersecting) return;
+      if (!answeredQuestionsCursor) return;
+      if (loadingMoreAnsweredQuestions) return;
+
+      setLoadingMoreAnsweredQuestions(true);
+      void (async () => {
+        try {
+          const params = new URLSearchParams();
+          const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
+          const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
+          params.set("pageSize", String(pageSize));
+          params.set("include", "questions");
+          params.set("questionsCursor", answeredQuestionsCursor);
+          params.set("tab", activeTab);
+          params.set("voted", "only");
+          if (activeCategory) params.set("category", activeCategory);
+          if (activeRegion) params.set("region", activeRegion);
+          if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
+
+          const res = await fetch(`/api/questions?${params.toString()}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const newQuestions: Question[] = data.questions ?? [];
+          setAnsweredQuestionsCursor(typeof data.questionsNextCursor === "string" ? data.questionsNextCursor : null);
+          if (typeof data.questionsTotal === "number") {
+            setAnsweredQuestionsTotal(data.questionsTotal);
+          }
+          if (newQuestions.length > 0) {
+            setAnsweredQuestions((prev) => {
+              const map = new Map<string, Question>();
+              for (const q of prev) map.set(q.id, q);
+              for (const q of newQuestions) map.set(q.id, q);
+              return Array.from(map.values());
+            });
+          }
+        } catch {
+          // ignore
+        } finally {
+          setLoadingMoreAnsweredQuestions(false);
+        }
+      })();
+    });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    answeredQuestionsCursor,
+    answeredQuestionsEndRef,
+    loadingMoreAnsweredQuestions,
+    searchQuery,
+    shouldShowAnsweredFallback,
   ]);
 
   useEffect(() => {
@@ -2379,6 +2540,44 @@ export default function Home() {
                   ))}
             </div>
             <div ref={questionsEndRef} className="h-1" />
+
+            {shouldShowAnsweredFallback && (loadingAnsweredQuestions || answeredQuestions.length > 0) ? (
+              <div className="mt-10 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-semibold text-white sm:text-lg">
+                    Du hast hier alles beantwortet – weitere Fragen
+                  </h3>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                    Abgestimmt
+                  </span>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  {loadingAnsweredQuestions && answeredQuestions.length === 0
+                    ? Array.from({ length: Math.min(QUESTIONS_PAGE_SIZE, 6) }).map((_, idx) => (
+                        <FeedCardSkeleton key={`qa-skel-${idx}`} variant="question" />
+                      ))
+                    : answeredQuestions.map((q) => (
+                        <EventCard
+                          key={`answered-${q.id}`}
+                          question={q}
+                          isSubmitting={submittingId === q.id}
+                          showFavorite={Boolean(currentUser)}
+                          isFavorited={Boolean(favoriteQuestions[q.id])}
+                          isFavoriteSubmitting={favoriteSubmittingId === q.id}
+                          onToggleFavorite={() => void handleToggleFavorite(q.id)}
+                          onVote={(choice) => handleVote(q.id, choice)}
+                          onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
+                          onOpenDetails={(href) => navigateWithTransition(href)}
+                        />
+                      ))}
+                </div>
+                <div ref={answeredQuestionsEndRef} className="h-1" />
+                {loadingMoreAnsweredQuestions ? (
+                  <div className="text-xs text-slate-400">Lade mehr…</div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
         )}
 
