@@ -52,21 +52,31 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
 
     const countsByCommentId = new Map<string, { upVotes: number; downVotes: number }>();
     if (commentIds.length > 0) {
-      const { data: countRows, error: countsError } = await supabase
-        .from("question_comment_vote_counts")
-        .select("comment_id,up_votes,down_votes")
-        .in("comment_id", commentIds);
+      try {
+        const { data: countRows, error: countsError } = await supabase
+          .from("question_comment_vote_counts")
+          .select("comment_id,up_votes,down_votes")
+          .in("comment_id", commentIds);
 
-      if (countsError && !isMissingRelation(countsError)) throw countsError;
-
-      ((countRows ?? []) as any[]).forEach((r) => {
-        const cid = String(r.comment_id ?? "");
-        if (!cid) return;
-        countsByCommentId.set(cid, {
-          upVotes: Math.max(0, Number(r.up_votes ?? 0) || 0),
-          downVotes: Math.max(0, Number(r.down_votes ?? 0) || 0),
-        });
-      });
+        if (countsError) {
+          // Kommentar-Counts sind optional: ohne diese Tabelle/View sollen Kommentare trotzdem laden.
+          if (!isMissingRelation(countsError)) {
+            console.warn("comment vote counts query failed:", (countsError as any)?.message ?? countsError);
+          }
+        } else {
+          ((countRows ?? []) as any[]).forEach((r) => {
+            const cid = String(r.comment_id ?? "");
+            if (!cid) return;
+            countsByCommentId.set(cid, {
+              upVotes: Math.max(0, Number(r.up_votes ?? 0) || 0),
+              downVotes: Math.max(0, Number(r.down_votes ?? 0) || 0),
+            });
+          });
+        }
+      } catch (err) {
+        // Optional: niemals Kommentare blockieren
+        console.warn("comment vote counts threw:", (err as any)?.message ?? err);
+      }
     }
 
     const cookieStore = await cookies();
@@ -75,19 +85,28 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
 
     const myVoteByCommentId = new Map<string, "up" | "down">();
     if (user?.id && commentIds.length > 0) {
-      const { data: myRows, error: myError } = await supabase
-        .from("question_comment_votes")
-        .select("comment_id,vote")
-        .eq("user_id", user.id)
-        .in("comment_id", commentIds);
+      try {
+        const { data: myRows, error: myError } = await supabase
+          .from("question_comment_votes")
+          .select("comment_id,vote")
+          .eq("user_id", user.id)
+          .in("comment_id", commentIds);
 
-      if (myError && !isMissingRelation(myError)) throw myError;
-      ((myRows ?? []) as any[]).forEach((r) => {
-        const cid = String(r.comment_id ?? "");
-        const vote = r.vote === "down" ? "down" : "up";
-        if (!cid) return;
-        myVoteByCommentId.set(cid, vote);
-      });
+        if (myError) {
+          if (!isMissingRelation(myError)) {
+            console.warn("comment vote myVote query failed:", (myError as any)?.message ?? myError);
+          }
+        } else {
+          ((myRows ?? []) as any[]).forEach((r) => {
+            const cid = String(r.comment_id ?? "");
+            const vote = r.vote === "down" ? "down" : "up";
+            if (!cid) return;
+            myVoteByCommentId.set(cid, vote);
+          });
+        }
+      } catch (err) {
+        console.warn("comment vote myVote threw:", (err as any)?.message ?? err);
+      }
     }
 
     const merged = comments.map((c) => {
@@ -103,7 +122,7 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json(
         {
           error:
-            "Supabase table/view fehlt. Fuehre supabase/question_comments.sql und supabase/question_comment_votes.sql aus.",
+            "Supabase table/view fehlt. Führe supabase/question_comments.sql und supabase/question_comment_votes.sql aus.",
         },
         { status: 500 }
       );
@@ -168,7 +187,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const code = (e as any)?.code as string | undefined;
     if (code === "42P01") {
       return NextResponse.json(
-        { error: "Supabase table 'question_comments' fehlt. Fuehre supabase/question_comments.sql aus." },
+        { error: "Supabase table 'question_comments' fehlt. Führe supabase/question_comments.sql aus." },
         { status: 500 }
       );
     }
