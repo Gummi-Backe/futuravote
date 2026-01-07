@@ -704,6 +704,7 @@ export default function Home() {
   const [pendingDraftChoice, setPendingDraftChoice] = useState<Record<string, DraftReviewChoice>>({});
   const [showExtraCategories, setShowExtraCategories] = useState(false);
   const [showExtraRegions, setShowExtraRegions] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">(
     () => homeCache?.draftStatusFilter ?? "open"
@@ -732,6 +733,24 @@ export default function Home() {
     ],
     []
   );
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileMenuOpen]);
 
   const categoryOptions = useMemo(() => {
     const map = new Map<string, { label: string; icon: string; color: string }>();
@@ -1659,7 +1678,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="hidden md:flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               type="button"
               className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
@@ -1764,7 +1783,7 @@ export default function Home() {
             ) : null}
           </div>
 
-          <div className="sticky top-3 z-20 -mx-4 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 backdrop-blur md:static md:-mx-0 md:border-0 md:bg-transparent md:p-0">
+          <div className="hidden md:block sticky top-3 z-20 -mx-4 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 backdrop-blur md:static md:-mx-0 md:border-0 md:bg-transparent md:p-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[220px]">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-300/70" aria-hidden="true">
@@ -1877,7 +1896,347 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-200">
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="fixed bottom-20 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white shadow-2xl shadow-emerald-500/10 backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-200/40 active:translate-y-0 md:hidden"
+          aria-label="Menü & Filter öffnen"
+          title="Menü & Filter"
+        >
+          <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+            <path
+              d="M4 7h16M4 12h16M4 17h16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+
+        {mobileMenuOpen ? (
+          <div
+            className="overlay-enter fixed inset-0 z-50 bg-black/55 backdrop-blur-sm md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <div
+              className="overlay-panel absolute bottom-0 left-0 right-0 max-h-[85svh] overflow-y-auto overscroll-contain rounded-t-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Menü & Filter</h2>
+                  <p className="mt-1 text-xs text-slate-300">Suche, Filter, Region und Schnellzugriffe.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-slate-100 hover:border-emerald-300/60"
+                >
+                  Schließen
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <div className="relative">
+                    <span
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-300/70"
+                      aria-hidden="true"
+                    >
+                      🔎
+                    </span>
+                    <input
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      placeholder="Titel suchen…"
+                      className="w-full rounded-full border border-white/10 bg-white/5 py-2 pl-9 pr-10 text-sm text-white placeholder:text-slate-400 shadow-sm shadow-black/20 outline-none transition focus:border-emerald-200/40"
+                      aria-label="Titel suchen"
+                    />
+                    {searchInput.trim().length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setSearchInput("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-200 hover:border-emerald-200/40 hover:text-white"
+                        aria-label="Suche löschen"
+                        title="Suche löschen"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                  {searchQuery.trim().length >= 2 ? (
+                    <span className="inline-flex w-fit rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-50">
+                      Suche aktiv
+                    </span>
+                  ) : null}
+                </div>
+
+                {!showReviewOnly ? (
+                  <div className="space-y-2">
+                    <div
+                      className="flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory"
+                      onTouchStart={handleTabTouchStart}
+                      onTouchEnd={handleTabTouchEnd}
+                    >
+                      {tabs.map((tab) => {
+                        const label =
+                          tab.id === "new"
+                            ? "Neu & wenig bewertet"
+                            : tab.id === "unanswered"
+                              ? "Noch nicht abgestimmt"
+                              : tab.label;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
+                              activeTab === tab.id
+                                ? "border border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
+                                : "border border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                            }`}
+                          >
+                            <span>{tab.icon}</span>
+                            <span className="font-semibold whitespace-nowrap">{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center rounded-xl border border-white/25 bg-white/5 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setTypeFilter("all")}
+                        className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:-translate-y-0.5 ${
+                          typeFilter === "all"
+                            ? "bg-emerald-500/25 text-white shadow-sm shadow-emerald-500/20"
+                            : "text-slate-100 hover:bg-white/5"
+                        }`}
+                        title="Alle"
+                      >
+                        Alle
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTypeFilter("prognose")}
+                        className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:-translate-y-0.5 ${
+                          typeFilter === "prognose"
+                            ? "bg-emerald-500/25 text-white shadow-sm shadow-emerald-500/20"
+                            : "text-slate-100 hover:bg-white/5"
+                        }`}
+                        title="Nur Prognosen"
+                      >
+                        Prognosen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTypeFilter("meinung")}
+                        className={`rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:-translate-y-0.5 ${
+                          typeFilter === "meinung"
+                            ? "bg-emerald-500/25 text-white shadow-sm shadow-emerald-500/20"
+                            : "text-slate-100 hover:bg-white/5"
+                        }`}
+                        title="Nur Meinungs-Umfragen"
+                      >
+                        Umfragen
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <div
+                    className="flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory"
+                    onTouchStart={handleCategoryTouchStart}
+                    onTouchEnd={handleCategoryTouchEnd}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategory(null)}
+                      className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
+                        activeCategory === null
+                          ? "border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
+                          : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                      }`}
+                    >
+                      <span>Alle Kategorien</span>
+                    </button>
+                    {categories.map((cat) => {
+                      const isActive = activeCategory === cat.label;
+                      return (
+                        <button
+                          key={cat.label}
+                          type="button"
+                          onClick={() => setActiveCategory(isActive ? null : cat.label)}
+                          className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full border px-4 py-2 shadow-sm shadow-black/20 snap-center transition ${
+                            isActive
+                              ? "border-emerald-300/60 bg-emerald-500/25 text-white hover:-translate-y-0.5"
+                              : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                          }`}
+                        >
+                          <span>{cat.icon}</span>
+                          <span>{cat.label}</span>
+                        </button>
+                      );
+                    })}
+                    {extraCategories.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowExtraCategories((open) => !open)}
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-full border shadow-sm shadow-black/20 snap-center transition ${
+                          showExtraCategories
+                            ? "border-emerald-300/60 bg-emerald-500/25 text-white hover:-translate-y-0.5"
+                            : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
+                        }`}
+                        aria-label="Weitere Kategorien"
+                      >
+                        <span className="text-lg leading-none">…</span>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
+                    <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-300">
+                      Region:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveRegion(null)}
+                      className={`rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
+                        !activeRegion
+                          ? "bg-emerald-500/25 text-white border border-emerald-300/60"
+                          : "bg-white/5 text-slate-100 border border-white/15 hover:border-emerald-300/40"
+                      }`}
+                    >
+                      Alle Regionen
+                    </button>
+                    {mainRegions.map((region) => {
+                      const isActive = activeRegion === region;
+                      const isDefault = currentUser?.defaultRegion === region;
+                      const baseClasses =
+                        "rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 transition border hover:-translate-y-0.5";
+
+                      let styleClasses: string;
+                      if (isActive) {
+                        styleClasses = "bg-emerald-500/25 text-white border-emerald-300/60";
+                      } else if (isDefault) {
+                        styleClasses = "bg-white/5 text-emerald-100 border-emerald-300/60 hover:border-emerald-300/70";
+                      } else {
+                        styleClasses = "bg-white/5 text-slate-100 border-white/15 hover:border-emerald-300/40";
+                      }
+
+                      return (
+                        <button
+                          key={region}
+                          type="button"
+                          onClick={() => setActiveRegion(region === activeRegion ? null : region)}
+                          className={`${baseClasses} ${styleClasses}`}
+                        >
+                          {region}
+                        </button>
+                      );
+                    })}
+                    {extraRegions.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowExtraRegions(true)}
+                        className="rounded-full px-3 py-1 text-xs shadow-sm shadow-black/20 border border-white/20 bg-white/5 text-slate-100 hover:border-emerald-300/40 transition hover:-translate-y-0.5"
+                        aria-label="Weitere Regionen"
+                      >
+                        …
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="space-y-2 border-t border-white/10 pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="flex-1 min-w-[140px] rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-white/30 transition hover:-translate-y-0.5 hover:shadow-white/50"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        if (!currentUser) {
+                          navigateWithTransition("/auth");
+                        } else {
+                          navigateWithTransition("/drafts/new");
+                        }
+                      }}
+                      title="Neue Frage vorschlagen (geht zuerst ins Review)"
+                    >
+                      Frage stellen
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 min-w-[120px] rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        navigateWithTransition("/archiv");
+                      }}
+                      title="Archiv & Statistiken"
+                    >
+                      Archiv
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 min-w-[120px] rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        navigateWithTransition("/rangliste");
+                      }}
+                      title="Rangliste: Wer lag oft richtig?"
+                    >
+                      Rangliste
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 min-w-[120px] rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        navigateWithTransition("/regeln");
+                      }}
+                      title="Regeln & Auflösung"
+                    >
+                      Regeln
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 min-w-[120px] rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        setShowReviewOnly((prev) => !prev);
+                        if (typeof window !== "undefined") {
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                      }}
+                      title="Review: Community bewertet neue Fragen"
+                    >
+                      {showReviewOnly ? "Zurück zum Feed" : "Review"}
+                    </button>
+                    {!currentUser ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          navigateWithTransition("/auth");
+                        }}
+                        className="flex-1 min-w-[160px] rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                        title="Einloggen oder registrieren"
+                      >
+                        Login / Register
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 hidden md:flex flex-wrap items-center gap-2 text-xs text-slate-200">
           <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] uppercase tracking-wide text-slate-300">
             Region:
           </span>
