@@ -2574,44 +2574,6 @@ export default function Home() {
                   ))}
             </div>
             <div ref={questionsEndRef} className="h-1" />
-
-            {shouldShowAnsweredFallback && (loadingAnsweredQuestions || answeredQuestions.length > 0) ? (
-              <div className="mt-10 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-base font-semibold text-white sm:text-lg">
-                    Du hast hier alles beantwortet – weitere Fragen
-                  </h3>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
-                    Abgestimmt
-                  </span>
-                </div>
-
-                <div className="grid gap-5 md:grid-cols-2">
-                  {loadingAnsweredQuestions && answeredQuestions.length === 0
-                    ? Array.from({ length: Math.min(QUESTIONS_PAGE_SIZE, 6) }).map((_, idx) => (
-                        <FeedCardSkeleton key={`qa-skel-${idx}`} variant="question" />
-                      ))
-                    : answeredQuestions.map((q) => (
-                        <EventCard
-                          key={`answered-${q.id}`}
-                          question={q}
-                          isSubmitting={submittingId === q.id}
-                          showFavorite={Boolean(currentUser)}
-                          isFavorited={Boolean(favoriteQuestions[q.id])}
-                          isFavoriteSubmitting={favoriteSubmittingId === q.id}
-                          onToggleFavorite={() => void handleToggleFavorite(q.id)}
-                          onVote={(choice) => handleVote(q.id, choice)}
-                          onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
-                          onOpenDetails={(href) => navigateWithTransition(href)}
-                        />
-                      ))}
-                </div>
-                <div ref={answeredQuestionsEndRef} className="h-1" />
-                {loadingMoreAnsweredQuestions ? (
-                  <div className="text-xs text-slate-400">Lade mehr…</div>
-                ) : null}
-              </div>
-            ) : null}
           </section>
         )}
 
@@ -2684,6 +2646,42 @@ export default function Home() {
           </div>
           <div ref={draftsEndRef} className="h-1" />
         </section>
+
+        {!showReviewOnly && shouldShowAnsweredFallback && (loadingAnsweredQuestions || answeredQuestions.length > 0) ? (
+          <section className="mt-10 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-white sm:text-lg">
+                Du hast hier alles beantwortet - weitere Fragen
+              </h3>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                Abgestimmt
+              </span>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              {loadingAnsweredQuestions && answeredQuestions.length === 0
+                ? Array.from({ length: Math.min(QUESTIONS_PAGE_SIZE, 6) }).map((_, idx) => (
+                    <FeedCardSkeleton key={`qa-skel-${idx}`} variant="question" />
+                  ))
+                : answeredQuestions.map((q) => (
+                    <EventCard
+                      key={`answered-${q.id}`}
+                      question={q}
+                      isSubmitting={submittingId === q.id}
+                      showFavorite={Boolean(currentUser)}
+                      isFavorited={Boolean(favoriteQuestions[q.id])}
+                      isFavoriteSubmitting={favoriteSubmittingId === q.id}
+                      onToggleFavorite={() => void handleToggleFavorite(q.id)}
+                      onVote={(choice) => handleVote(q.id, choice)}
+                      onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
+                      onOpenDetails={(href) => navigateWithTransition(href)}
+                    />
+                  ))}
+            </div>
+            <div ref={answeredQuestionsEndRef} className="h-1" />
+            {loadingMoreAnsweredQuestions ? <div className="text-xs text-slate-400">Lade mehr…</div> : null}
+          </section>
+        ) : null}
       </div>
       {showExtraCategories && extraCategories.length > 0 && (
         <div
