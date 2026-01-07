@@ -36,6 +36,7 @@ declare
     'question_resolution_suggestions',
     'question_resolution_proposals',
     'question_comments',
+    'question_comment_votes',
     'question_metrics_daily',
     'votes',
     'question_options',

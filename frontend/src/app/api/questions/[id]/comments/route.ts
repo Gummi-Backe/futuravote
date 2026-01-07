@@ -3,11 +3,18 @@ import { NextResponse } from "next/server";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { addQuestionComment, listQuestionComments, type CommentStance } from "@/app/data/dbSupabaseComments";
+import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 
 export const revalidate = 0;
 
 const RATE_LIMIT_MS = 5000;
 const lastCommentByUser = new Map<string, number>();
+
+function isMissingRelation(error: unknown): boolean {
+  const code = String((error as any)?.code ?? "");
+  const msg = String((error as any)?.message ?? "").toLowerCase();
+  return code === "42P01" || msg.includes("does not exist") || msg.includes("schema cache");
+}
 
 function normalizeStance(input: unknown): CommentStance {
   return input === "yes" || input === "no" || input === "neutral" ? input : "neutral";
@@ -39,12 +46,65 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
 
   try {
     const comments = await listQuestionComments(id, 80);
-    return NextResponse.json({ comments }, { status: 200 });
+
+    const commentIds = comments.map((c) => c.id).filter(Boolean);
+    const supabase = getSupabaseAdminClient();
+
+    const countsByCommentId = new Map<string, { upVotes: number; downVotes: number }>();
+    if (commentIds.length > 0) {
+      const { data: countRows, error: countsError } = await supabase
+        .from("question_comment_vote_counts")
+        .select("comment_id,up_votes,down_votes")
+        .in("comment_id", commentIds);
+
+      if (countsError && !isMissingRelation(countsError)) throw countsError;
+
+      ((countRows ?? []) as any[]).forEach((r) => {
+        const cid = String(r.comment_id ?? "");
+        if (!cid) return;
+        countsByCommentId.set(cid, {
+          upVotes: Math.max(0, Number(r.up_votes ?? 0) || 0),
+          downVotes: Math.max(0, Number(r.down_votes ?? 0) || 0),
+        });
+      });
+    }
+
+    const cookieStore = await cookies();
+    const userSessionId = cookieStore.get("fv_user")?.value;
+    const user = userSessionId ? await getUserBySessionSupabase(userSessionId).catch(() => null) : null;
+
+    const myVoteByCommentId = new Map<string, "up" | "down">();
+    if (user?.id && commentIds.length > 0) {
+      const { data: myRows, error: myError } = await supabase
+        .from("question_comment_votes")
+        .select("comment_id,vote")
+        .eq("user_id", user.id)
+        .in("comment_id", commentIds);
+
+      if (myError && !isMissingRelation(myError)) throw myError;
+      ((myRows ?? []) as any[]).forEach((r) => {
+        const cid = String(r.comment_id ?? "");
+        const vote = r.vote === "down" ? "down" : "up";
+        if (!cid) return;
+        myVoteByCommentId.set(cid, vote);
+      });
+    }
+
+    const merged = comments.map((c) => {
+      const counts = countsByCommentId.get(c.id) ?? { upVotes: 0, downVotes: 0 };
+      const myVote = myVoteByCommentId.get(c.id) ?? null;
+      return { ...c, ...counts, myVote };
+    });
+
+    return NextResponse.json({ comments: merged }, { status: 200 });
   } catch (e: unknown) {
     const code = (e as any)?.code as string | undefined;
     if (code === "42P01") {
       return NextResponse.json(
-        { error: "Supabase table 'question_comments' fehlt. Fuehre supabase/question_comments.sql aus." },
+        {
+          error:
+            "Supabase table/view fehlt. Fuehre supabase/question_comments.sql und supabase/question_comment_votes.sql aus.",
+        },
         { status: 500 }
       );
     }
