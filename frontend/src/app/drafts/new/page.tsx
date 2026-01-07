@@ -635,7 +635,7 @@ export default function NewDraftPage() {
 
     if (visibility === "public" && isResolvable) {
       if (!trimmedResolutionCriteria) {
-        setError("Bitte beschreibe, wie die Frage aufgeloest wird (Aufloesungs-Regeln).");
+        setError("Bitte beschreibe, wie die Frage aufgelöst wird (Auflösungs-Regeln).");
         return;
       }
       if (!trimmedResolutionSource) {
@@ -643,7 +643,7 @@ export default function NewDraftPage() {
         return;
       }
       if (!resolutionDeadline || Number.isNaN(Date.parse(resolutionDeadline))) {
-        setError("Bitte setze eine Aufloesungs-Deadline (Datum/Uhrzeit).");
+        setError("Bitte setze eine Auflösungs-Deadline (Datum/Uhrzeit).");
         return;
       }
     }
