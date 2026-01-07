@@ -275,7 +275,16 @@ function EventCard({
 
       <div className="space-y-3">
         <div className="flex gap-4">
-          <div className="flex-shrink-0">
+          <Link
+            href={`/questions/${encodeURIComponent(question.id)}`}
+            onClick={(e) => {
+              if (!onOpenDetails) return;
+              e.preventDefault();
+              onOpenDetails(`/questions/${encodeURIComponent(question.id)}`);
+            }}
+            aria-label={`Details öffnen: ${question.title}`}
+            className="block flex-shrink-0 no-underline"
+          >
             {question.imageUrl ? (
               <div className="inline-flex max-h-24 max-w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
                 <img
@@ -299,14 +308,25 @@ function EventCard({
             {question.imageCredit && (
               <p className="mt-1 text-[10px] leading-tight text-slate-400 line-clamp-2">Bild: {question.imageCredit}</p>
             )}
-          </div>
+          </Link>
           <div className="min-w-0 flex-1">
             <h3
               className={`card-title-wrap line-clamp-5 font-bold leading-tight text-white ${getQuestionTitleSizeClass(
                 question.title
               )}`}
             >
-              {question.title}
+              <Link
+                href={`/questions/${encodeURIComponent(question.id)}`}
+                onClick={(e) => {
+                  if (!onOpenDetails) return;
+                  e.preventDefault();
+                  onOpenDetails(`/questions/${encodeURIComponent(question.id)}`);
+                }}
+                aria-label={`Details öffnen: ${question.title}`}
+                className="block no-underline"
+              >
+                {question.title}
+              </Link>
             </h3>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Link
@@ -316,7 +336,7 @@ function EventCard({
                   e.preventDefault();
                   onOpenDetails(`/questions/${encodeURIComponent(question.id)}`);
                 }}
-                className="inline-flex min-w-[9.5rem] items-center justify-center rounded-full border border-white/20 bg-white/10 px-5 py-1.5 text-sm font-semibold leading-none text-white shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/15"
+                className="inline-flex min-w-[9.5rem] items-center justify-center rounded-full border border-amber-200/40 bg-amber-500/20 px-5 py-1.5 text-sm font-semibold leading-none text-amber-50 shadow-sm shadow-amber-500/10 transition hover:-translate-y-0.5 hover:border-amber-200/60 hover:bg-amber-500/25"
               >
                 Details ansehen
               </Link>

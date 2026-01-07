@@ -446,7 +446,7 @@ export default async function QuestionDetail(props: {
           </section>
         ) : null}
 
-        <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:mt-8 sm:p-6">
+        <section className="mt-6 rounded-3xl border border-amber-200/35 bg-gradient-to-br from-amber-500/18 via-white/5 to-white/5 p-4 shadow-xl shadow-amber-500/15 ring-1 ring-amber-200/20 sm:mt-8 sm:p-6">
           <h3 className="text-base font-semibold text-white">Abstimmen</h3>
           <DetailVoteButtons
             className="mt-4 space-y-3"
