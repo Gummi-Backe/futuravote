@@ -12,28 +12,52 @@ function normalizeVote(input: unknown): VoteValue | null {
   return input === "up" || input === "down" ? input : null;
 }
 
+function isMissingRelation(error: unknown): boolean {
+  const code = String((error as any)?.code ?? "");
+  const msg = String((error as any)?.message ?? "").toLowerCase();
+  return code === "42P01" || msg.includes("does not exist") || msg.includes("schema cache");
+}
+
 async function getCountsForComment(commentId: string) {
   const supabase = getSupabaseAdminClient();
+
   const { data, error } = await supabase
     .from("question_comment_vote_counts")
     .select("comment_id,up_votes,down_votes")
     .eq("comment_id", commentId)
     .maybeSingle();
 
-  // View fehlt -> wie Tabelle fehlt behandeln
-  if (error) throw error;
+  if (!error) {
+    const row: any = data ?? null;
+    return {
+      upVotes: Math.max(0, Number(row?.up_votes ?? 0) || 0),
+      downVotes: Math.max(0, Number(row?.down_votes ?? 0) || 0),
+    };
+  }
 
-  const row: any = data ?? null;
-  return {
-    upVotes: Math.max(0, Number(row?.up_votes ?? 0) || 0),
-    downVotes: Math.max(0, Number(row?.down_votes ?? 0) || 0),
-  };
+  if (!isMissingRelation(error)) {
+    throw error;
+  }
+
+  // Fallback: wenn die View fehlt (oder der Schema-Cache noch nicht aktualisiert ist)
+  const { data: rows, error: rowsError } = await supabase
+    .from("question_comment_votes")
+    .select("vote")
+    .eq("comment_id", commentId);
+
+  if (rowsError) throw rowsError;
+
+  let upVotes = 0;
+  let downVotes = 0;
+  ((rows ?? []) as any[]).forEach((r) => {
+    if (r.vote === "down") downVotes += 1;
+    else if (r.vote === "up") upVotes += 1;
+  });
+
+  return { upVotes, downVotes };
 }
 
-export async function POST(
-  request: Request,
-  props: { params: Promise<{ id: string; commentId: string }> }
-) {
+export async function POST(request: Request, props: { params: Promise<{ id: string; commentId: string }> }) {
   const resolved = await props.params;
   const questionId = resolved?.id;
   const commentId = resolved?.commentId;
@@ -76,7 +100,7 @@ export async function POST(
     const code = (commentError as any)?.code as string | undefined;
     if (code === "42P01") {
       return NextResponse.json(
-        { error: "Supabase table 'question_comments' fehlt. Fuehre supabase/question_comments.sql aus." },
+        { error: "Supabase table 'question_comments' fehlt. Führe supabase/question_comments.sql aus." },
         { status: 500 }
       );
     }
@@ -130,11 +154,10 @@ export async function POST(
     const code = e?.code as string | undefined;
     if (code === "42P01") {
       return NextResponse.json(
-        { error: "Supabase table 'question_comment_votes' fehlt. Fuehre supabase/question_comment_votes.sql aus." },
+        { error: "Supabase table 'question_comment_votes' fehlt. Führe supabase/question_comment_votes.sql aus." },
         { status: 500 }
       );
     }
     return NextResponse.json({ error: "Vote konnte nicht gespeichert werden." }, { status: 500 });
   }
 }
-
