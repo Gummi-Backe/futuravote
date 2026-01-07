@@ -1544,14 +1544,18 @@ export default function Home() {
         showToast("Deine Stimme wurde gezählt.", "success");
       } catch {
         clearVoteCooldown();
+        if (prevQuestion) {
+          setQuestions((prev) => prev.map((q) => (q.id === questionId ? prevQuestion : q)));
+        } else {
+          setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: undefined } : q)));
+        }
         setError("Vote fehlgeschlagen. Bitte versuche es erneut.");
         showToast("Vote fehlgeschlagen. Bitte versuche es erneut.", "error");
-        await fetchLatest();
       } finally {
         setSubmittingId(null);
       }
     },
-    [fetchLatest, questions, showToast]
+    [questions, showToast]
   );
 
   const handleVoteOption = useCallback(
@@ -1613,15 +1617,17 @@ export default function Home() {
         showToast("Deine Stimme wurde gezählt.", "success");
       } catch (e: unknown) {
         clearVoteCooldown();
+        if (prevQuestion) {
+          setQuestions((prev) => prev.map((q) => (q.id === questionId ? prevQuestion : q)));
+        }
         const message = e instanceof Error ? e.message : "Vote fehlgeschlagen. Bitte versuche es erneut.";
         setError(message);
         showToast(message, "error");
-        await fetchLatest();
       } finally {
         setSubmittingId(null);
       }
     },
-    [fetchLatest, questions, showToast]
+    [questions, showToast]
   );
 
   const handleDraftVote = useCallback(
@@ -1654,12 +1660,9 @@ export default function Home() {
           rememberDraftChoice(draftId, choice);
           showToast("Dein Review wurde gespeichert.", "success");
         }
-
-        await fetchLatest();
       } catch {
         setError("Draft-Review fehlgeschlagen. Bitte versuche es erneut.");
         showToast("Draft-Review fehlgeschlagen. Bitte versuche es erneut.", "error");
-        await fetchLatest();
       } finally {
         setDraftSubmittingId(null);
         setPendingDraftChoice((prev) => {
@@ -1669,7 +1672,7 @@ export default function Home() {
         });
       }
     },
-    [fetchLatest, markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
+    [markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
   );
 
   const handleAdminDraftAction = useCallback(
