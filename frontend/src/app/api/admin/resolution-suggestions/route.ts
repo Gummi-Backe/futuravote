@@ -57,7 +57,9 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("question_resolution_suggestions")
     .select(
-      "id,question_id,source_kind,created_by_user_id,status,suggested_outcome,suggested_option_id,confidence,note,sources,model,created_at,questions(id,title,closes_at,share_id,answer_mode,question_options(id,label,sort_order))"
+      // Wichtig: `questions -> question_options` ist in PostgREST ggf. mehrdeutig (z.B. auch über questions.resolved_option_id).
+      // Daher FK explizit angeben: question_options!question_options_question_id_fkey(...)
+      "id,question_id,source_kind,created_by_user_id,status,suggested_outcome,suggested_option_id,confidence,note,sources,model,created_at,questions(id,title,closes_at,share_id,answer_mode,question_options!question_options_question_id_fkey(id,label,sort_order))"
     )
     .eq("status", status)
     .order("created_at", { ascending: false })
@@ -186,7 +188,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Update fehlgeschlagen: ${updErr.message}` }, { status: 500 });
   }
 
-  // Andere offene Vorschlaege fuer diese Frage schliessen (damit die Queue sauber bleibt)
+  // Andere offene Vorschläge für diese Frage schließen (damit die Queue sauber bleibt)
   await supabase
     .from("question_resolution_suggestions")
     .update({ status: "dismissed", updated_at: nowIso })
@@ -196,3 +198,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, question });
 }
+
