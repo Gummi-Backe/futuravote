@@ -56,6 +56,12 @@ function pointsTier(pointsTotal: number): "none" | "bronze" | "silver" | "gold" 
   return "none";
 }
 
+async function fetchAdminUserIds(supabase: ReturnType<typeof getSupabaseAdminClient>): Promise<Set<string>> {
+  const { data, error } = await supabase.from("users").select("id").eq("role", "admin").limit(50);
+  if (error) throw new Error(`Rangliste: admin users query fehlgeschlagen: ${error.message}`);
+  return new Set(((data ?? []) as any[]).map((r) => String(r.id)).filter(Boolean));
+}
+
 async function fetchAllRows<T>(options: {
   supabase: ReturnType<typeof getSupabaseAdminClient>;
   table: string;
@@ -99,6 +105,7 @@ export async function getTrefferLeaderboard(options: {
   limit?: number;
 }): Promise<{ resolvedCount: number; leaders: TrefferLeaderRow[] }> {
   const supabase = getSupabaseAdminClient();
+  const adminUserIds = await fetchAdminUserIds(supabase);
   const days = Math.max(7, Math.min(365, Math.round(options.days)));
   const category = (options.category ?? "all").trim() || "all";
   const minSamples = Math.max(1, Math.min(100, Math.round(options.minSamples ?? 5)));
@@ -164,6 +171,7 @@ export async function getTrefferLeaderboard(options: {
     (voteRows ?? []).forEach((v) => {
       const row = v as VoteRow;
       if (!row.user_id || !row.question_id) return;
+      if (adminUserIds.has(String(row.user_id))) return;
       const resolved = resolvedByQuestionId.get(row.question_id);
       if (!resolved) return;
 
@@ -235,6 +243,7 @@ export async function getCommunityLeaderboard(options: {
   limit?: number;
 }): Promise<CommunityLeaderRow[]> {
   const supabase = getSupabaseAdminClient();
+  const adminUserIds = await fetchAdminUserIds(supabase);
   const category = (options.category ?? "all").trim() || "all";
   const limit = Math.max(1, Math.min(100, Math.round(options.limit ?? 25)));
 
@@ -275,6 +284,7 @@ export async function getCommunityLeaderboard(options: {
   acceptedDrafts.forEach((d) => {
     const userId = d.creator_id ? String(d.creator_id) : null;
     if (!userId) return;
+    if (adminUserIds.has(userId)) return;
     ensure(userId).acceptedDrafts += 1;
   });
 
@@ -311,6 +321,7 @@ export async function getCommunityLeaderboard(options: {
     const userId = c.user_id ? String(c.user_id) : null;
     const questionId = c.question_id ? String(c.question_id) : null;
     if (!userId || !questionId) return;
+    if (adminUserIds.has(userId)) return;
     if (category !== "all") {
       const qCat = categoryByQuestionId.get(questionId);
       if (qCat !== category) return;
@@ -340,6 +351,7 @@ export async function getCommunityLeaderboard(options: {
     const userId = p.user_id ? String(p.user_id) : null;
     const questionId = p.question_id ? String(p.question_id) : null;
     if (!userId || !questionId) return;
+    if (adminUserIds.has(userId)) return;
     if (category !== "all") {
       const qCat = categoryByQuestionId.get(questionId);
       if (qCat !== category) return;
@@ -368,6 +380,7 @@ export async function getCommunityLeaderboard(options: {
     const userId = s.created_by_user_id ? String(s.created_by_user_id) : null;
     const questionId = s.question_id ? String(s.question_id) : null;
     if (!userId || !questionId) return;
+    if (adminUserIds.has(userId)) return;
     if (category !== "all") {
       const qCat = categoryByQuestionId.get(questionId);
       if (qCat !== category) return;
