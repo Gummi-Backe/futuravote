@@ -23,11 +23,24 @@ function clampInt(value: unknown, fallback: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
-function medalForRank(rankIndex: number): { label: "Gold" | "Silber" | "Bronze"; className: string } | null {
-  if (rankIndex === 0) return { label: "Gold", className: "bg-amber-500/20 text-amber-200" };
-  if (rankIndex === 1) return { label: "Silber", className: "bg-slate-400/20 text-slate-200" };
-  if (rankIndex === 2) return { label: "Bronze", className: "bg-orange-500/20 text-orange-200" };
+function medalForRankNumber(rank: number): { label: "Gold" | "Silber" | "Bronze"; className: string } | null {
+  if (rank === 1) return { label: "Gold", className: "bg-amber-500/20 text-amber-200" };
+  if (rank === 2) return { label: "Silber", className: "bg-slate-400/20 text-slate-200" };
+  if (rank === 3) return { label: "Bronze", className: "bg-orange-500/20 text-orange-200" };
   return null;
+}
+
+function computeCompetitionRanks<T>(rows: T[], getPoints: (row: T) => number): number[] {
+  let lastPoints: number | null = null;
+  let lastRank = 0;
+  return rows.map((row, index) => {
+    const points = getPoints(row);
+    if (lastPoints !== null && points === lastPoints) return lastRank;
+    const rank = index + 1;
+    lastPoints = points;
+    lastRank = rank;
+    return rank;
+  });
 }
 
 export default async function RanglistePage({
@@ -47,6 +60,9 @@ export default async function RanglistePage({
   const communityLeaders = view === "community" ? await getCommunityLeaderboard({ category, limit }) : [];
 
   const shown = treffer.leaders;
+  const trefferRanks = view === "treffer" ? computeCompetitionRanks(shown, (row) => row.pointsTotal) : [];
+  const communityRanks =
+    view === "community" ? computeCompetitionRanks(communityLeaders, (row) => row.pointsTotal) : [];
 
   const makeHref = (next: { view?: LeaderboardView; days?: number; category?: string }) => {
     const nextView = next.view ?? view;
@@ -206,10 +222,11 @@ export default async function RanglistePage({
                       </thead>
                       <tbody>
                         {shown.map((row, idx) => {
-                          const medal = medalForRank(idx);
+                          const rank = trefferRanks[idx] ?? idx + 1;
+                          const medal = medalForRankNumber(rank);
                           return (
                             <tr key={row.userId} className="border-t border-white/10">
-                              <td className="px-4 py-3 font-semibold text-slate-200">{idx + 1}</td>
+                              <td className="px-4 py-3 font-semibold text-slate-200">{rank}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
                                   <span className="text-white">{row.displayName}</span>
@@ -253,10 +270,11 @@ export default async function RanglistePage({
                     </thead>
                     <tbody>
                       {communityLeaders.map((row, idx) => {
-                        const medal = medalForRank(idx);
+                        const rank = communityRanks[idx] ?? idx + 1;
+                        const medal = medalForRankNumber(rank);
                         return (
                           <tr key={row.userId} className="border-t border-white/10">
-                            <td className="px-4 py-3 font-semibold text-slate-200">{idx + 1}</td>
+                            <td className="px-4 py-3 font-semibold text-slate-200">{rank}</td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <span className="text-white">{row.displayName}</span>
@@ -304,4 +322,3 @@ export default async function RanglistePage({
     </main>
   );
 }
-
