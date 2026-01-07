@@ -46,6 +46,7 @@ type UserRow = {
   id: string;
   display_name: string;
   email_verified?: boolean | null;
+  role?: string | null;
 };
 
 function pointsTier(pointsTotal: number): "none" | "bronze" | "silver" | "gold" {
@@ -184,22 +185,32 @@ export async function getTrefferLeaderboard(options: {
   }
 
   const userIds = Array.from(statsByUser.keys());
-  const userById = new Map<string, string>();
+  const userById = new Map<string, { displayName: string; role: string }>();
   for (let i = 0; i < userIds.length; i += 200) {
     const chunk = userIds.slice(i, i + 200);
-    const { data: userRows, error: userError } = await supabase.from("users").select("id,display_name").in("id", chunk);
+    const { data: userRows, error: userError } = await supabase
+      .from("users")
+      .select("id,display_name,role")
+      .in("id", chunk);
     if (userError) throw new Error(`Rangliste (Treffer): users query fehlgeschlagen: ${userError.message}`);
-    ((userRows ?? []) as UserRow[]).forEach((u) => userById.set(u.id, u.display_name));
+    ((userRows ?? []) as UserRow[]).forEach((u) =>
+      userById.set(String(u.id), {
+        displayName: String(u.display_name ?? "User"),
+        role: String(u.role ?? "user"),
+      })
+    );
   }
 
   const leaders: TrefferLeaderRow[] = [];
   statsByUser.forEach((s, userId) => {
+    const meta = userById.get(userId);
+    if (meta?.role === "admin") return;
     if (s.total < minSamples) return;
     const accuracyPct = Math.round((s.correct / s.total) * 100);
     const pointsTotal = Math.max(0, s.correct) * 10;
     leaders.push({
       userId,
-      displayName: userById.get(userId) ?? "Anonym",
+      displayName: meta?.displayName ?? "Anonym",
       total: s.total,
       correct: s.correct,
       incorrect: s.incorrect,
@@ -367,18 +378,19 @@ export async function getCommunityLeaderboard(options: {
   const userIds = Array.from(pointsByUser.keys());
   if (userIds.length === 0) return [];
 
-  const userMeta = new Map<string, { displayName: string; emailVerified: boolean }>();
+  const userMeta = new Map<string, { displayName: string; emailVerified: boolean; role: string }>();
   for (let i = 0; i < userIds.length; i += 200) {
     const chunk = userIds.slice(i, i + 200);
     const { data: userRows, error: userError } = await supabase
       .from("users")
-      .select("id,display_name,email_verified")
+      .select("id,display_name,email_verified,role")
       .in("id", chunk);
     if (userError) throw new Error(`Rangliste (Community): users query fehlgeschlagen: ${userError.message}`);
     ((userRows ?? []) as UserRow[]).forEach((u) =>
       userMeta.set(String(u.id), {
         displayName: String(u.display_name ?? "User"),
         emailVerified: Boolean(u.email_verified),
+        role: String(u.role ?? "user"),
       })
     );
   }
@@ -387,6 +399,7 @@ export async function getCommunityLeaderboard(options: {
     .map((userId) => {
       const s = pointsByUser.get(userId)!;
       const meta = userMeta.get(userId);
+      if (meta?.role === "admin") return null;
       const commentsTotal = s.comments.size;
       const commentsWithSource = Array.from(s.comments.values()).filter((c) => c.hasSource).length;
       const commentsWithoutSource = commentsTotal - commentsWithSource;
@@ -421,6 +434,7 @@ export async function getCommunityLeaderboard(options: {
         actionPoints,
       };
     })
+    .filter((r): r is CommunityLeaderRow & { actionPoints: number } => Boolean(r))
     .filter((r) => r.actionPoints > 0)
     .sort((a, b) => {
       if (b.pointsTotal !== a.pointsTotal) return b.pointsTotal - a.pointsTotal;
@@ -433,4 +447,3 @@ export async function getCommunityLeaderboard(options: {
 
   return leaders.map(({ actionPoints, ...rest }) => rest);
 }
-
