@@ -19,6 +19,14 @@ const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
 const REVIEWED_DRAFTS_STORAGE_KEY = "fv_reviewed_drafts_v1";
 const REVIEWED_DRAFT_CHOICES_STORAGE_KEY = "fv_reviewed_draft_choices_v1";
+const FEED_SCROLL_ANCHOR_STORAGE_KEY = "fv_feed_scroll_anchor_v1";
+
+type FeedScrollAnchor = {
+  anchorId: string;
+  offsetTop: number;
+  scrollY: number;
+  ts: number;
+};
 
 const feedTabs = [
   { id: "all", label: "Alle", icon: "✨" },
@@ -204,6 +212,7 @@ function EventCard({
 
   return (
     <article
+      data-feed-item-id={`q:${question.id}`}
       className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 mx-auto ${
         voted ? "ring-1 ring-emerald-300/25 border-emerald-300/35 shadow-emerald-400/25" : ""
       } ${
@@ -739,6 +748,8 @@ export default function Home() {
     () => homeCache?.favoriteQuestions ?? {}
   );
   const [favoritesUpdatedAt, setFavoritesUpdatedAt] = useState<number | null>(() => homeCache?.favoritesUpdatedAt ?? null);
+  const pendingScrollAnchorRef = useRef<FeedScrollAnchor | null>(null);
+  const sawLoadingForScrollRestoreRef = useRef(false);
   const [favoriteSubmittingId, setFavoriteSubmittingId] = useState<string | null>(null);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const answeredQuestionsEndRef = useRef<HTMLDivElement | null>(null);
@@ -1805,6 +1816,89 @@ export default function Home() {
     [router]
   );
 
+  const saveFeedScrollAnchor = useCallback((anchorId: string) => {
+    try {
+      if (typeof window === "undefined") return;
+      if (!anchorId) return;
+      const selector =
+        typeof (window as any).CSS?.escape === "function"
+          ? `[data-feed-item-id="${(window as any).CSS.escape(anchorId)}"]`
+          : `[data-feed-item-id="${anchorId.replace(/\"/g, '\\\\\"')}"]`;
+      const el = document.querySelector(selector) as HTMLElement | null;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const payload: FeedScrollAnchor = {
+        anchorId,
+        offsetTop: Math.round(rect.top),
+        scrollY: window.scrollY,
+        ts: Date.now(),
+      };
+      window.sessionStorage.setItem(FEED_SCROLL_ANCHOR_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const raw = window.sessionStorage.getItem(FEED_SCROLL_ANCHOR_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<FeedScrollAnchor>;
+      if (!parsed || typeof parsed.anchorId !== "string") return;
+      pendingScrollAnchorRef.current = {
+        anchorId: parsed.anchorId,
+        offsetTop: Number(parsed.offsetTop) || 0,
+        scrollY: Number(parsed.scrollY) || 0,
+        ts: Number(parsed.ts) || Date.now(),
+      };
+      sawLoadingForScrollRestoreRef.current = false;
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    const anchor = pendingScrollAnchorRef.current;
+    if (!anchor) return;
+    if (loading) {
+      sawLoadingForScrollRestoreRef.current = true;
+      return;
+    }
+    if (!sawLoadingForScrollRestoreRef.current) return;
+
+    pendingScrollAnchorRef.current = null;
+    sawLoadingForScrollRestoreRef.current = false;
+    try {
+      if (typeof window !== "undefined") window.sessionStorage.removeItem(FEED_SCROLL_ANCHOR_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+
+    const run = () => {
+      try {
+        const selector =
+          typeof (window as any).CSS?.escape === "function"
+            ? `[data-feed-item-id="${(window as any).CSS.escape(anchor.anchorId)}"]`
+            : `[data-feed-item-id="${anchor.anchorId.replace(/\"/g, '\\\\\"')}"]`;
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (!el) {
+          window.scrollTo({ top: anchor.scrollY, behavior: "auto" });
+          return;
+        }
+        const rect = el.getBoundingClientRect();
+        const delta = rect.top - anchor.offsetTop;
+        if (Number.isFinite(delta) && Math.abs(delta) > 1) {
+          window.scrollBy({ top: delta, behavior: "auto" });
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  }, [loading]);
+
   return (
     <main
       suppressHydrationWarning
@@ -2615,7 +2709,10 @@ export default function Home() {
                       onToggleFavorite={() => void handleToggleFavorite(q.id)}
                       onVote={(choice) => handleVote(q.id, choice)}
                       onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
-                      onOpenDetails={(href) => navigateWithTransition(href)}
+                      onOpenDetails={(href) => {
+                        saveFeedScrollAnchor(`q:${q.id}`);
+                        navigateWithTransition(href);
+                      }}
                     />
                   ))}
             </div>
@@ -2720,7 +2817,10 @@ export default function Home() {
                       onToggleFavorite={() => void handleToggleFavorite(q.id)}
                       onVote={(choice) => handleVote(q.id, choice)}
                       onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
-                      onOpenDetails={(href) => navigateWithTransition(href)}
+                      onOpenDetails={(href) => {
+                        saveFeedScrollAnchor(`q:${q.id}`);
+                        navigateWithTransition(href);
+                      }}
                     />
                   ))}
             </div>
