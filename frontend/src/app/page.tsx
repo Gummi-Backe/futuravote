@@ -1509,12 +1509,14 @@ export default function Home() {
       }
 
       const prevQuestion = questions.find((q) => q.id === questionId) ?? null;
+      const prevAnsweredQuestion = answeredQuestions.find((q) => q.id === questionId) ?? null;
       const alreadyVoted = prevQuestion?.userChoice;
       if (alreadyVoted) return;
 
       setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
       setSubmittingId(questionId);
       setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: choice } : q)));
+      setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: choice } : q)));
       try {
         const res = await fetch("/api/votes", {
           method: "POST",
@@ -1529,6 +1531,13 @@ export default function Home() {
           } else {
             setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: undefined } : q)));
           }
+          if (prevAnsweredQuestion) {
+            setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? prevAnsweredQuestion : q)));
+          } else {
+            setAnsweredQuestions((prev) =>
+              prev.map((q) => (q.id === questionId ? { ...q, userChoice: undefined } : q))
+            );
+          }
           setVoteCooldownUntil(Date.now() + Math.max(0, retryAfterMs ?? 0));
           setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
           showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
@@ -1538,6 +1547,9 @@ export default function Home() {
         const data = await res.json();
         const updated = data.question as Question;
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q)));
+        setAnsweredQuestions((prev) =>
+          prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
+        );
         invalidateProfileCaches();
         setError(null);
         triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
@@ -1549,13 +1561,20 @@ export default function Home() {
         } else {
           setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: undefined } : q)));
         }
+        if (prevAnsweredQuestion) {
+          setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? prevAnsweredQuestion : q)));
+        } else {
+          setAnsweredQuestions((prev) =>
+            prev.map((q) => (q.id === questionId ? { ...q, userChoice: undefined } : q))
+          );
+        }
         setError("Vote fehlgeschlagen. Bitte versuche es erneut.");
         showToast("Vote fehlgeschlagen. Bitte versuche es erneut.", "error");
       } finally {
         setSubmittingId(null);
       }
     },
-    [questions, showToast]
+    [answeredQuestions, questions, showToast]
   );
 
   const handleVoteOption = useCallback(
@@ -1567,12 +1586,29 @@ export default function Home() {
       }
 
       const prevQuestion = questions.find((q) => q.id === questionId) ?? null;
+      const prevAnsweredQuestion = answeredQuestions.find((q) => q.id === questionId) ?? null;
       const alreadyVoted = prevQuestion?.userOptionId;
       if (alreadyVoted) return;
 
       setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
       setSubmittingId(questionId);
       setQuestions((prev) =>
+        prev.map((q) => {
+          if (q.id !== questionId) return q;
+          const nextOptions = (q.options ?? []).map((opt) => ({
+            ...opt,
+            votesCount: opt.id === optionId ? Math.max(0, opt.votesCount ?? 0) + 1 : Math.max(0, opt.votesCount ?? 0),
+          }));
+          const total = nextOptions.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0);
+          const denom = Math.max(1, total);
+          const withPct = nextOptions.map((opt) => ({
+            ...opt,
+            pct: Math.round((Math.max(0, opt.votesCount ?? 0) / denom) * 100),
+          }));
+          return { ...q, userOptionId: optionId, options: withPct };
+        })
+      );
+      setAnsweredQuestions((prev) =>
         prev.map((q) => {
           if (q.id !== questionId) return q;
           const nextOptions = (q.options ?? []).map((opt) => ({
@@ -1601,6 +1637,9 @@ export default function Home() {
           if (prevQuestion) {
             setQuestions((prev) => prev.map((q) => (q.id === questionId ? prevQuestion : q)));
           }
+          if (prevAnsweredQuestion) {
+            setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? prevAnsweredQuestion : q)));
+          }
           setVoteCooldownUntil(Date.now() + Math.max(0, retryAfterMs ?? 0));
           setError(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`);
           showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
@@ -1611,6 +1650,7 @@ export default function Home() {
 
         const updated = data.question as Question;
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
+        setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         invalidateProfileCaches();
         setError(null);
         triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
@@ -1620,6 +1660,9 @@ export default function Home() {
         if (prevQuestion) {
           setQuestions((prev) => prev.map((q) => (q.id === questionId ? prevQuestion : q)));
         }
+        if (prevAnsweredQuestion) {
+          setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? prevAnsweredQuestion : q)));
+        }
         const message = e instanceof Error ? e.message : "Vote fehlgeschlagen. Bitte versuche es erneut.";
         setError(message);
         showToast(message, "error");
@@ -1627,7 +1670,7 @@ export default function Home() {
         setSubmittingId(null);
       }
     },
-    [questions, showToast]
+    [answeredQuestions, questions, showToast]
   );
 
   const handleDraftVote = useCallback(

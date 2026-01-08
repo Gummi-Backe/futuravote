@@ -858,6 +858,27 @@ export async function getQuestionsPageFromSupabase(options: {
     return { items: [], total: 0, nextCursor: null };
   }
 
+  const fetchUserVotesForQuestions = async (questionIds: string[]) => {
+    const map = new Map<string, SessionVote>();
+    if (!userId || questionIds.length === 0) return map;
+    const { data: userVotes, error: userVotesError } = await supabase
+      .from("votes")
+      .select("question_id, choice, option_id")
+      .eq("user_id", userId)
+      .in("question_id", questionIds);
+
+    if (userVotesError) {
+      throw new Error(`Supabase getQuestionsPage (UserVotesForItems) fehlgeschlagen: ${userVotesError.message}`);
+    }
+
+    for (const row of (userVotes as any[]) ?? []) {
+      const qid = String((row as any)?.question_id ?? "");
+      if (!qid) continue;
+      map.set(qid, { choice: (row as any)?.choice ?? null, optionId: (row as any)?.option_id ?? null });
+    }
+    return map;
+  };
+
   const applyFilters = (query: any) => {
     query = query.not("status", "eq", "archived");
     query = query.eq("visibility", "public");
@@ -1021,7 +1042,11 @@ export async function getQuestionsPageFromSupabase(options: {
       .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
       .map((row) => row.id);
     const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
-    const items = picked.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id)));
+    const userVotesMap = await fetchUserVotesForQuestions(picked.map((row) => row.id));
+    const items = picked.map((row) => {
+      const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
+      return mapQuestion(row, vote, optionsMap.get(row.id));
+    });
     return { items, total: scored.length, nextCursor: null };
   }
 
@@ -1034,7 +1059,11 @@ export async function getQuestionsPageFromSupabase(options: {
     .map((row) => row.id);
   const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
 
-  const items = pageRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id)));
+  const userVotesMap = await fetchUserVotesForQuestions(pageRows.map((row) => row.id));
+  const items = pageRows.map((row) => {
+    const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
+    return mapQuestion(row, vote, optionsMap.get(row.id));
+  });
 
   const lastRow = pageRows[pageRows.length - 1];
   let nextCursor: string | null = null;
@@ -1068,7 +1097,8 @@ export async function getQuestionsPageFromSupabase(options: {
 }
 export async function getQuestionByIdFromSupabase(
   id: string,
-  sessionId?: string
+  sessionId?: string,
+  userId?: string | null
 ): Promise<QuestionWithVotes | null> {
   const supabase = getSupabaseAdminClient();
 
@@ -1086,7 +1116,7 @@ export async function getQuestionByIdFromSupabase(
   const questionRow = row as QuestionRow;
   const answerMode = normalizeAnswerMode(questionRow.answer_mode ?? "binary");
 
-  const [optionsMap, sessionVote] = await Promise.all([
+  const [optionsMap, sessionVote, userVote] = await Promise.all([
     answerMode === "options"
       ? fetchQuestionOptionsMap({ supabase, questionIds: [id] })
       : Promise.resolve(new Map<string, PollOption[]>()),
@@ -1108,9 +1138,24 @@ export async function getQuestionByIdFromSupabase(
         optionId: (voteRow as any).option_id ?? null,
       };
     })(),
+    (async (): Promise<SessionVote | undefined> => {
+      if (!userId) return undefined;
+      const { data: voteRow, error: voteError } = await supabase
+        .from("votes")
+        .select("choice, option_id")
+        .eq("question_id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (voteError) {
+        throw new Error(`Supabase getQuestionById (UserVote) fehlgeschlagen: ${voteError.message}`);
+      }
+      if (!voteRow) return undefined;
+      return { choice: (voteRow as any).choice ?? null, optionId: (voteRow as any).option_id ?? null };
+    })(),
   ]);
 
-  return mapQuestion(questionRow, sessionVote, optionsMap.get(id));
+  return mapQuestion(questionRow, sessionVote ?? userVote, optionsMap.get(id));
 }
 
 export type SharedPoll =

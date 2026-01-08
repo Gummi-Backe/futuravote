@@ -75,9 +75,13 @@ export async function generateMetadata(props: {
   };
 }
 
-async function fetchQuestion(id: string, sessionId?: string | null): Promise<QuestionWithVotes | null> {
+async function fetchQuestion(
+  id: string,
+  sessionId?: string | null,
+  userId?: string | null
+): Promise<QuestionWithVotes | null> {
   try {
-    return await getQuestionByIdFromSupabase(id, sessionId ?? undefined);
+    return await getQuestionByIdFromSupabase(id, sessionId ?? undefined, userId ?? undefined);
   } catch {
     return null;
   }
@@ -162,7 +166,7 @@ export default async function QuestionDetail(props: {
   const currentUser = sessionId ? await getUserBySessionSupabase(sessionId) : null;
   const isAdmin = currentUser?.role === "admin";
 
-  const question = await fetchQuestion(id, fvSessionId);
+  const question = await fetchQuestion(id, fvSessionId, currentUser?.id ?? null);
   if (!question) {
     notFound();
   }
