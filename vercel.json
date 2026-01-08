@@ -5,7 +5,7 @@
   "outputDirectory": ".next",
   "crons": [
     {
-      "path": "/api/cron/question-metrics?daysBack=120",
+      "path": "/api/cron/question-metrics",
       "schedule": "5 0 * * *"
     },
     {
