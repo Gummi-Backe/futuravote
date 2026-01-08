@@ -55,6 +55,7 @@ declare
   votes_rows int := 0;
   option_rows int := 0;
   snap_rows int := 0;
+  rank_rows int := 0;
 begin
   -- Votes -> daily aggregates (yes/no)
   insert into public.question_metrics_daily (question_id, day, yes_votes, no_votes, updated_at)
@@ -92,6 +93,62 @@ begin
 
   get diagnostics option_rows = row_count;
 
+  -- Ranking-Score auf den aktuellen Stand bringen (gleiche Logik wie im Frontend)
+  -- (damit Snapshot + Feed-Sortierung nicht dauerhaft bei 0 bleiben)
+  update public.questions q
+  set ranking_score = (
+    (
+      0.5 * ln(
+        1
+        + (
+          case
+            when q.answer_mode = 'options' then coalesce(
+              (select sum(coalesce(qo.votes_count, 0))::double precision
+               from public.question_options qo
+               where qo.question_id = q.id),
+              0
+            )
+            else (coalesce(q.yes_votes, 0) + coalesce(q.no_votes, 0))::double precision
+          end
+        )
+      )
+      + 0.5 * (
+        (
+          case
+            when q.answer_mode = 'options' then coalesce(
+              (select sum(coalesce(qo.votes_count, 0))::double precision
+               from public.question_options qo
+               where qo.question_id = q.id),
+              0
+            )
+            else (coalesce(q.yes_votes, 0) + coalesce(q.no_votes, 0))::double precision
+          end
+        )
+        / greatest(coalesce(q.views, 0), 1)::double precision
+      )
+    )
+    * (
+      1
+      / (
+        1
+        + (
+          greatest(
+            0,
+            extract(epoch from (now() - coalesce(q.created_at, now()))) / 3600.0
+          ) / 24.0
+        )
+      )
+    )
+    + case
+        when greatest(0, extract(epoch from (now() - coalesce(q.created_at, now()))) / 3600.0) < 12.0 then 1.0
+        else 0.0
+      end
+  )
+  where q.visibility = 'public'
+    and coalesce(q.status, '') <> 'archived';
+
+  get diagnostics rank_rows = row_count;
+
   -- Views/Ranking Snapshot fuer "heute" (UTC)
   insert into public.question_metrics_daily (question_id, day, yes_votes, no_votes, views, ranking_score, updated_at)
   select
@@ -116,6 +173,7 @@ begin
     'startDateUtc', start_date::text,
     'votesRowsUpserted', votes_rows,
     'optionRowsUpserted', option_rows,
+    'rankingRowsUpdated', rank_rows,
     'snapshotRowsUpserted', snap_rows
   );
 end;
