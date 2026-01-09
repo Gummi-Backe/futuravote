@@ -13,8 +13,7 @@ type QuestionComment = {
   sourceUrl: string | null;
   createdAt: string;
   upVotes?: number;
-  downVotes?: number;
-  myVote?: "up" | "down" | null;
+  myVote?: "up" | null;
 };
 
 function formatTime(value: string) {
@@ -119,7 +118,7 @@ export function CommentsSection({
       if (!res.ok) throw new Error(json?.error ?? "Kommentar konnte nicht gespeichert werden.");
       const next = json?.comment as QuestionComment | undefined;
       if (next) {
-        setComments((prev) => ([...(prev ?? []), { ...next, upVotes: 0, downVotes: 0, myVote: null }] as QuestionComment[]));
+        setComments((prev) => ([...(prev ?? []), { ...next, upVotes: 0, myVote: null }] as QuestionComment[]));
       } else {
         await fetchComments();
       }
@@ -134,7 +133,7 @@ export function CommentsSection({
   }, [body, canSubmit, fetchComments, questionId, sourceUrl, stance, submitting]);
 
   const voteOnComment = useCallback(
-    async (commentId: string, vote: "up" | "down") => {
+    async (commentId: string) => {
       if (!isLoggedIn || voteSubmittingId) return;
       setVoteSubmittingId(commentId);
       setError(null);
@@ -144,16 +143,15 @@ export function CommentsSection({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ vote }),
+            body: JSON.stringify({ vote: "up" }),
           }
         );
         const json: any = await res.json().catch(() => null);
         if (!res.ok) throw new Error(json?.error ?? "Vote konnte nicht gespeichert werden.");
         const upVotes = Number(json?.upVotes ?? 0) || 0;
-        const downVotes = Number(json?.downVotes ?? 0) || 0;
-        const myVote = json?.myVote === "down" ? "down" : json?.myVote === "up" ? "up" : null;
+        const myVote = json?.myVote === "up" ? "up" : null;
         setComments((prev) =>
-          (prev ?? []).map((c) => (c.id === commentId ? { ...c, upVotes, downVotes, myVote } : c))
+          (prev ?? []).map((c) => (c.id === commentId ? { ...c, upVotes, myVote } : c))
         );
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Vote konnte nicht gespeichert werden.");
@@ -316,33 +314,19 @@ export function CommentsSection({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => void voteOnComment(c.id, "up")}
+                  onClick={() => void voteOnComment(c.id)}
                   disabled={!isLoggedIn || Boolean(voteSubmittingId)}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
                     c.myVote === "up"
-                      ? "border-emerald-200/60 bg-emerald-500/20 text-emerald-50"
-                      : "border-white/10 bg-white/5 text-slate-200 hover:border-emerald-200/30"
+                      ? "border-rose-200/60 bg-rose-500/20 text-rose-50"
+                      : "border-white/10 bg-white/5 text-slate-200 hover:border-rose-200/30"
                   }`}
                   aria-pressed={c.myVote === "up"}
-                  title={isLoggedIn ? "Daumen hoch" : "Login ist erforderlich"}
+                  title={isLoggedIn ? "Gefällt mir" : "Login ist erforderlich"}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path
-                      d="M14 9V5a3 3 0 0 0-3-3l-1 7"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M7 9H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M7 22h10a2 2 0 0 0 2-2l1-7a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v9"
+                      d="M20.8 4.6a5.3 5.3 0 0 0-7.5 0L12 5.9l-1.3-1.3a5.3 5.3 0 0 0-7.5 7.5l1.3 1.3L12 21.9l7.5-7.5 1.3-1.3a5.3 5.3 0 0 0 0-7.5Z"
                       stroke="currentColor"
                       strokeWidth="2"
                       strokeLinecap="round"
@@ -350,44 +334,6 @@ export function CommentsSection({
                     />
                   </svg>
                   <span>{Math.max(0, Number(c.upVotes ?? 0) || 0)}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => void voteOnComment(c.id, "down")}
-                  disabled={!isLoggedIn || Boolean(voteSubmittingId)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
-                    c.myVote === "down"
-                      ? "border-rose-200/60 bg-rose-500/15 text-rose-50"
-                      : "border-white/10 bg-white/5 text-slate-200 hover:border-rose-200/30"
-                  }`}
-                  aria-pressed={c.myVote === "down"}
-                  title={isLoggedIn ? "Daumen runter" : "Login ist erforderlich"}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M10 15v4a3 3 0 0 0 3 3l1-7"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M17 15h3a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-3"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M17 2H7a2 2 0 0 0-2 2l-1 7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V2"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span>{Math.max(0, Number(c.downVotes ?? 0) || 0)}</span>
                 </button>
               </div>
               {c.sourceUrl ? (

@@ -70,7 +70,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
             if (!cid) return;
             countsByCommentId.set(cid, {
               upVotes: Math.max(0, Number(r.up_votes ?? 0) || 0),
-              downVotes: Math.max(0, Number(r.down_votes ?? 0) || 0),
+              downVotes: 0,
             });
           });
         }
@@ -84,7 +84,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     const userSessionId = cookieStore.get("fv_user")?.value;
     const user = userSessionId ? await getUserBySessionSupabase(userSessionId).catch(() => null) : null;
 
-    const myVoteByCommentId = new Map<string, "up" | "down">();
+    const myVoteByCommentId = new Map<string, "up">();
     if (user?.id && commentIds.length > 0) {
       try {
         const { data: myRows, error: myError } = await supabase
@@ -100,9 +100,9 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         } else {
           ((myRows ?? []) as any[]).forEach((r) => {
             const cid = String(r.comment_id ?? "");
-            const vote = r.vote === "down" ? "down" : "up";
+            const vote = r.vote === "up" ? "up" : null;
             if (!cid) return;
-            myVoteByCommentId.set(cid, vote);
+            if (vote) myVoteByCommentId.set(cid, vote);
           });
         }
       } catch (err) {

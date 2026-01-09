@@ -1,4 +1,4 @@
--- Future-Vote: Votes auf Kommentare (Daumen hoch/runter) (server-only)
+-- Future-Vote: Likes auf Kommentare (Herz) (server-only)
 --
 -- Ziel:
 -- - Eingeloggte Nutzer können Kommentare bewerten (👍/👎).
@@ -30,6 +30,22 @@ create index if not exists question_comment_votes_user_idx
 create index if not exists question_comment_votes_vote_idx
   on public.question_comment_votes (vote);
 
+-- Migration: alte Downvotes entfernen und zukünftige Downvotes verhindern.
+delete from public.question_comment_votes where vote = 'down';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'question_comment_votes_only_up'
+      and conrelid = 'public.question_comment_votes'::regclass
+  ) then
+    alter table public.question_comment_votes
+      add constraint question_comment_votes_only_up check (vote = 'up');
+  end if;
+end $$;
+
 -- View ohne SECURITY DEFINER.
 -- Je nach Postgres-Version unterstützt Supabase "WITH (security_invoker = true)".
 -- Wir versuchen zuerst die sichere Variante und fallen sonst auf eine normale View zurück.
@@ -43,7 +59,7 @@ begin
       select
         comment_id,
         count(*) filter (where vote = 'up') as up_votes,
-        count(*) filter (where vote = 'down') as down_votes
+        0::bigint as down_votes
       from public.question_comment_votes
       group by comment_id
     $v$;
@@ -53,7 +69,7 @@ begin
       select
         comment_id,
         count(*) filter (where vote = 'up') as up_votes,
-        count(*) filter (where vote = 'down') as down_votes
+        0::bigint as down_votes
       from public.question_comment_votes
       group by comment_id
     $v$;

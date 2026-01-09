@@ -6,10 +6,10 @@ import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 
 export const revalidate = 0;
 
-type VoteValue = "up" | "down";
+type VoteValue = "up";
 
 function normalizeVote(input: unknown): VoteValue | null {
-  return input === "up" || input === "down" ? input : null;
+  return input === "up" ? input : null;
 }
 
 function isMissingRelation(error: unknown): boolean {
@@ -31,7 +31,7 @@ async function getCountsForComment(commentId: string) {
     const row: any = data ?? null;
     return {
       upVotes: Math.max(0, Number(row?.up_votes ?? 0) || 0),
-      downVotes: Math.max(0, Number(row?.down_votes ?? 0) || 0),
+      downVotes: 0,
     };
   }
 
@@ -48,13 +48,11 @@ async function getCountsForComment(commentId: string) {
   if (rowsError) throw rowsError;
 
   let upVotes = 0;
-  let downVotes = 0;
   ((rows ?? []) as any[]).forEach((r) => {
-    if (r.vote === "down") downVotes += 1;
-    else if (r.vote === "up") upVotes += 1;
+    if (r.vote === "up") upVotes += 1;
   });
 
-  return { upVotes, downVotes };
+  return { upVotes, downVotes: 0 };
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string; commentId: string }> }) {
@@ -121,7 +119,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     if (existingError) throw existingError;
 
-    const existingVote = (existing as any)?.vote as VoteValue | undefined;
+    const existingVote = (existing as any)?.vote === "up" ? ("up" as const) : null;
     const nowIso = new Date().toISOString();
 
     if (existingVote === vote) {
@@ -147,7 +145,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     const counts = await getCountsForComment(commentId);
-    const myVote: VoteValue | null = existingVote === vote ? null : vote;
+    const myVote: VoteValue | null = existingVote === vote ? null : "up";
 
     return NextResponse.json({ ok: true, ...counts, myVote }, { status: 200 });
   } catch (e: any) {
