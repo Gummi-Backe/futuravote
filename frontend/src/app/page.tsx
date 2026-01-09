@@ -23,6 +23,8 @@ const FEED_SCROLL_ANCHOR_STORAGE_KEY = "fv_feed_scroll_anchor_v1";
 
 type FeedScrollAnchor = {
   anchorId: string;
+  prevId?: string | null;
+  nextId?: string | null;
   offsetTop: number;
   scrollY: number;
   ts: number;
@@ -1820,6 +1822,12 @@ export default function Home() {
     try {
       if (typeof window === "undefined") return;
       if (!anchorId) return;
+
+      const getIdFromEl = (el: Element | null): string | null => {
+        const raw = el?.getAttribute?.("data-feed-item-id");
+        return raw && typeof raw === "string" ? raw : null;
+      };
+
       const selector =
         typeof (window as any).CSS?.escape === "function"
           ? `[data-feed-item-id="${(window as any).CSS.escape(anchorId)}"]`
@@ -1827,8 +1835,16 @@ export default function Home() {
       const el = document.querySelector(selector) as HTMLElement | null;
       if (!el) return;
       const rect = el.getBoundingClientRect();
+
+      const items = Array.from(document.querySelectorAll("[data-feed-item-id]"));
+      const index = items.findIndex((item) => item === el);
+      const prevId = index > 0 ? getIdFromEl(items[index - 1]) : null;
+      const nextId = index >= 0 && index < items.length - 1 ? getIdFromEl(items[index + 1]) : null;
+
       const payload: FeedScrollAnchor = {
         anchorId,
+        prevId,
+        nextId,
         offsetTop: Math.round(rect.top),
         scrollY: window.scrollY,
         ts: Date.now(),
@@ -1848,6 +1864,8 @@ export default function Home() {
       if (!parsed || typeof parsed.anchorId !== "string") return;
       pendingScrollAnchorRef.current = {
         anchorId: parsed.anchorId,
+        prevId: typeof parsed.prevId === "string" ? parsed.prevId : null,
+        nextId: typeof parsed.nextId === "string" ? parsed.nextId : null,
         offsetTop: Number(parsed.offsetTop) || 0,
         scrollY: Number(parsed.scrollY) || 0,
         ts: Number(parsed.ts) || Date.now(),
@@ -1877,15 +1895,25 @@ export default function Home() {
 
     const run = () => {
       try {
-        const selector =
-          typeof (window as any).CSS?.escape === "function"
-            ? `[data-feed-item-id="${(window as any).CSS.escape(anchor.anchorId)}"]`
-            : `[data-feed-item-id="${anchor.anchorId.replace(/\"/g, '\\\\\"')}"]`;
-        const el = document.querySelector(selector) as HTMLElement | null;
+        const selectEl = (id: string): HTMLElement | null => {
+          if (!id) return null;
+          const selector =
+            typeof (window as any).CSS?.escape === "function"
+              ? `[data-feed-item-id="${(window as any).CSS.escape(id)}"]`
+              : `[data-feed-item-id="${id.replace(/\"/g, '\\\\\"')}"]`;
+          return document.querySelector(selector) as HTMLElement | null;
+        };
+
+        const candidates = [anchor.anchorId, anchor.prevId ?? null, anchor.nextId ?? null].filter(
+          (id): id is string => Boolean(id)
+        );
+        const el = candidates.map((id) => selectEl(id)).find(Boolean) ?? null;
+
         if (!el) {
-          window.scrollTo({ top: anchor.scrollY, behavior: "auto" });
+          window.scrollTo({ top: 0, behavior: "auto" });
           return;
         }
+
         const rect = el.getBoundingClientRect();
         const delta = rect.top - anchor.offsetTop;
         if (Number.isFinite(delta) && Math.abs(delta) > 1) {
