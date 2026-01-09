@@ -67,6 +67,7 @@ export function AdminAiAssistant({
   const [region, setRegion] = useState<string>("");
   const [theme, setTheme] = useState<string>("");
   const [count, setCount] = useState<number>(1);
+  const [optionsCount, setOptionsCount] = useState<number>(4);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +114,8 @@ export function AdminAiAssistant({
         ...basePayload,
         isResolvable: typeof requestedIsResolvable === "boolean" ? requestedIsResolvable : undefined,
         answerMode: requestedAnswerMode,
+        optionsCount:
+          requestedAnswerMode === "options" ? Math.max(2, Math.min(6, Math.round(optionsCount))) : undefined,
         visibility: requestedVisibility,
       };
 
@@ -238,6 +241,24 @@ export function AdminAiAssistant({
                 ))}
               </select>
             </div>
+
+            {requestedAnswerMode === "options" ? (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-200">Anzahl Optionen</label>
+                <select
+                  value={optionsCount}
+                  onChange={(e) => setOptionsCount(Number(e.target.value))}
+                  className="rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                  title="Wie viele Antwortoptionen die KI erzeugen soll (2–6)."
+                >
+                  {[2, 3, 4, 5, 6].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
             <button
               type="button"

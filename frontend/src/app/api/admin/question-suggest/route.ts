@@ -12,6 +12,7 @@ type Body = {
   count?: number;
   isResolvable?: boolean;
   answerMode?: "binary" | "options";
+  optionsCount?: number;
   visibility?: "public" | "link_only";
 };
 
@@ -164,7 +165,7 @@ function safeJsonFromText(text: string): any | null {
 
 function normalizeSuggestion(
   raw: any,
-  defaults?: { isResolvable?: boolean; answerMode?: "binary" | "options" },
+  defaults?: { isResolvable?: boolean; answerMode?: "binary" | "options"; optionsCount?: number },
 ): QuestionSuggestion | null {
   const title = typeof raw?.title === "string" ? raw.title.trim() : "";
   const description = typeof raw?.description === "string" ? raw.description.trim() : "";
@@ -188,13 +189,16 @@ function normalizeSuggestion(
         : "binary";
 
   const optionsRaw: unknown[] = Array.isArray(raw?.options) ? (raw.options as unknown[]) : [];
+  const optionsCount =
+    typeof defaults?.optionsCount === "number" ? Math.max(2, Math.min(6, Math.round(defaults.optionsCount))) : null;
+  const optionsLimit = optionsCount ?? 6;
   const options =
     answerMode === "options"
       ? optionsRaw
           .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
           .filter(Boolean)
           .map((s) => s.slice(0, 80))
-          .slice(0, 6)
+          .slice(0, optionsLimit)
       : [];
 
   const uniqueOptions = (() => {
@@ -205,7 +209,7 @@ function normalizeSuggestion(
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(o);
-      if (out.length >= 6) break;
+      if (out.length >= optionsLimit) break;
     }
     return out;
   })();
@@ -234,6 +238,7 @@ function normalizeSuggestion(
   if (!category) return null;
   if (!pollEndAt || Number.isNaN(Date.parse(pollEndAt))) return null;
   if (answerMode === "options" && uniqueOptions.length < 2) return null;
+  if (answerMode === "options" && typeof optionsCount === "number" && uniqueOptions.length < optionsCount) return null;
   if (isResolvable) {
     if (!resolutionCriteria || resolutionCriteria.length < 10) return null;
     if (!resolutionSource) return null;
@@ -247,7 +252,7 @@ function normalizeSuggestion(
     region: region ? region.slice(0, 100) : null,
     isResolvable,
     answerMode,
-    options: uniqueOptions,
+    options: typeof optionsCount === "number" ? uniqueOptions.slice(0, optionsCount) : uniqueOptions,
     imagePrompt: normalizedImagePrompt,
     reviewHours,
     pollEndAt,
@@ -267,6 +272,7 @@ function buildPrompt(opts: {
   avoidTitles?: string[];
   requestedIsResolvable?: boolean;
   requestedAnswerMode?: "binary" | "options";
+  requestedOptionsCount?: number;
   requestedVisibility?: "public" | "link_only";
 }): string {
   const category = (opts.category ?? "").trim();
@@ -283,6 +289,9 @@ function buildPrompt(opts: {
       : "",
     typeof opts.requestedAnswerMode === "string"
       ? `- Antwortmodus: ${opts.requestedAnswerMode === "options" ? "Optionen (2-6, Single-Choice)" : "Ja/Nein (binary)"}`
+      : "",
+    typeof opts.requestedOptionsCount === "number" && opts.requestedAnswerMode === "options"
+      ? `- Anzahl Optionen: ${opts.requestedOptionsCount}`
       : "",
   ]
     .filter(Boolean)
@@ -319,6 +328,9 @@ function buildPrompt(opts: {
       : "- answerMode: 'binary' (Ja/Nein) oder 'options' (2-6 feste Optionen, Single-Choice).",
     typeof opts.requestedAnswerMode !== "string" || opts.requestedAnswerMode === "options"
       ? "- Bei answerMode='options': options muss 2-6 neutrale, klare Optionen enthalten (keine Duplikate)."
+      : "",
+    typeof opts.requestedOptionsCount === "number" && opts.requestedAnswerMode === "options"
+      ? `- Bei answerMode='options': Erstelle genau ${opts.requestedOptionsCount} Optionen (nicht mehr, nicht weniger).`
       : "",
     typeof opts.requestedAnswerMode === "string" && opts.requestedAnswerMode === "binary"
       ? "- Bei answerMode='binary': options als leeres Array setzen."
@@ -407,6 +419,9 @@ export async function POST(request: Request) {
   if (body.answerMode && body.answerMode !== "binary" && body.answerMode !== "options") {
     return NextResponse.json({ error: "answerMode muss 'binary' oder 'options' sein." }, { status: 400 });
   }
+  if (typeof body.optionsCount !== "undefined" && typeof body.optionsCount !== "number") {
+    return NextResponse.json({ error: "optionsCount muss eine Zahl sein." }, { status: 400 });
+  }
   if (body.visibility && body.visibility !== "public" && body.visibility !== "link_only") {
     return NextResponse.json({ error: "visibility muss 'public' oder 'link_only' sein." }, { status: 400 });
   }
@@ -414,6 +429,15 @@ export async function POST(request: Request) {
   const requestedIsResolvable = typeof body.isResolvable === "boolean" ? body.isResolvable : undefined;
   const requestedAnswerMode = body.answerMode === "binary" || body.answerMode === "options" ? body.answerMode : undefined;
   const requestedVisibility = body.visibility === "public" || body.visibility === "link_only" ? body.visibility : undefined;
+
+  const requestedOptionsCountRaw = typeof body.optionsCount === "number" ? body.optionsCount : null;
+  if (requestedOptionsCountRaw !== null && requestedAnswerMode !== "options") {
+    return NextResponse.json({ error: "optionsCount ist nur mit answerMode='options' erlaubt." }, { status: 400 });
+  }
+  const requestedOptionsCount =
+    requestedAnswerMode === "options" && requestedOptionsCountRaw !== null && Number.isFinite(requestedOptionsCountRaw)
+      ? Math.max(2, Math.min(6, Math.round(requestedOptionsCountRaw)))
+      : undefined;
 
   const countRaw = typeof body.count === "number" ? body.count : 1;
   const count = Math.max(1, Math.min(8, Math.round(Number.isFinite(countRaw) ? countRaw : 1)));
@@ -450,6 +474,7 @@ export async function POST(request: Request) {
       avoidTitles: collected.map((s) => s.title),
       requestedIsResolvable,
       requestedAnswerMode,
+      requestedOptionsCount,
       requestedVisibility,
     });
 
@@ -468,7 +493,13 @@ export async function POST(request: Request) {
         : [];
 
     const normalized = rawSuggestions
-      .map((s: unknown) => normalizeSuggestion(s, { isResolvable: requestedIsResolvable, answerMode: requestedAnswerMode }))
+      .map((s: unknown) =>
+        normalizeSuggestion(s, {
+          isResolvable: requestedIsResolvable,
+          answerMode: requestedAnswerMode,
+          optionsCount: requestedOptionsCount,
+        })
+      )
       .filter(Boolean) as QuestionSuggestion[];
 
     const constrained = normalized.filter((s) => {

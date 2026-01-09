@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = {
   questionId: string;
@@ -43,8 +43,30 @@ export default function AdminControls({
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiSources, setAiSources] = useState<string[]>([]);
   const [aiConfidence, setAiConfidence] = useState<number | null>(null);
+  const [aiContext, setAiContext] = useState("");
 
   const hasResolved = Boolean(resolvedOutcome || resolvedOptionId);
+
+  useEffect(() => {
+    const key = `fv_admin_ai_context:${questionId}`;
+    try {
+      setAiContext(localStorage.getItem(key) ?? "");
+    } catch {
+      // ignore
+    }
+  }, [questionId]);
+
+  useEffect(() => {
+    const key = `fv_admin_ai_context:${questionId}`;
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(key, aiContext);
+      } catch {
+        // ignore
+      }
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [aiContext, questionId]);
 
   const handleAction = async (
     action: "archive" | "delete" | "resolve",
@@ -99,7 +121,7 @@ export default function AdminControls({
       const res = await fetch("/api/admin/resolve-suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId }),
+        body: JSON.stringify({ questionId, context: aiContext.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -199,6 +221,17 @@ export default function AdminControls({
             </ul>
           </div>
         ) : null}
+
+        <label className="mb-2 block">
+          <span className="block text-[11px] text-slate-200">Hinweise an die KI (intern, optional)</span>
+          <textarea
+            value={aiContext}
+            onChange={(e) => setAiContext(e.target.value.slice(0, 2000))}
+            placeholder="Neue Erkenntnisse, Links, Suchbegriffe oder Kontext. Wird nur beim KI-Vorschlag berücksichtigt und nicht veröffentlicht."
+            rows={3}
+            className="mt-1 w-full resize-y rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-slate-500"
+          />
+        </label>
 
         {answerMode === "binary" ? (
           <div className="flex flex-wrap gap-2">
@@ -365,4 +398,3 @@ export default function AdminControls({
     </div>
   );
 }
-

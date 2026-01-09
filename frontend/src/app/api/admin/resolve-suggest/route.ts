@@ -7,6 +7,7 @@ export const revalidate = 0;
 
 type Body = {
   questionId?: string;
+  context?: string;
 };
 
 type Suggestion = {
@@ -83,6 +84,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Fragen-ID fehlt." }, { status: 400 });
   }
 
+  const context = typeof body.context === "string" ? body.context.trim().slice(0, 2000) : "";
+
   const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json({ error: "PERPLEXITY_API_KEY ist nicht gesetzt." }, { status: 500 });
@@ -134,6 +137,15 @@ export async function POST(request: Request) {
         ]
       : [];
 
+  const contextLines =
+    context.length > 0
+      ? [
+          "",
+          "Admin-Hinweise (unbestätigt, bitte verifizieren):",
+          context,
+        ]
+      : [];
+
   const prompt =
     answerMode === "binary"
       ? [
@@ -144,6 +156,7 @@ export async function POST(request: Request) {
           "- Antworte NUR als JSON (ohne Markdown, ohne Text davor/danach).",
           "- Wenn du das Ergebnis nicht sicher bestimmen kannst: suggestedOutcome = \"unknown\".",
           "- Quellen muessen als URLs in sources stehen.",
+          "- Berücksichtige Admin-Hinweise nur als Ausgangspunkt und verifiziere sie über offizielle Quellen.",
           "",
           "JSON Format:",
           "{\"suggestedOutcome\":\"yes|no|unknown\",\"suggestedOptionId\":null,\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
@@ -157,6 +170,7 @@ export async function POST(request: Request) {
           `- Aufloesungs-Regeln: ${String((row as any).resolution_criteria ?? "")}`,
           `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
           `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
+          ...contextLines,
         ].join("\n")
       : [
           "Du bist ein Recherche-Assistent fuer die Aufloesung von Prognosefragen (Optionen).",
@@ -167,6 +181,7 @@ export async function POST(request: Request) {
           "- Wenn du das Ergebnis nicht sicher bestimmen kannst: suggestedOutcome = \"unknown\" und suggestedOptionId = null.",
           "- suggestedOptionId MUSS exakt eine der unten stehenden IDs sein (oder null).",
           "- Quellen muessen als URLs in sources stehen.",
+          "- Berücksichtige Admin-Hinweise nur als Ausgangspunkt und verifiziere sie über offizielle Quellen.",
           "",
           "JSON Format:",
           "{\"suggestedOutcome\":\"unknown\",\"suggestedOptionId\":\"uuid|null\",\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
@@ -181,6 +196,7 @@ export async function POST(request: Request) {
           `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
           `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
           ...optionLines,
+          ...contextLines,
         ].join("\n");
 
   const res = await fetch("https://api.perplexity.ai/chat/completions", {
