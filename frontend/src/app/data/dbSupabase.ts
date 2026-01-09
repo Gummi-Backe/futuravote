@@ -1122,16 +1122,18 @@ export async function getQuestionByIdFromSupabase(
       : Promise.resolve(new Map<string, PollOption[]>()),
     (async (): Promise<SessionVote | undefined> => {
       if (!sessionId) return undefined;
-      const { data: voteRow, error: voteError } = await supabase
+      const { data: voteRows, error: voteError } = await supabase
         .from("votes")
-        .select("choice, option_id")
+        .select("choice, option_id, created_at")
         .eq("question_id", id)
         .eq("session_id", sessionId)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
       if (voteError) {
         throw new Error(`Supabase getQuestionById (Vote) fehlgeschlagen: ${voteError.message}`);
       }
+      const voteRow = ((voteRows as any[]) ?? [])[0] ?? null;
       if (!voteRow) return undefined;
       return {
         choice: (voteRow as any).choice ?? null,
@@ -1140,16 +1142,18 @@ export async function getQuestionByIdFromSupabase(
     })(),
     (async (): Promise<SessionVote | undefined> => {
       if (!userId) return undefined;
-      const { data: voteRow, error: voteError } = await supabase
+      const { data: voteRows, error: voteError } = await supabase
         .from("votes")
-        .select("choice, option_id")
+        .select("choice, option_id, created_at")
         .eq("question_id", id)
         .eq("user_id", userId)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
       if (voteError) {
         throw new Error(`Supabase getQuestionById (UserVote) fehlgeschlagen: ${voteError.message}`);
       }
+      const voteRow = ((voteRows as any[]) ?? [])[0] ?? null;
       if (!voteRow) return undefined;
       return { choice: (voteRow as any).choice ?? null, optionId: (voteRow as any).option_id ?? null };
     })(),
