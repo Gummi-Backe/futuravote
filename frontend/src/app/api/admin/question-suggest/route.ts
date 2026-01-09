@@ -279,6 +279,10 @@ function buildPrompt(opts: {
   const region = (opts.region ?? "").trim();
   const theme = (opts.theme ?? "").trim();
   const avoidTitles = (opts.avoidTitles ?? []).map((t) => t.trim()).filter(Boolean).slice(0, 12);
+  const optionsCount =
+    typeof opts.requestedOptionsCount === "number"
+      ? Math.max(2, Math.min(6, Math.round(opts.requestedOptionsCount)))
+      : null;
 
   const constraintLines = [
     typeof opts.requestedVisibility === "string"
@@ -296,6 +300,22 @@ function buildPrompt(opts: {
   ]
     .filter(Boolean)
     .join("\n");
+
+  const formatLine = (() => {
+    const base =
+      `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`;
+
+    if (opts.requestedAnswerMode === "binary") {
+      return base.replace(`"answerMode":"binary|options","options":["..."]`, `"answerMode":"binary","options":[]`);
+    }
+
+    if (opts.requestedAnswerMode === "options" && optionsCount) {
+      const example = Array.from({ length: optionsCount }, (_, i) => `"Option ${i + 1}"`).join(",");
+      return base.replace(`"answerMode":"binary|options","options":["..."]`, `"answerMode":"options","options":[${example}]`);
+    }
+
+    return base;
+  })();
 
   return [
     "Du bist ein Recherche-Assistent fuer Fragen/Umfragen auf Future-Vote.",
@@ -332,6 +352,13 @@ function buildPrompt(opts: {
     typeof opts.requestedOptionsCount === "number" && opts.requestedAnswerMode === "options"
       ? `- Bei answerMode='options': Erstelle genau ${opts.requestedOptionsCount} Optionen (nicht mehr, nicht weniger).`
       : "",
+    typeof opts.requestedOptionsCount === "number" && opts.requestedAnswerMode === "options"
+      ? [
+          `- STRICT: Das Feld options MUSS GENAU ${opts.requestedOptionsCount} Einträge haben (Array-Länge == ${opts.requestedOptionsCount}).`,
+          `- Wenn du mehr als ${opts.requestedOptionsCount} Ideen hast: wähle die besten ${opts.requestedOptionsCount}.`,
+          `- Wenn du weniger als ${opts.requestedOptionsCount} Ideen hast: ergänze neutrale Alternativen bis genau ${opts.requestedOptionsCount}.`,
+        ].join("\n")
+      : "",
     typeof opts.requestedAnswerMode === "string" && opts.requestedAnswerMode === "binary"
       ? "- Bei answerMode='binary': options als leeres Array setzen."
       : "",
@@ -351,7 +378,7 @@ function buildPrompt(opts: {
     "Antworte NUR als JSON (kein Markdown, kein Text davor/danach).",
     "WICHTIG: In JSON-Strings keine echten Zeilenumbrueche verwenden. Falls noetig, nutze \\n.",
     "Format:",
-    `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`,
+    formatLine,
     "",
     `Erstelle genau ${opts.count} Vorschlaege.`,
   ]
