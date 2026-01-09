@@ -67,12 +67,12 @@ export function HelpButton() {
         body: (
           <div className="space-y-2 text-sm text-slate-200">
             <p>
-              Future‑Vote ist eine Plattform für Prognose‑Fragen. Du kannst mit <span className="font-semibold text-white">Ja</span>{" "}
-              oder <span className="font-semibold text-white">Nein</span> abstimmen, neue Fragen vorschlagen und sehen, wie die Community
-              denkt.
+              Future‑Vote ist eine Plattform für <span className="font-semibold text-white">Umfragen</span> und{" "}
+              <span className="font-semibold text-white">Prognosen</span>. Du kannst abstimmen (Ja/Nein oder Optionen), neue Fragen
+              vorschlagen und sehen, wie die Community denkt.
             </p>
             <p className="rounded-2xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100">
-              Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
+              Deine Meinung. Deine Prognose. Deine Stimme.
             </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">

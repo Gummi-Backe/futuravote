@@ -20,6 +20,7 @@ const DRAFTS_PAGE_SIZE = 6;
 const REVIEWED_DRAFTS_STORAGE_KEY = "fv_reviewed_drafts_v1";
 const REVIEWED_DRAFT_CHOICES_STORAGE_KEY = "fv_reviewed_draft_choices_v1";
 const FEED_SCROLL_ANCHOR_STORAGE_KEY = "fv_feed_scroll_anchor_v1";
+const FEED_UI_STATE_STORAGE_KEY = "fv_feed_ui_state_v1";
 
 type FeedScrollAnchor = {
   anchorId: string;
@@ -29,6 +30,41 @@ type FeedScrollAnchor = {
   scrollY: number;
   ts: number;
 };
+
+type FeedUiState = {
+  activeTab: string;
+  activeCategory: string | null;
+  activeRegion: string | null;
+  searchQuery: string;
+  guestVotedFilter: "exclude" | "only";
+  typeFilter: "all" | "prognose" | "meinung";
+  draftStatusFilter: "all" | "open" | "accepted" | "rejected";
+  showReviewOnly: boolean;
+  showAnsweredInFeed: boolean;
+  ts: number;
+};
+
+function readFeedUiStateFromStorage(): Partial<FeedUiState> | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = window.sessionStorage.getItem(FEED_UI_STATE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<FeedUiState>;
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeFeedUiStateToStorage(state: FeedUiState) {
+  try {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(FEED_UI_STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
 
 const feedTabs = [
   { id: "all", label: "Alle", icon: "✨" },
@@ -685,6 +721,7 @@ type HomeCache = {
   typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
+  showAnsweredInFeed: boolean;
   questions: Question[];
   answeredQuestions: Question[];
   drafts: Draft[];
@@ -702,16 +739,23 @@ let homeCache: HomeCache | null = null;
 
 export default function Home() {
   const router = useRouter();
+  const initialUiState = useMemo<Partial<FeedUiState>>(() => readFeedUiStateFromStorage() ?? {}, []);
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
-  const [activeTab, setActiveTab] = useState<string>(() => homeCache?.activeTab ?? "all");
-  const [activeCategory, setActiveCategory] = useState<string | null>(() => homeCache?.activeCategory ?? null);
-  const [activeRegion, setActiveRegion] = useState<string | null>(() => homeCache?.activeRegion ?? null);
-  const [searchInput, setSearchInput] = useState<string>(() => homeCache?.searchQuery ?? "");
-  const [searchQuery, setSearchQuery] = useState<string>(() => homeCache?.searchQuery ?? "");
-  const [guestVotedFilter, setGuestVotedFilter] = useState<HomeCache["guestVotedFilter"]>(
-    () => homeCache?.guestVotedFilter ?? "exclude"
+  const [activeTab, setActiveTab] = useState<string>(() => homeCache?.activeTab ?? initialUiState.activeTab ?? "all");
+  const [activeCategory, setActiveCategory] = useState<string | null>(
+    () => homeCache?.activeCategory ?? (typeof initialUiState.activeCategory === "string" ? initialUiState.activeCategory : null)
   );
-  const [typeFilter, setTypeFilter] = useState<HomeCache["typeFilter"]>(() => homeCache?.typeFilter ?? "all");
+  const [activeRegion, setActiveRegion] = useState<string | null>(
+    () => homeCache?.activeRegion ?? (typeof initialUiState.activeRegion === "string" ? initialUiState.activeRegion : null)
+  );
+  const [searchInput, setSearchInput] = useState<string>(() => homeCache?.searchQuery ?? initialUiState.searchQuery ?? "");
+  const [searchQuery, setSearchQuery] = useState<string>(() => homeCache?.searchQuery ?? initialUiState.searchQuery ?? "");
+  const [guestVotedFilter, setGuestVotedFilter] = useState<HomeCache["guestVotedFilter"]>(
+    () => homeCache?.guestVotedFilter ?? (initialUiState.guestVotedFilter === "only" ? "only" : "exclude")
+  );
+  const [typeFilter, setTypeFilter] = useState<HomeCache["typeFilter"]>(
+    () => homeCache?.typeFilter ?? (initialUiState.typeFilter === "prognose" || initialUiState.typeFilter === "meinung" ? initialUiState.typeFilter : "all")
+  );
   const [questions, setQuestions] = useState<Question[]>(() => homeCache?.questions ?? []);
   const [answeredQuestions, setAnsweredQuestions] = useState<Question[]>(() => homeCache?.answeredQuestions ?? []);
   const [drafts, setDrafts] = useState<Draft[]>(() => homeCache?.drafts ?? []);
@@ -730,9 +774,8 @@ export default function Home() {
   const [showExtraRegions, setShowExtraRegions] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
-  const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">(
-    () => homeCache?.draftStatusFilter ?? "open"
-  );
+  const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
+  const [showAnsweredInFeed, setShowAnsweredInFeed] = useState<boolean>(() => homeCache?.showAnsweredInFeed ?? Boolean(initialUiState.showAnsweredInFeed));
   const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
   const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
   const [questionsCursor, setQuestionsCursor] = useState<string | null>(() => homeCache?.questionsCursor ?? null);
@@ -751,7 +794,7 @@ export default function Home() {
   );
   const [favoritesUpdatedAt, setFavoritesUpdatedAt] = useState<number | null>(() => homeCache?.favoritesUpdatedAt ?? null);
   const pendingScrollAnchorRef = useRef<FeedScrollAnchor | null>(null);
-  const sawLoadingForScrollRestoreRef = useRef(false);
+  const scrollRestoreAttemptedRef = useRef(false);
   const [favoriteSubmittingId, setFavoriteSubmittingId] = useState<string | null>(null);
   const questionsEndRef = useRef<HTMLDivElement | null>(null);
   const answeredQuestionsEndRef = useRef<HTMLDivElement | null>(null);
@@ -867,10 +910,20 @@ export default function Home() {
     [categoryOptions]
   );
 
-  const shouldShowAnsweredFallback = useMemo(() => {
-    if (currentUser) return true;
-    return guestVotedFilter === "exclude";
-  }, [currentUser, guestVotedFilter]);
+  const canShowAnsweredInFeed = Boolean(currentUser);
+  useEffect(() => {
+    if (canShowAnsweredInFeed) return;
+    if (!showAnsweredInFeed) return;
+    setShowAnsweredInFeed(false);
+  }, [canShowAnsweredInFeed, showAnsweredInFeed]);
+
+  // Seriosität/UX: abgestimmte Fragen nicht automatisch in den Feed mischen.
+  // (Das erzeugt sonst Scroll-Sprünge und wirkt chaotisch.)
+  useEffect(() => {
+    if (!currentUser) return;
+    if (!showAnsweredInFeed) return;
+    setShowAnsweredInFeed(false);
+  }, [currentUser, showAnsweredInFeed]);
 
   const resetAnsweredQuestions = useCallback(() => {
     setAnsweredQuestions([]);
@@ -880,7 +933,7 @@ export default function Home() {
   }, []);
 
   const fetchAnsweredQuestionsFirstPage = useCallback(async () => {
-    if (!shouldShowAnsweredFallback) return;
+    if (!showAnsweredInFeed) return;
     if (answeredLoadStateRef.current.inflight || answeredLoadStateRef.current.loaded) return;
     answeredLoadStateRef.current.inflight = true;
 
@@ -917,29 +970,51 @@ export default function Home() {
     activeCategory,
     activeRegion,
     searchQuery,
-    shouldShowAnsweredFallback,
+    showAnsweredInFeed,
   ]);
 
   const fetchLatest = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
       const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
       const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
-      params.set("pageSize", String(pageSize));
-      params.set("include", "both");
-      params.set("tab", activeTab);
-      if (!currentUser) params.set("voted", guestVotedFilter);
-      if (activeCategory) params.set("category", activeCategory);
-      if (activeRegion) params.set("region", activeRegion);
-      if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
 
-      const res = await fetch(`/api/questions?${params.toString()}`);
-      if (!res.ok) throw new Error("API Response not ok");
-      const data = await res.json();
+      // Fragen und Drafts getrennt laden, damit der Abstimmungs-Filter
+      // (Noch nicht abgestimmt / Abgestimmt) nur die Fragen beeinflusst.
+      const questionParams = new URLSearchParams();
+      questionParams.set("pageSize", String(pageSize));
+      questionParams.set("include", "questions");
+      questionParams.set("tab", activeTab);
+      questionParams.set("voted", guestVotedFilter);
+      if (activeCategory) questionParams.set("category", activeCategory);
+      if (activeRegion) questionParams.set("region", activeRegion);
+      if (searchQuery.trim().length >= 2) questionParams.set("q", searchQuery.trim());
 
-      const initialQuestions: Question[] = data.questions ?? [];
-      const initialDrafts: Draft[] = data.drafts ?? [];
+      const draftParams = new URLSearchParams();
+      draftParams.set("pageSize", String(pageSize));
+      draftParams.set("include", "drafts");
+      // Review-Bereich: offene Drafts, bereits bewertete in dieser Session ausblenden.
+      draftParams.set("voted", "exclude");
+      if (activeCategory) draftParams.set("category", activeCategory);
+      if (activeRegion) draftParams.set("region", activeRegion);
+      if (searchQuery.trim().length >= 2) draftParams.set("q", searchQuery.trim());
+
+      const [questionsRes, draftsRes] = await Promise.all([
+        fetch(`/api/questions?${questionParams.toString()}`),
+        fetch(`/api/questions?${draftParams.toString()}`),
+      ]);
+
+      if (!questionsRes.ok) throw new Error("API Response not ok");
+      // Drafts sollen den Feed nicht blockieren, falls einmal etwas schiefgeht.
+      const draftsOk = draftsRes.ok;
+
+      const [questionsData, draftsData] = await Promise.all([
+        questionsRes.json(),
+        draftsOk ? draftsRes.json() : Promise.resolve({ drafts: [], draftsNextCursor: null, draftsTotal: null }),
+      ]);
+
+      const initialQuestions: Question[] = questionsData.questions ?? [];
+      const initialDrafts: Draft[] = draftsData.drafts ?? [];
 
       // Sicherstellen, dass keine Duplikate entstehen (z.B. nach Filterwechsel)
       const uniqueQuestions = Array.from(
@@ -951,10 +1026,10 @@ export default function Home() {
 
       setQuestions(uniqueQuestions);
       setDrafts(uniqueDrafts);
-      setQuestionsCursor(typeof data.questionsNextCursor === "string" ? data.questionsNextCursor : null);
-      setDraftsCursor(typeof data.draftsNextCursor === "string" ? data.draftsNextCursor : null);
-      setQuestionsTotal(typeof data.questionsTotal === "number" ? data.questionsTotal : null);
-      setDraftsTotal(typeof data.draftsTotal === "number" ? data.draftsTotal : null);
+      setQuestionsCursor(typeof questionsData.questionsNextCursor === "string" ? questionsData.questionsNextCursor : null);
+      setDraftsCursor(typeof draftsData.draftsNextCursor === "string" ? draftsData.draftsNextCursor : null);
+      setQuestionsTotal(typeof questionsData.questionsTotal === "number" ? questionsData.questionsTotal : null);
+      setDraftsTotal(typeof draftsData.draftsTotal === "number" ? draftsData.draftsTotal : null);
       resetAnsweredQuestions();
       setError(null);
       setToast(null);
@@ -981,11 +1056,17 @@ export default function Home() {
   ]);
 
   useEffect(() => {
+    if (!showAnsweredInFeed) return;
     if (loading) return;
-    if (!shouldShowAnsweredFallback) return;
-    if (questions.length > 0) return;
+
+    const hasOpenQuestionsForCurrentFilters =
+      typeFilter === "all"
+        ? questions.length > 0
+        : questions.some((q) => (q.isResolvable === false ? false : true) === (typeFilter === "prognose"));
+
+    if (hasOpenQuestionsForCurrentFilters) return; // keine Mischung: nur wenn wirklich keine offenen Fragen mehr da sind
     void fetchAnsweredQuestionsFirstPage();
-  }, [fetchAnsweredQuestionsFirstPage, loading, questions.length, shouldShowAnsweredFallback]);
+  }, [fetchAnsweredQuestionsFirstPage, loading, questions, showAnsweredInFeed, typeFilter]);
 
   useEffect(() => {
     homeCache = {
@@ -997,6 +1078,7 @@ export default function Home() {
       typeFilter,
       draftStatusFilter,
       showReviewOnly,
+      showAnsweredInFeed,
       questions,
       answeredQuestions,
       drafts,
@@ -1018,6 +1100,7 @@ export default function Home() {
     typeFilter,
     draftStatusFilter,
     showReviewOnly,
+    showAnsweredInFeed,
     questions,
     answeredQuestions,
     drafts,
@@ -1029,6 +1112,31 @@ export default function Home() {
     draftsTotal,
     favoriteQuestions,
     favoritesUpdatedAt,
+  ]);
+
+  useEffect(() => {
+    writeFeedUiStateToStorage({
+      activeTab,
+      activeCategory,
+      activeRegion,
+      searchQuery,
+      guestVotedFilter,
+      typeFilter,
+      draftStatusFilter,
+      showReviewOnly,
+      showAnsweredInFeed,
+      ts: Date.now(),
+    });
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    searchQuery,
+    guestVotedFilter,
+    typeFilter,
+    draftStatusFilter,
+    showReviewOnly,
+    showAnsweredInFeed,
   ]);
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
@@ -1215,6 +1323,15 @@ export default function Home() {
     }
   }, []);
 
+  const resetFeedFilters = useCallback(() => {
+    setActiveTab("all");
+    setActiveCategory(null);
+    setActiveRegion(null);
+    setSearchInput("");
+    setSearchQuery("");
+    setTypeFilter("all");
+  }, []);
+
   const filteredQuestions = useMemo(() => {
     // Die eigentliche Tab-Logik (Alle, Top, Endet bald, Neu & wenig bewertet,
     // sowie der Abstimmungs-Filter (bereits abgestimmt ausblenden / nur abgestimmt)
@@ -1243,6 +1360,11 @@ export default function Home() {
     return result;
   }, [activeCategory, activeRegion, questions, typeFilter]);
 
+  const hasFeedFilters = useMemo(() => {
+    const hasSearch = searchQuery.trim().length >= 2;
+    return Boolean(activeCategory || activeRegion || hasSearch || typeFilter !== "all" || activeTab !== "all");
+  }, [activeCategory, activeRegion, activeTab, searchQuery, typeFilter]);
+
   const visibleQuestions = useMemo(
     () => filteredQuestions.slice(0, visibleQuestionCount),
     [filteredQuestions, visibleQuestionCount]
@@ -1260,13 +1382,17 @@ export default function Home() {
         result = result.filter((d) => d.region === activeRegion);
       }
     }
-    if (draftStatusFilter !== "all") {
-      result = result.filter((d) => (d.status ?? "open") === draftStatusFilter);
-    }
+    // Startansicht bewusst simpel: Review-Bereich zeigt nur offene Drafts.
+    result = result.filter((d) => (d.status ?? "open") === "open");
 
     // Reihenfolge so lassen, wie sie vom Server kommt (Cursor-Pagination + Ranking).
     return result;
   }, [activeCategory, activeRegion, drafts, draftStatusFilter]);
+
+  useEffect(() => {
+    // Der Filter ist in der UI entfernt; wir halten ihn defensiv auf "open".
+    if (draftStatusFilter !== "open") setDraftStatusFilter("open");
+  }, [draftStatusFilter]);
 
   const visibleDrafts = useMemo(
     () => filteredDrafts.slice(0, visibleDraftCount),
@@ -1300,9 +1426,6 @@ export default function Home() {
       const alreadyLoadedAll =
         !questionsCursor || (questionsTotal !== null && questions.length >= questionsTotal);
       if (alreadyLoadedAll || loadingMoreQuestions || questions.length === 0) {
-        if (alreadyLoadedAll && shouldShowAnsweredFallback) {
-          void fetchAnsweredQuestionsFirstPage();
-        }
         return;
       }
 
@@ -1318,7 +1441,7 @@ export default function Home() {
           params.set("include", "questions");
           if (questionsCursor) params.set("questionsCursor", questionsCursor);
           params.set("tab", activeTab);
-          if (!currentUser) params.set("voted", guestVotedFilter);
+          params.set("voted", guestVotedFilter);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
           if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
@@ -1363,14 +1486,12 @@ export default function Home() {
     searchQuery,
     currentUser,
     guestVotedFilter,
-    shouldShowAnsweredFallback,
-    fetchAnsweredQuestionsFirstPage,
   ]);
 
   useEffect(() => {
     if (!answeredQuestionsEndRef.current) return;
     if (typeof IntersectionObserver === "undefined") return;
-    if (!shouldShowAnsweredFallback) return;
+    if (!showAnsweredInFeed) return;
     if (!answeredQuestionsCursor) return;
     if (loadingMoreAnsweredQuestions) return;
 
@@ -1430,7 +1551,7 @@ export default function Home() {
     answeredQuestionsEndRef,
     loadingMoreAnsweredQuestions,
     searchQuery,
-    shouldShowAnsweredFallback,
+    showAnsweredInFeed,
   ]);
 
   useEffect(() => {
@@ -1466,7 +1587,8 @@ export default function Home() {
           params.set("include", "drafts");
           if (draftsCursor) params.set("draftsCursor", draftsCursor);
           params.set("tab", activeTab);
-          if (!currentUser) params.set("voted", guestVotedFilter);
+          // Review-Bereich: offene Drafts, bereits bewertete in dieser Session ausblenden.
+          params.set("voted", "exclude");
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
           if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
@@ -1509,8 +1631,6 @@ export default function Home() {
     visibleDraftCount,
     loadingMoreDrafts,
     searchQuery,
-    currentUser,
-    guestVotedFilter,
   ]);
 
   const handleVote = useCallback(
@@ -1826,6 +1946,31 @@ export default function Home() {
     [router]
   );
 
+  const saveFeedUiStateNow = useCallback(() => {
+    writeFeedUiStateToStorage({
+      activeTab,
+      activeCategory,
+      activeRegion,
+      searchQuery,
+      guestVotedFilter,
+      typeFilter,
+      draftStatusFilter,
+      showReviewOnly,
+      showAnsweredInFeed,
+      ts: Date.now(),
+    });
+  }, [
+    activeTab,
+    activeCategory,
+    activeRegion,
+    searchQuery,
+    guestVotedFilter,
+    typeFilter,
+    draftStatusFilter,
+    showReviewOnly,
+    showAnsweredInFeed,
+  ]);
+
   const saveFeedScrollAnchor = useCallback((anchorId: string) => {
     try {
       if (typeof window === "undefined") return;
@@ -1878,7 +2023,7 @@ export default function Home() {
         scrollY: Number(parsed.scrollY) || 0,
         ts: Number(parsed.ts) || Date.now(),
       };
-      sawLoadingForScrollRestoreRef.current = false;
+      scrollRestoreAttemptedRef.current = false;
     } catch {
       // ignore
     }
@@ -1887,21 +2032,33 @@ export default function Home() {
   useEffect(() => {
     const anchor = pendingScrollAnchorRef.current;
     if (!anchor) return;
-    if (loading) {
-      sawLoadingForScrollRestoreRef.current = true;
+    if (loading) return;
+    if (scrollRestoreAttemptedRef.current) return;
+
+    const MAX_ANCHOR_AGE_MS = 30 * 60 * 1000;
+    if (Date.now() - anchor.ts > MAX_ANCHOR_AGE_MS) {
+      pendingScrollAnchorRef.current = null;
+      scrollRestoreAttemptedRef.current = true;
+      try {
+        if (typeof window !== "undefined") window.sessionStorage.removeItem(FEED_SCROLL_ANCHOR_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
       return;
     }
-    if (!sawLoadingForScrollRestoreRef.current) return;
 
-    pendingScrollAnchorRef.current = null;
-    sawLoadingForScrollRestoreRef.current = false;
-    try {
-      if (typeof window !== "undefined") window.sessionStorage.removeItem(FEED_SCROLL_ANCHOR_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    scrollRestoreAttemptedRef.current = true;
 
-    const run = () => {
+    const cleanup = () => {
+      pendingScrollAnchorRef.current = null;
+      try {
+        if (typeof window !== "undefined") window.sessionStorage.removeItem(FEED_SCROLL_ANCHOR_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    };
+
+    const run = (attempt: number) => {
       try {
         const selectEl = (id: string): HTMLElement | null => {
           if (!id) return null;
@@ -1915,25 +2072,43 @@ export default function Home() {
         const candidates = [anchor.anchorId, anchor.prevId ?? null, anchor.nextId ?? null].filter(
           (id): id is string => Boolean(id)
         );
-        const el = candidates.map((id) => selectEl(id)).find(Boolean) ?? null;
+        const picked =
+          candidates
+            .map((id) => ({ id, el: selectEl(id) }))
+            .find((item) => Boolean(item.el)) ?? null;
+        const el = picked?.el ?? null;
 
         if (!el) {
+          if (attempt < 6) {
+            requestAnimationFrame(() => run(attempt + 1));
+            return;
+          }
           window.scrollTo({ top: 0, behavior: "auto" });
+          cleanup();
           return;
         }
 
-        const rect = el.getBoundingClientRect();
-        const delta = rect.top - anchor.offsetTop;
-        if (Number.isFinite(delta) && Math.abs(delta) > 1) {
-          window.scrollBy({ top: delta, behavior: "auto" });
+        if ((picked?.id ?? "") === anchor.anchorId) {
+          const rect = el.getBoundingClientRect();
+          const delta = rect.top - anchor.offsetTop;
+          if (Number.isFinite(delta) && Math.abs(delta) > 1) {
+            window.scrollBy({ top: delta, behavior: "auto" });
+          }
+        } else {
+          // Wenn der ursprüngliche Anker nicht mehr existiert (z. B. weil er nach dem Zurückkehren
+          // aus dem Feed rausgefiltert wurde), springen wir bewusst zur nächstbesten Karte.
+          el.scrollIntoView({ block: "start", behavior: "auto" });
+          window.scrollBy({ top: -12, behavior: "auto" });
         }
+
+        cleanup();
       } catch {
         // ignore
       }
     };
 
-    requestAnimationFrame(() => requestAnimationFrame(run));
-  }, [loading]);
+    requestAnimationFrame(() => requestAnimationFrame(() => run(0)));
+  }, [answeredQuestions.length, drafts.length, loading, questions.length, showAnsweredInFeed]);
 
   return (
     <main
@@ -1944,19 +2119,21 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
         <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-4 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="flex min-w-0 items-start gap-3 lg:max-w-[38rem]">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/20 text-xl text-emerald-100 shadow-lg shadow-emerald-500/40">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-xl text-emerald-100 shadow-lg shadow-emerald-500/40">
                 FV
               </div>
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">FUTURE-VOTE</p>
-                <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">Prognosen, schnell abgestimmt.</h1>
+                <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">
+                  Umfragen &amp; Prognosen, schnell abgestimmt.
+                </h1>
                 <p className="mt-1 max-w-2xl text-sm font-semibold text-emerald-100/90">
-                  Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
+                  Deine Meinung. Deine Prognose. Deine Stimme.
                 </p>
               </div>
             </div>
-            <div className="flex flex-1 flex-col items-end gap-2">
+            <div className="flex shrink-0 flex-col items-end gap-2">
               {currentUser && (
                 <div className="flex items-center gap-2 rounded-xl bg-black/30 px-3 py-2 text-xs text-slate-200">
                   <button
@@ -2230,25 +2407,6 @@ export default function Home() {
                 );
               })}
 
-              {!currentUser ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setGuestVotedFilter((prev) => (prev === "exclude" ? "only" : "exclude"))
-                  }
-                  className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
-                    guestVotedFilter === "only"
-                      ? "border border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
-                      : "border border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
-                  }`}
-                  title="Klicke, um zwischen „Noch nicht abgestimmt“ und „Abgestimmt“ zu wechseln"
-                >
-                  <span aria-hidden="true">{guestVotedFilter === "only" ? "✅" : "⭕"}</span>
-                  <span className="font-semibold whitespace-nowrap">
-                    {guestVotedFilter === "only" ? "Abgestimmt" : "Noch nicht abgestimmt"}
-                  </span>
-                </button>
-              ) : null}
             </div>
 
             <div
@@ -2408,25 +2566,6 @@ export default function Home() {
                         );
                       })}
 
-                      {!currentUser ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setGuestVotedFilter((prev) => (prev === "exclude" ? "only" : "exclude"))
-                          }
-                          className={`inline-flex min-w-fit shrink-0 items-center gap-2 rounded-full px-4 py-2 shadow-sm shadow-black/20 backdrop-blur transition snap-center ${
-                            guestVotedFilter === "only"
-                              ? "border border-emerald-300/60 bg-emerald-500/20 text-white hover:-translate-y-0.5"
-                              : "border border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40 hover:-translate-y-0.5"
-                          }`}
-                          title="Klicke, um zwischen „Noch nicht abgestimmt“ und „Abgestimmt“ zu wechseln"
-                        >
-                          <span aria-hidden="true">{guestVotedFilter === "only" ? "✅" : "⭕"}</span>
-                          <span className="font-semibold whitespace-nowrap">
-                            {guestVotedFilter === "only" ? "Abgestimmt" : "Noch nicht abgestimmt"}
-                          </span>
-                        </button>
-                      ) : null}
                     </div>
 
                     <div className="flex items-center rounded-xl border border-white/25 bg-white/5 p-1">
@@ -2718,12 +2857,45 @@ export default function Home() {
 
         {!showReviewOnly && (
           <section className="mt-8 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
                 <span>{tabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
                 <span>{tabLabel}</span>
               </h2>
-              <span className="text-sm text-slate-300">Engagement + Freshness + Trust</span>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="hidden lg:inline text-sm text-slate-300">Engagement + Freshness + Trust</span>
+                <div
+                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
+                  role="group"
+                  aria-label="Abstimmungsfilter"
+                  title="Wähle, ob du noch offene oder bereits abgestimmte Fragen sehen willst"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setGuestVotedFilter("exclude")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      guestVotedFilter === "exclude"
+                        ? "bg-emerald-500/25 text-white"
+                        : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span aria-hidden="true">⭕</span>
+                    <span className="whitespace-nowrap">Noch nicht abgestimmt</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGuestVotedFilter("only")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      guestVotedFilter === "only"
+                        ? "bg-emerald-500/25 text-white"
+                        : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span aria-hidden="true">✅</span>
+                    <span className="whitespace-nowrap">Abgestimmt</span>
+                  </button>
+                </div>
+              </div>
             </div>
             {loading && visibleQuestions.length > 0 && (
               <div className="text-xs text-slate-400">Aktualisiere...</div>
@@ -2744,14 +2916,105 @@ export default function Home() {
                       isFavoriteSubmitting={favoriteSubmittingId === q.id}
                       onToggleFavorite={() => void handleToggleFavorite(q.id)}
                       onVote={(choice) => handleVote(q.id, choice)}
-                      onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
-                      onOpenDetails={(href) => {
-                        saveFeedScrollAnchor(`q:${q.id}`);
-                        navigateWithTransition(href);
-                      }}
-                    />
-                  ))}
+                       onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
+                       onOpenDetails={(href) => {
+                         saveFeedUiStateNow();
+                         saveFeedScrollAnchor(`q:${q.id}`);
+                         navigateWithTransition(href);
+                       }}
+                     />
+                   ))}
             </div>
+            {!loading && !error && visibleQuestions.length === 0 ? (
+              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-5 text-sm text-slate-200 shadow-xl shadow-black/20">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-lg text-emerald-100 shadow-lg shadow-emerald-500/25">
+                    ✓
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-base font-semibold text-white">
+                      {hasFeedFilters
+                        ? "Keine offenen Fragen passen zu deinen Filtern."
+                        : "Du hast in diesem Feed alles beantwortet."}
+                    </div>
+                    {hasFeedFilters ? (
+                      <p className="mt-1 text-slate-200/90">
+                        Tipp: Setze Filter zurück oder wechsle den Tab, um wieder offene Fragen zu finden.
+                      </p>
+                    ) : currentUser ? (
+                      <p className="mt-1 text-slate-200/90">
+                        Du kannst oben auf <span className="font-semibold">Abgestimmt</span> umschalten oder deine Abstimmungen im Profil unter{" "}
+                        <span className="font-semibold">Deine Aktivität</span> ansehen.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-slate-200/90">
+                        Tippe oben auf <span className="font-semibold">Abgestimmt</span>, um beantwortete Fragen zu sehen - oder
+                        registriere dich, damit deine Abstimmungen geräteübergreifend gespeichert sind.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {hasFeedFilters ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGuestVotedFilter("exclude");
+                        resetFeedFilters();
+                      }}
+                      className="rounded-full border border-emerald-300/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-emerald-500/15 transition hover:-translate-y-0.5"
+                    >
+                      Filter zurücksetzen
+                    </button>
+                  ) : null}
+
+                  {currentUser ? (
+                    <button
+                      type="button"
+                      onClick={() => navigateWithTransition("/profil/aktivitaet?typ=votes_all")}
+                      className="rounded-full border border-emerald-300/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-emerald-500/15 transition hover:-translate-y-0.5"
+                    >
+                      Meine Abstimmungen
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => navigateWithTransition("/auth")}
+                      className="rounded-full border border-emerald-300/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-emerald-500/15 transition hover:-translate-y-0.5"
+                    >
+                      Login / Registrieren
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => navigateWithTransition("/archiv")}
+                    className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:-translate-y-0.5 hover:border-emerald-300/40"
+                  >
+                    Archiv entdecken
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateWithTransition("/drafts/new")}
+                    className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:-translate-y-0.5 hover:border-emerald-300/40"
+                  >
+                    Neue Frage vorschlagen
+                  </button>
+
+                  {!currentUser ? (
+                    <button
+                      type="button"
+                      onClick={() => setGuestVotedFilter((prev) => (prev === "exclude" ? "only" : "exclude"))}
+                      className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:-translate-y-0.5 hover:border-emerald-300/40"
+                    >
+                      {guestVotedFilter === "exclude" ? "Abgestimmt anzeigen" : "Noch nicht abgestimmt anzeigen"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             <div ref={questionsEndRef} className="h-1" />
           </section>
         )}
@@ -2775,30 +3038,9 @@ export default function Home() {
             </h2>
             <div className="flex items-center gap-3 text-sm text-slate-300">
               <span className="hidden sm:inline">Community entscheidet, was live geht</span>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {([
-                  { id: "open" as const, label: "Offen", active: "border-sky-300/60 bg-sky-500/20 text-white" },
-                  { id: "accepted" as const, label: "Angenommen", active: "border-emerald-300/60 bg-emerald-500/20 text-white" },
-                  { id: "rejected" as const, label: "Abgelehnt", active: "border-rose-300/60 bg-rose-500/20 text-white" },
-                  { id: "all" as const, label: "Alle", active: "border-slate-300/30 bg-slate-500/20 text-white" },
-                ] as const).map((item) => {
-                  const isActive = draftStatusFilter === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setDraftStatusFilter(item.id)}
-                      className={`inline-flex min-w-fit items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
-                        isActive
-                          ? item.active
-                          : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/40"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                Offen
+              </span>
             </div>
           </div>
           <div
@@ -2826,12 +3068,15 @@ export default function Home() {
           <div ref={draftsEndRef} className="h-1" />
         </section>
 
-        {!showReviewOnly && shouldShowAnsweredFallback && (loadingAnsweredQuestions || answeredQuestions.length > 0) ? (
+        {!showReviewOnly &&
+        Boolean(currentUser) &&
+        showAnsweredInFeed &&
+        !loading &&
+        visibleQuestions.length === 0 &&
+        (loadingAnsweredQuestions || answeredQuestions.length > 0) ? (
           <section className="mt-10 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-white sm:text-lg">
-                Du hast hier alles beantwortet - weitere Fragen
-              </h3>
+              <h3 className="text-base font-semibold text-white sm:text-lg">Abgestimmte Fragen</h3>
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
                 Abgestimmt
               </span>
@@ -2852,13 +3097,14 @@ export default function Home() {
                       isFavoriteSubmitting={favoriteSubmittingId === q.id}
                       onToggleFavorite={() => void handleToggleFavorite(q.id)}
                       onVote={(choice) => handleVote(q.id, choice)}
-                      onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
-                      onOpenDetails={(href) => {
-                        saveFeedScrollAnchor(`q:${q.id}`);
-                        navigateWithTransition(href);
-                      }}
-                    />
-                  ))}
+                       onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
+                       onOpenDetails={(href) => {
+                         saveFeedUiStateNow();
+                         saveFeedScrollAnchor(`q:${q.id}`);
+                         navigateWithTransition(href);
+                       }}
+                     />
+                   ))}
             </div>
             <div ref={answeredQuestionsEndRef} className="h-1" />
             {loadingMoreAnsweredQuestions ? <div className="text-xs text-slate-400">Lade mehr…</div> : null}

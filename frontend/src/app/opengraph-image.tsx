@@ -43,13 +43,13 @@ export default function Image() {
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ fontSize: 58, lineHeight: 1.05, fontWeight: 800, letterSpacing: -1 }}>
-            Prognosen, schnell abgestimmt.
-          </div>
-          <div style={{ fontSize: 26, lineHeight: 1.25, color: "rgba(226,232,240,0.85)", maxWidth: 900 }}>
-            Ja/Nein-Kacheln, Community-Review für neue Fragen, Trends und Archiv.
-          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ fontSize: 58, lineHeight: 1.05, fontWeight: 800, letterSpacing: -1 }}>
+            Umfragen & Prognosen, schnell abgestimmt.
+            </div>
+            <div style={{ fontSize: 26, lineHeight: 1.25, color: "rgba(226,232,240,0.85)", maxWidth: 900 }}>
+            Deine Meinung. Deine Prognose. Deine Stimme.
+            </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
             <div
               style={{
@@ -91,4 +91,3 @@ export default function Image() {
     size
   );
 }
-
