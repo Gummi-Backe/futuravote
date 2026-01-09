@@ -1559,14 +1559,18 @@ export default function Home() {
         if (!res.ok) throw new Error("Vote failed");
         const data = await res.json();
         const updated = data.question as Question;
-        setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q)));
+        setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         setAnsweredQuestions((prev) =>
-          prev.map((q) => (q.id === questionId ? { ...q, ...updated, userChoice: choice } : q))
+          prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q))
         );
         invalidateProfileCaches();
         setError(null);
         triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
-        showToast("Deine Stimme wurde gezählt.", "success");
+        if (data?.alreadyVoted) {
+          showToast("Du hast bereits abgestimmt.", "error");
+        } else {
+          showToast("Deine Stimme wurde gezählt.", "success");
+        }
       } catch {
         clearVoteCooldown();
         if (prevQuestion) {
@@ -1667,7 +1671,11 @@ export default function Home() {
         invalidateProfileCaches();
         setError(null);
         triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
-        showToast("Deine Stimme wurde gezählt.", "success");
+        if (data?.alreadyVoted) {
+          showToast("Du hast bereits abgestimmt.", "error");
+        } else {
+          showToast("Deine Stimme wurde gezählt.", "success");
+        }
       } catch (e: unknown) {
         clearVoteCooldown();
         if (prevQuestion) {

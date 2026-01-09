@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const existing = await getQuestionByIdFromSupabase(questionId, sessionId);
+    const existing = await getQuestionByIdFromSupabase(questionId, sessionId, userId);
     if (!existing) {
       return NextResponse.json({ error: "Question not found" }, { status: 404 });
     }
@@ -90,21 +90,28 @@ export async function POST(request: Request) {
       }
     }
 
-    const updated =
+    const result =
       answerMode === "options"
         ? await voteOnQuestionOptionInSupabase({ questionId, optionId: optionId!, sessionId, userId })
         : await voteOnQuestionInSupabase(questionId, normalizedChoice, sessionId, userId);
-    lastVoteBySession.set(sessionId, now);
 
-    await logAnalyticsEventServer({
-      event: "vote_question",
-      sessionId,
-      userId,
-      path: `/questions/${questionId}`,
-      meta: answerMode === "options" ? { answerMode, optionId } : { answerMode, choice: normalizedChoice },
-    });
+    const updated = result?.question ?? null;
+    const alreadyVoted = Boolean(result?.alreadyVoted);
+    if (!alreadyVoted) {
+      lastVoteBySession.set(sessionId, now);
+    }
 
-    const response = NextResponse.json({ question: updated });
+    if (!alreadyVoted) {
+      await logAnalyticsEventServer({
+        event: "vote_question",
+        sessionId,
+        userId,
+        path: `/questions/${questionId}`,
+        meta: answerMode === "options" ? { answerMode, optionId } : { answerMode, choice: normalizedChoice },
+      });
+    }
+
+    const response = NextResponse.json({ question: updated, alreadyVoted });
     response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
     return response;
   } catch (e: unknown) {

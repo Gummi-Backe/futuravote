@@ -863,9 +863,10 @@ export async function getQuestionsPageFromSupabase(options: {
     if (!userId || questionIds.length === 0) return map;
     const { data: userVotes, error: userVotesError } = await supabase
       .from("votes")
-      .select("question_id, choice, option_id")
+      .select("question_id, choice, option_id, created_at")
       .eq("user_id", userId)
-      .in("question_id", questionIds);
+      .in("question_id", questionIds)
+      .order("created_at", { ascending: false });
 
     if (userVotesError) {
       throw new Error(`Supabase getQuestionsPage (UserVotesForItems) fehlgeschlagen: ${userVotesError.message}`);
@@ -874,6 +875,8 @@ export async function getQuestionsPageFromSupabase(options: {
     for (const row of (userVotes as any[]) ?? []) {
       const qid = String((row as any)?.question_id ?? "");
       if (!qid) continue;
+      // Bei mehreren Votes (Legacy) nimmt die Map durch order(created_at desc) automatisch den neuesten.
+      if (map.has(qid)) continue;
       map.set(qid, { choice: (row as any)?.choice ?? null, optionId: (row as any)?.option_id ?? null });
     }
     return map;
@@ -1159,7 +1162,8 @@ export async function getQuestionByIdFromSupabase(
     })(),
   ]);
 
-  return mapQuestion(questionRow, sessionVote ?? userVote, optionsMap.get(id));
+  // Eingeloggte Nutzer: Account-Vote hat Vorrang vor Session-Vote (geräteübergreifend konsistent).
+  return mapQuestion(questionRow, userVote ?? sessionVote, optionsMap.get(id));
 }
 
 export type SharedPoll =
@@ -1326,10 +1330,27 @@ export async function voteOnQuestionInSupabase(
   choice: VoteChoice,
   sessionId: string,
   userId?: string | null
-): Promise<QuestionWithVotes | null> {
+): Promise<{ question: QuestionWithVotes | null; alreadyVoted: boolean }> {
   const supabase = getSupabaseAdminClient();
 
-  // Doppelvotes in derselben Session verhindern
+  // Doppelvotes für eingeloggte Nutzer verhindern (geräteübergreifend)
+  if (userId) {
+    const { data: existingUserVotes, error: existingUserError } = await supabase
+      .from("votes")
+      .select("question_id")
+      .eq("question_id", id)
+      .eq("user_id", userId)
+      .limit(1);
+
+    if (existingUserError) {
+      throw new Error(`Supabase Vote-Check (User) fehlgeschlagen: ${existingUserError.message}`);
+    }
+    if ((existingUserVotes as any[])?.length) {
+      return { question: await getQuestionByIdFromSupabase(id, sessionId, userId), alreadyVoted: true };
+    }
+  }
+
+  // Doppelvotes in derselben Session verhindern (Gäste / zusätzliches Sicherheitsnetz)
   const { data: existingVotes, error: existingError } = await supabase
     .from("votes")
     .select("question_id")
@@ -1341,7 +1362,7 @@ export async function voteOnQuestionInSupabase(
     throw new Error(`Supabase Vote-Check fehlgeschlagen: ${existingError.message}`);
   }
   if ((existingVotes as any[])?.length) {
-    return getQuestionByIdFromSupabase(id, sessionId);
+    return { question: await getQuestionByIdFromSupabase(id, sessionId, userId), alreadyVoted: true };
   }
 
   const now = new Date().toISOString();
@@ -1369,7 +1390,7 @@ export async function voteOnQuestionInSupabase(
     throw new Error(`Supabase Vote-Update (Select) fehlgeschlagen: ${countsError.message}`);
   }
   if (!countsRow) {
-    return null;
+    return { question: null, alreadyVoted: false };
   }
 
   const currentYes = (countsRow as any).yes_votes ?? 0;
@@ -1386,7 +1407,7 @@ export async function voteOnQuestionInSupabase(
     throw new Error(`Supabase Vote-Update fehlgeschlagen: ${updateError.message}`);
   }
 
-  return getQuestionByIdFromSupabase(id, sessionId);
+  return { question: await getQuestionByIdFromSupabase(id, sessionId, userId), alreadyVoted: false };
 }
 
 export async function voteOnQuestionOptionInSupabase(options: {
@@ -1394,11 +1415,28 @@ export async function voteOnQuestionOptionInSupabase(options: {
   optionId: string;
   sessionId: string;
   userId?: string | null;
-}): Promise<QuestionWithVotes | null> {
+}): Promise<{ question: QuestionWithVotes | null; alreadyVoted: boolean }> {
   const supabase = getSupabaseAdminClient();
   const { questionId, optionId, sessionId, userId } = options;
 
-  // Doppelvotes in derselben Session verhindern
+  // Doppelvotes für eingeloggte Nutzer verhindern (geräteübergreifend)
+  if (userId) {
+    const { data: existingUserVotes, error: existingUserError } = await supabase
+      .from("votes")
+      .select("question_id")
+      .eq("question_id", questionId)
+      .eq("user_id", userId)
+      .limit(1);
+
+    if (existingUserError) {
+      throw new Error(`Supabase Vote-Check (User) fehlgeschlagen: ${existingUserError.message}`);
+    }
+    if ((existingUserVotes as any[])?.length) {
+      return { question: await getQuestionByIdFromSupabase(questionId, sessionId, userId), alreadyVoted: true };
+    }
+  }
+
+  // Doppelvotes in derselben Session verhindern (Gäste / zusätzliches Sicherheitsnetz)
   const { data: existingVotes, error: existingError } = await supabase
     .from("votes")
     .select("question_id")
@@ -1410,7 +1448,7 @@ export async function voteOnQuestionOptionInSupabase(options: {
     throw new Error(`Supabase Vote-Check fehlgeschlagen: ${existingError.message}`);
   }
   if ((existingVotes as any[])?.length) {
-    return getQuestionByIdFromSupabase(questionId, sessionId);
+    return { question: await getQuestionByIdFromSupabase(questionId, sessionId, userId), alreadyVoted: true };
   }
 
   const { data: optionRow, error: optionError } = await supabase
@@ -1451,7 +1489,7 @@ export async function voteOnQuestionOptionInSupabase(options: {
     throw new Error(`Supabase Vote-Update (option) fehlgeschlagen: ${updateError.message}`);
   }
 
-  return getQuestionByIdFromSupabase(questionId, sessionId);
+  return { question: await getQuestionByIdFromSupabase(questionId, sessionId, userId), alreadyVoted: false };
 }
 
 export async function incrementViewsForQuestionInSupabase(questionId: string): Promise<void> {
