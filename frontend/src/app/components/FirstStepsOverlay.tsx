@@ -56,7 +56,7 @@ export function FirstStepsOverlay() {
         body: (
           <>
             Tippe auf <span className="font-semibold text-white">Ja</span> oder{" "}
-            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login. Im Feed kannst du zwischen{" "}
+            <span className="font-semibold text-white">Nein</span>. Du brauchst daf\u00fcr kein Login. Im Feed kannst du zwischen{" "}
             <span className="font-semibold text-white">Noch nicht abgestimmt</span> und{" "}
             <span className="font-semibold text-white">Abgestimmt</span> wechseln.
           </>
@@ -67,11 +67,11 @@ export function FirstStepsOverlay() {
         body: <>In den Details siehst du den Verlauf (Trend) und die wichtigsten Zahlen zur Frage.</>,
       },
       {
-        title: "3) Auflösung & Archiv",
+        title: "3) Aufl\u00f6sung & Archiv",
         body: (
           <>
             Wenn eine Frage endet, wird sie{" "}
-            <span className="font-semibold text-white">mit Quelle</span> aufgelöst. Im{" "}
+            <span className="font-semibold text-white">mit Quelle</span> aufgel\u00f6st. Im{" "}
             <Link href="/archiv" className="font-semibold text-emerald-100 hover:text-emerald-50">
               Archiv
             </Link>{" "}
@@ -83,7 +83,7 @@ export function FirstStepsOverlay() {
         title: "4) Eigene Frage vorschlagen",
         body: (
           <>
-            Über <span className="font-semibold text-white">Frage stellen</span> kannst du neue Fragen einreichen. Sie starten im{" "}
+            \u00dcber <span className="font-semibold text-white">Frage stellen</span> kannst du neue Fragen einreichen. Sie starten im{" "}
             <span className="font-semibold text-white">Review</span> und die Community entscheidet, ob sie live geht.
           </>
         ),
@@ -93,7 +93,7 @@ export function FirstStepsOverlay() {
         body: (
           <>
             Du kannst beim Erstellen auch{" "}
-            <span className="font-semibold text-white">Privat (nur per Link)</span> wählen. Dann erscheint die Umfrage nicht im Feed – nur
+            <span className="font-semibold text-white">Privat (nur per Link)</span> w\u00e4hlen. Dann erscheint die Umfrage nicht im Feed - nur
             wer den Link hat, kann abstimmen.
           </>
         ),
@@ -116,7 +116,7 @@ export function FirstStepsOverlay() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">Willkommen bei Future‑Vote</p>
-            <h2 className="mt-1 text-lg font-semibold text-white">Kurz erklärt, wie’s hier läuft</h2>
+            <h2 className="mt-1 text-lg font-semibold text-white">Kurz erkl\u00e4rt, wie's hier l\u00e4uft</h2>
             <p className="mt-2 rounded-2xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100">
               {"Abstimmen \u2192 Deadline \u2192 Aufl\u00f6sung mit Quellen \u2192 Archiv \u2192 deine Trefferquote."}
             </p>
@@ -125,8 +125,8 @@ export function FirstStepsOverlay() {
             type="button"
             onClick={close}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 hover:border-emerald-200/40 hover:text-white"
-            aria-label="Schließen"
-            title="Schließen"
+            aria-label="Schlie\u00dfen"
+            title="Schlie\u00dfen"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
               <path
@@ -165,7 +165,7 @@ export function FirstStepsOverlay() {
               onClick={close}
               className="inline-flex w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40 sm:w-auto"
             >
-              Archiv öffnen
+              Archiv \u00f6ffnen
             </Link>
           </div>
           <button
