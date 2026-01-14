@@ -2379,18 +2379,6 @@ export default function Home() {
                 >
                   Regeln
                 </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
-                  onClick={() => {
-                    setShowReviewOnly((prev) => !prev);
-                    if (typeof window !== "undefined") {
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }
-                  }}
-                >
-                {showReviewOnly ? "Zurück zum Feed" : "Review"}
-                </button>
                 {!currentUser && (
                   <button
                     type="button"
@@ -2443,20 +2431,6 @@ export default function Home() {
             >
               Regeln
             </button>
-            <button
-              type="button"
-              className="rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 sm:px-4"
-              onClick={() => {
-                setShowReviewOnly((prev) => !prev);
-                if (typeof window !== "undefined") {
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }
-              }}
-              title="Review: Community bewertet neue Fragen"
-            >
-              {showReviewOnly ? "Zur\u00fcck zum Feed" : "Review"}
-            </button>
-
             {!showReviewOnly ? (
               <div className="flex items-center rounded-xl border border-white/25 bg-white/5 p-1">
                 <button
@@ -2926,20 +2900,6 @@ export default function Home() {
                     >
                       Regeln
                     </button>
-                    <button
-                      type="button"
-                      className="flex-1 min-w-[120px] rounded-xl border border-white/25 px-3 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        setShowReviewOnly((prev) => !prev);
-                        if (typeof window !== "undefined") {
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }
-                      }}
-                      title="Review: Community bewertet neue Fragen"
-                    >
-                      {showReviewOnly ? "Zurück zum Feed" : "Review"}
-                    </button>
                     {!currentUser ? (
                       <button
                         type="button"
@@ -3039,7 +2999,34 @@ export default function Home() {
 
                 
 
+                
+
                 <div
+                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
+                  role="group"
+                  aria-label="Bereich"
+                  title="Zwischen Feed und Review umschalten"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewOnly(false)}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      !showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="whitespace-nowrap">Feed</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewOnly(true)}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="whitespace-nowrap">Review</span>
+                  </button>
+                </div>
+<div
                   className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
                   role="group"
                   aria-label="Abstimmungsfilter"
