@@ -511,10 +511,6 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
             <SkeletonCard />
           ) : null}
 
-          <p className="mt-1 text-[11px] text-slate-400">
-            Hinweis: Die Zahlen basieren auf Daten, die seit Einführung der Supabase-DB gesammelt werden.
-          </p>
-
           <EmailNotificationSettings />
 
           <ProfilePollTabs baseUrl={baseUrl} />

@@ -91,7 +91,8 @@ export default function DatenschutzPage() {
                 <ul className="list-disc space-y-2 pl-5">
                   <li>
                     <span className="font-semibold text-white">fv_session</span>: anonyme Session-Kennung, um z. B. doppelte
-                    Abstimmungen/Reviews zu verhindern und den Abstimmungsstatus anzuzeigen (typisch bis zu 1 Jahr).
+                    Abstimmungen/Reviews zu verhindern, den Abstimmungsstatus im Feed anzuzeigen und Filter wie
+                    „Noch nicht abgestimmt“ / „Abgestimmt“ zu ermöglichen (typisch bis zu 1 Jahr).
                   </li>
                   <li>
                     <span className="font-semibold text-white">fv_user</span>: Login-Session-Kennung, um angemeldet zu

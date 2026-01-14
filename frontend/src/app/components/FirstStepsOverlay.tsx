@@ -56,7 +56,9 @@ export function FirstStepsOverlay() {
         body: (
           <>
             Tippe auf <span className="font-semibold text-white">Ja</span> oder{" "}
-            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login.
+            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login. Im Feed kannst du zwischen{" "}
+            <span className="font-semibold text-white">Noch nicht abgestimmt</span> und{" "}
+            <span className="font-semibold text-white">Abgestimmt</span> wechseln.
           </>
         ),
       },

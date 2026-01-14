@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type Draft, type Question } from "./data/mock";
 import { invalidateProfileCaches } from "./lib/profileCache";
 import { triggerAhaMicrocopy } from "./lib/ahaMicrocopy";
+import { consumeFeedVoteDeltas, recordFeedVoteDelta } from "./lib/feedVoteSync";
 import {
   clearVoteCooldown,
   FV_VOTE_COOLDOWN_DEFAULT_MS,
@@ -722,6 +723,8 @@ type HomeCache = {
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   showReviewOnly: boolean;
   showAnsweredInFeed: boolean;
+  visibleQuestionCount: number;
+  visibleDraftCount: number;
   questions: Question[];
   answeredQuestions: Question[];
   drafts: Draft[];
@@ -739,7 +742,14 @@ let homeCache: HomeCache | null = null;
 
 export default function Home() {
   const router = useRouter();
-  const initialUiState = useMemo<Partial<FeedUiState>>(() => readFeedUiStateFromStorage() ?? {}, []);
+  // Wichtig: Storage (localStorage/sessionStorage) erst nach dem Mount lesen.
+  // Sonst kann es bei SSR/Hydration zu Mismatches kommen (Server kennt Storage nicht).
+  const initialUiState = useMemo<Partial<FeedUiState>>(() => ({}), []);
+  // Merken, ob bereits beim allerersten Render ein Cache existierte (Client-Navigation).
+  // Bei einem harten Reload ist das false (dann müssen wir initial Daten laden).
+  const hadHomeCacheOnInitRef = useRef<boolean>(Boolean(homeCache));
+  const feedReturnSyncAppliedRef = useRef(false);
+  const [feedReturnSyncReady, setFeedReturnSyncReady] = useState<boolean>(() => !hadHomeCacheOnInitRef.current);
   const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
   const [activeTab, setActiveTab] = useState<string>(() => homeCache?.activeTab ?? initialUiState.activeTab ?? "all");
   const [activeCategory, setActiveCategory] = useState<string | null>(
@@ -776,8 +786,12 @@ export default function Home() {
   const [isLeaving, setIsLeaving] = useState(false);
   const [draftStatusFilter, setDraftStatusFilter] = useState<"all" | "open" | "accepted" | "rejected">("open");
   const [showAnsweredInFeed, setShowAnsweredInFeed] = useState<boolean>(() => homeCache?.showAnsweredInFeed ?? Boolean(initialUiState.showAnsweredInFeed));
-  const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(QUESTIONS_PAGE_SIZE);
-  const [visibleDraftCount, setVisibleDraftCount] = useState<number>(DRAFTS_PAGE_SIZE);
+  const [visibleQuestionCount, setVisibleQuestionCount] = useState<number>(
+    () => (typeof homeCache?.visibleQuestionCount === "number" ? homeCache.visibleQuestionCount : QUESTIONS_PAGE_SIZE)
+  );
+  const [visibleDraftCount, setVisibleDraftCount] = useState<number>(
+    () => (typeof homeCache?.visibleDraftCount === "number" ? homeCache.visibleDraftCount : DRAFTS_PAGE_SIZE)
+  );
   const [questionsCursor, setQuestionsCursor] = useState<string | null>(() => homeCache?.questionsCursor ?? null);
   const [answeredQuestionsCursor, setAnsweredQuestionsCursor] = useState<string | null>(
     () => homeCache?.answeredQuestionsCursor ?? null
@@ -1050,7 +1064,6 @@ export default function Home() {
     activeCategory,
     activeRegion,
     searchQuery,
-    currentUser,
     guestVotedFilter,
     resetAnsweredQuestions,
   ]);
@@ -1079,6 +1092,8 @@ export default function Home() {
       draftStatusFilter,
       showReviewOnly,
       showAnsweredInFeed,
+      visibleQuestionCount,
+      visibleDraftCount,
       questions,
       answeredQuestions,
       drafts,
@@ -1101,6 +1116,8 @@ export default function Home() {
     draftStatusFilter,
     showReviewOnly,
     showAnsweredInFeed,
+    visibleQuestionCount,
+    visibleDraftCount,
     questions,
     answeredQuestions,
     drafts,
@@ -1147,12 +1164,31 @@ export default function Home() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
+  const fetchKey = useMemo(() => {
+    return [activeTab, guestVotedFilter, activeCategory ?? "", activeRegion ?? "", searchQuery, typeFilter].join("|");
+  }, [activeTab, activeCategory, activeRegion, guestVotedFilter, searchQuery, typeFilter]);
+
+  const lastFetchKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    fetchLatest();
-    return () => {
+    const cleanup = () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [fetchLatest]);
+
+    // Wichtig für UX: Wenn wir aus den Details zurückkommen, wollen wir nicht sofort neu laden.
+    // Das würde den Feed (und damit auch das Scroll-Restore) "neu sortieren" und wirkt chaotisch.
+    const isFirstRun = lastFetchKeyRef.current === null;
+    if (isFirstRun) {
+      lastFetchKeyRef.current = fetchKey;
+      if (hadHomeCacheOnInitRef.current) return cleanup;
+    } else if (lastFetchKeyRef.current === fetchKey) {
+      return cleanup;
+    } else {
+      lastFetchKeyRef.current = fetchKey;
+    }
+
+    fetchLatest();
+    return cleanup;
+  }, [fetchKey, fetchLatest]);
 
   useEffect(() => {
     const FAVORITES_CACHE_TTL_MS = 30_000;
@@ -1305,6 +1341,38 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // UI-State (Filter) aus Storage wiederherstellen - aber nur, wenn kein Cache existiert.
+    // (Cache wird bei Client-Navigation genutzt, Storage eher beim harten Reload.)
+    try {
+      if (typeof window === "undefined") return;
+      if (hadHomeCacheOnInitRef.current) return;
+      const stored = readFeedUiStateFromStorage();
+      if (!stored) return;
+
+      if (typeof stored.activeTab === "string") setActiveTab(stored.activeTab);
+      if (typeof stored.activeCategory === "string" || stored.activeCategory === null) setActiveCategory(stored.activeCategory ?? null);
+      if (typeof stored.activeRegion === "string" || stored.activeRegion === null) setActiveRegion(stored.activeRegion ?? null);
+      if (typeof stored.searchQuery === "string") {
+        setSearchInput(stored.searchQuery);
+        setSearchQuery(stored.searchQuery);
+      }
+      if (stored.guestVotedFilter === "only" || stored.guestVotedFilter === "exclude") {
+        setGuestVotedFilter(stored.guestVotedFilter);
+      }
+      if (stored.typeFilter === "prognose" || stored.typeFilter === "meinung" || stored.typeFilter === "all") {
+        setTypeFilter(stored.typeFilter);
+      }
+      if (stored.draftStatusFilter === "all" || stored.draftStatusFilter === "open" || stored.draftStatusFilter === "accepted" || stored.draftStatusFilter === "rejected") {
+        setDraftStatusFilter(stored.draftStatusFilter);
+      }
+      if (typeof stored.showReviewOnly === "boolean") setShowReviewOnly(stored.showReviewOnly);
+      if (typeof stored.showAnsweredInFeed === "boolean") setShowAnsweredInFeed(stored.showAnsweredInFeed);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
     // Aktuellen User fuer UI (Login-Status) abrufen
     void fetch("/api/auth/me")
       .then((res) => res.json())
@@ -1399,13 +1467,48 @@ export default function Home() {
     [filteredDrafts, visibleDraftCount]
   );
 
-  useEffect(() => {
-    setVisibleQuestionCount(QUESTIONS_PAGE_SIZE);
-  }, [activeTab, activeCategory, activeRegion, searchQuery, typeFilter]);
+  const questionVisibilityKey = useMemo(() => {
+    return [
+      activeTab,
+      guestVotedFilter,
+      activeCategory ?? "",
+      activeRegion ?? "",
+      searchQuery,
+      typeFilter,
+    ].join("|");
+  }, [activeTab, activeCategory, activeRegion, guestVotedFilter, searchQuery, typeFilter]);
 
-  useEffect(() => {
-    setVisibleDraftCount(DRAFTS_PAGE_SIZE);
+  const draftVisibilityKey = useMemo(() => {
+    return [
+      activeTab,
+      activeCategory ?? "",
+      activeRegion ?? "",
+      draftStatusFilter,
+      searchQuery,
+    ].join("|");
   }, [activeTab, activeCategory, activeRegion, draftStatusFilter, searchQuery]);
+
+  const lastQuestionVisibilityKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastQuestionVisibilityKeyRef.current === null) {
+      lastQuestionVisibilityKeyRef.current = questionVisibilityKey;
+      return;
+    }
+    if (lastQuestionVisibilityKeyRef.current === questionVisibilityKey) return;
+    lastQuestionVisibilityKeyRef.current = questionVisibilityKey;
+    setVisibleQuestionCount(QUESTIONS_PAGE_SIZE);
+  }, [questionVisibilityKey]);
+
+  const lastDraftVisibilityKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastDraftVisibilityKeyRef.current === null) {
+      lastDraftVisibilityKeyRef.current = draftVisibilityKey;
+      return;
+    }
+    if (lastDraftVisibilityKeyRef.current === draftVisibilityKey) return;
+    lastDraftVisibilityKeyRef.current = draftVisibilityKey;
+    setVisibleDraftCount(DRAFTS_PAGE_SIZE);
+  }, [draftVisibilityKey]);
 
   useEffect(() => {
     if (!questionsEndRef.current) return;
@@ -1679,6 +1782,14 @@ export default function Home() {
         if (!res.ok) throw new Error("Vote failed");
         const data = await res.json();
         const updated = data.question as Question;
+        recordFeedVoteDelta({
+          kind: "binary",
+          questionId,
+          choice:
+            (updated as any)?.userChoice === "yes" || (updated as any)?.userChoice === "no"
+              ? (updated as any).userChoice
+              : choice,
+        });
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         setAnsweredQuestions((prev) =>
           prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q))
@@ -1786,6 +1897,11 @@ export default function Home() {
         if (!res.ok) throw new Error(data?.error ?? "Vote failed");
 
         const updated = data.question as Question;
+        recordFeedVoteDelta({
+          kind: "options",
+          questionId,
+          optionId: typeof (updated as any)?.userOptionId === "string" ? (updated as any).userOptionId : optionId,
+        });
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         invalidateProfileCaches();
@@ -2030,8 +2146,44 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (feedReturnSyncAppliedRef.current) return;
+    feedReturnSyncAppliedRef.current = true;
+
+    if (!hadHomeCacheOnInitRef.current) {
+      consumeFeedVoteDeltas();
+      setFeedReturnSyncReady(true);
+      return;
+    }
+
+    const deltas = consumeFeedVoteDeltas();
+    const byQuestionId = new Map<string, (typeof deltas)[number]>();
+    for (const d of deltas) {
+      byQuestionId.set(d.questionId, d);
+    }
+
+    const applyDeltas = (items: Question[]) => {
+      if (!items || items.length === 0 || byQuestionId.size === 0) return items;
+      return items.map((q) => {
+        const d = byQuestionId.get(q.id);
+        if (!d) return q;
+        if (d.kind === "binary") return { ...q, userChoice: d.choice, userOptionId: undefined };
+        return { ...q, userOptionId: d.optionId, userChoice: undefined };
+      });
+    };
+
+    setQuestions((prev) => {
+      const patched = applyDeltas(prev);
+      if (guestVotedFilter !== "exclude") return patched;
+      return patched.filter((q) => !q.userChoice && !q.userOptionId);
+    });
+    setAnsweredQuestions((prev) => applyDeltas(prev));
+    setFeedReturnSyncReady(true);
+  }, [guestVotedFilter]);
+
+  useEffect(() => {
     const anchor = pendingScrollAnchorRef.current;
     if (!anchor) return;
+    if (!feedReturnSyncReady) return;
     if (loading) return;
     if (scrollRestoreAttemptedRef.current) return;
 
@@ -2108,7 +2260,7 @@ export default function Home() {
     };
 
     requestAnimationFrame(() => requestAnimationFrame(() => run(0)));
-  }, [answeredQuestions.length, drafts.length, loading, questions.length, showAnsweredInFeed]);
+  }, [answeredQuestions.length, drafts.length, feedReturnSyncReady, loading, questions.length, showAnsweredInFeed]);
 
   return (
     <main

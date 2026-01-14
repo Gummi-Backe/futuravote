@@ -108,6 +108,12 @@ export function HelpButton() {
               oder <span className="font-semibold text-white">Neu & unbewertet</span>.
             </p>
             <p>
+              Mit dem Schalter <span className="font-semibold text-white">Noch nicht abgestimmt</span> /{" "}
+              <span className="font-semibold text-white">Abgestimmt</span> bestimmst du, ob der Feed offene oder bereits beantwortete Fragen
+              zeigt. Eingeloggte Nutzerinnen und Nutzer finden beantwortete Fragen zusätzlich im Profil unter{" "}
+              <span className="font-semibold text-white">Abstimmungen</span>.
+            </p>
+            <p>
               Mit den <span className="font-semibold text-white">Kategorie‑Buttons</span> filterst du nach Themen. Wenn du eine{" "}
               <span className="font-semibold text-white">Region</span> ausgewählt hast, kannst du zusätzlich nach deiner Region filtern.
             </p>
@@ -190,7 +196,11 @@ export function HelpButton() {
         body: (
           <div className="space-y-2 text-sm text-slate-200">
             <p>
-              Im Profil siehst du deine Statistik (z.B. eigene Vorschläge, Abstimmungen und Reviews) und kannst deine Region setzen.
+              Im Profil siehst du deine Statistik (z. B. eigene Vorschläge, Abstimmungen und Reviews) und kannst deine Region setzen.
+            </p>
+            <p>
+              Unter <span className="font-semibold text-white">Abstimmungen</span> findest du alle Fragen, bei denen du bereits abgestimmt
+              hast.
             </p>
             <p>
               Unter <span className="font-semibold text-white">Deine Umfragen</span> findest du deine eingereichten Drafts und deine privaten

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { triggerAhaMicrocopy } from "@/app/lib/ahaMicrocopy";
+import { recordFeedVoteDelta } from "@/app/lib/feedVoteSync";
 import {
   clearVoteCooldown,
   FV_VOTE_COOLDOWN_DEFAULT_MS,
@@ -99,6 +100,9 @@ export function DetailVoteButtons({
         // Seriosität: pro Account nur eine Stimme – wir zeigen die echte gespeicherte Stimme an.
         const actual = payload?.question?.userChoice === "yes" || payload?.question?.userChoice === "no" ? payload.question.userChoice : prevChoice;
         setChoice(actual);
+        if (actual === "yes" || actual === "no") {
+          recordFeedVoteDelta({ kind: "binary", questionId, choice: actual });
+        }
         clearVoteCooldown();
         setError(null);
         showToast("Du hast bereits abgestimmt.", "error");
@@ -108,6 +112,7 @@ export function DetailVoteButtons({
 
       invalidateProfileCaches();
       triggerAhaMicrocopy({ closesAt: closesAt ?? null });
+      recordFeedVoteDelta({ kind: "binary", questionId, choice: nextChoice });
       showToast(`Gespeichert: ${nextChoice === "yes" ? "Ja" : "Nein"}`, "success");
       router.refresh();
     } catch {
@@ -164,6 +169,9 @@ export function DetailVoteButtons({
       if (payload?.alreadyVoted) {
         const actual = typeof payload?.question?.userOptionId === "string" ? payload.question.userOptionId : prevOptionId;
         setOptionId(actual ?? null);
+        if (typeof actual === "string" && actual) {
+          recordFeedVoteDelta({ kind: "options", questionId, optionId: actual });
+        }
         clearVoteCooldown();
         setError(null);
         showToast("Du hast bereits abgestimmt.", "error");
@@ -173,6 +181,7 @@ export function DetailVoteButtons({
 
       invalidateProfileCaches();
       triggerAhaMicrocopy({ closesAt: closesAt ?? null });
+      recordFeedVoteDelta({ kind: "options", questionId, optionId: nextOptionId });
       const label = (options ?? []).find((o) => o.id === nextOptionId)?.label;
       showToast(`Gespeichert: ${label ?? "Abgestimmt"}`, "success");
       router.refresh();
