@@ -3015,8 +3015,8 @@ export default function Home() {
           )}
         </div>
 
-        <section className="mt-8">
-          <div className="sticky top-0 z-30 -mx-2 rounded-2xl border border-white/10 bg-slate-950/80 px-2 py-2 shadow-sm shadow-black/30 backdrop-blur-sm sm:px-3">
+        <section className="sticky top-0 z-30 mt-8">
+          <div className="-mx-2 rounded-2xl border border-white/10 bg-slate-950/80 px-2 py-2 shadow-sm shadow-black/30 backdrop-blur-sm sm:px-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
                 {showReviewOnly ? (
@@ -3037,39 +3037,7 @@ export default function Home() {
                   <span className="hidden lg:inline text-sm text-slate-300">Engagement + Freshness + Trust</span>
                 ) : null}
 
-                <div
-                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
-                  role="group"
-                  aria-label="Bereich"
-                  title="Wähle zwischen Feed und Review (Drafts)"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowReviewOnly(false);
-                      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
-                      !showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
-                    }`}
-                  >
-                    <span aria-hidden="true">📰</span>
-                    <span className="whitespace-nowrap">Feed</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowReviewOnly(true);
-                      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
-                      showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
-                    }`}
-                  >
-                    <span aria-hidden="true">🧪</span>
-                    <span className="whitespace-nowrap">Review</span>
-                  </button>
-                </div>
+                
 
                 <div
                   className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
