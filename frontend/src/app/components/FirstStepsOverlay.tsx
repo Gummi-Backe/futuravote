@@ -33,8 +33,8 @@ export function FirstStepsOverlay() {
 
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -42,10 +42,10 @@ export function FirstStepsOverlay() {
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = previousOverflow;
     };
   }, [open]);
 
@@ -56,8 +56,8 @@ export function FirstStepsOverlay() {
         body: (
           <>
             Tippe auf <span className="font-semibold text-white">Ja</span> oder{" "}
-            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login. Im Feed kannst du zwischen{" "}
-            <span className="font-semibold text-white">Noch nicht abgestimmt</span> und{" "}
+            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login. Im Feed kannst du
+            zwischen <span className="font-semibold text-white">Noch nicht abgestimmt</span> und{" "}
             <span className="font-semibold text-white">Abgestimmt</span> wechseln.
           </>
         ),
@@ -70,8 +70,7 @@ export function FirstStepsOverlay() {
         title: "3) Auflösung & Archiv",
         body: (
           <>
-            Wenn eine Frage endet, wird sie{" "}
-            <span className="font-semibold text-white">mit Quelle</span> aufgelöst. Im{" "}
+            Wenn eine Frage endet, wird sie <span className="font-semibold text-white">mit Quelle</span> aufgelöst. Im{" "}
             <Link href="/archiv" className="font-semibold text-emerald-100 hover:text-emerald-50">
               Archiv
             </Link>{" "}
@@ -83,8 +82,9 @@ export function FirstStepsOverlay() {
         title: "4) Eigene Frage vorschlagen",
         body: (
           <>
-            Über <span className="font-semibold text-white">Frage stellen</span> kannst du neue Fragen einreichen. Sie starten im{" "}
-            <span className="font-semibold text-white">Review</span> und die Community entscheidet, ob sie live geht.
+            Über <span className="font-semibold text-white">Frage stellen</span> kannst du neue Fragen einreichen. Sie
+            starten im <span className="font-semibold text-white">Review</span> und die Community entscheidet, ob sie
+            live geht.
           </>
         ),
       },
@@ -93,8 +93,8 @@ export function FirstStepsOverlay() {
         body: (
           <>
             Du kannst beim Erstellen auch{" "}
-            <span className="font-semibold text-white">Privat (nur per Link)</span> wählen. Dann erscheint die Umfrage nicht im Feed - nur
-            wer den Link hat, kann abstimmen.
+            <span className="font-semibold text-white">Privat (nur per Link)</span> wählen. Dann erscheint die Umfrage
+            nicht im Feed – nur wer den Link hat, kann abstimmen.
           </>
         ),
       },
@@ -108,17 +108,17 @@ export function FirstStepsOverlay() {
     <div className="overlay-enter fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" onClick={close}>
       <div
         className="overlay-panel absolute left-1/2 top-8 flex max-h-[calc(100vh-4rem)] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col overflow-hidden rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 sm:top-16 sm:max-h-[calc(100vh-8rem)] sm:p-6"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Erste Schritte"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">Willkommen bei Future‑Vote</p>
-            <h2 className="mt-1 text-lg font-semibold text-white">Kurz erklärt, wie's hier läuft</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">Willkommen bei Future-Vote</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Kurz erklärt, wie&apos;s hier läuft</h2>
             <p className="mt-2 rounded-2xl border border-emerald-200/20 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100">
-              {"Abstimmen \u2192 Deadline \u2192 Aufl\u00f6sung mit Quellen \u2192 Archiv \u2192 deine Trefferquote."}
+              Abstimmen → Deadline → Auflösung mit Quellen → Archiv → deine Trefferquote.
             </p>
           </div>
           <button
@@ -129,23 +129,17 @@ export function FirstStepsOverlay() {
             title="Schließen"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-              <path
-                d="M6 6l12 12M18 6 6 18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.6"
-                strokeLinecap="round"
-              />
+              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="grid gap-3 sm:grid-cols-2">
-            {steps.map((s) => (
-              <div key={s.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm font-semibold text-white">{s.title}</p>
-                <p className="mt-1 text-sm text-slate-200">{s.body}</p>
+            {steps.map((step) => (
+              <div key={step.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-semibold text-white">{step.title}</p>
+                <p className="mt-1 text-sm text-slate-200">{step.body}</p>
               </div>
             ))}
           </div>
@@ -173,7 +167,7 @@ export function FirstStepsOverlay() {
             onClick={close}
             className="inline-flex w-full items-center justify-center rounded-full border border-emerald-200/25 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25 sm:w-auto"
           >
-            Los geht’s
+            Los geht&apos;s
           </button>
         </div>
       </div>

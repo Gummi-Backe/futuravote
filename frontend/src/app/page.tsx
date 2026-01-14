@@ -1453,9 +1453,17 @@ export default function Home() {
     // Startansicht bewusst simpel: Review-Bereich zeigt nur offene Drafts.
     result = result.filter((d) => (d.status ?? "open") === "open");
 
+    // Gleiche Logik wie im Feed: "Noch nicht abgestimmt" zeigt nur noch nicht bewertete Drafts,
+    // "Abgestimmt" zeigt die bereits bewerteten Drafts (gerätebasiert).
+    if (guestVotedFilter === "exclude") {
+      result = result.filter((d) => !reviewedDrafts[d.id]);
+    } else {
+      result = result.filter((d) => Boolean(reviewedDrafts[d.id]));
+    }
+
     // Reihenfolge so lassen, wie sie vom Server kommt (Cursor-Pagination + Ranking).
     return result;
-  }, [activeCategory, activeRegion, drafts, draftStatusFilter]);
+  }, [activeCategory, activeRegion, drafts, draftStatusFilter, guestVotedFilter, reviewedDrafts]);
 
   useEffect(() => {
     // Der Filter ist in der UI entfernt; wir halten ihn defensiv auf "open".
@@ -3007,9 +3015,101 @@ export default function Home() {
           )}
         </div>
 
-        {!showReviewOnly && (
-          <section className="mt-8 space-y-4">
+        <section className="mt-8">
+          <div className="sticky top-0 z-30 -mx-2 rounded-2xl border border-white/10 bg-slate-950/80 px-2 py-2 shadow-sm shadow-black/30 backdrop-blur-sm sm:px-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+                {showReviewOnly ? (
+                  <>
+                    <span aria-hidden="true">🗳️</span>
+                    <span>Review (Drafts)</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{tabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
+                    <span>{tabLabel}</span>
+                  </>
+                )}
+              </h2>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {!showReviewOnly ? (
+                  <span className="hidden lg:inline text-sm text-slate-300">Engagement + Freshness + Trust</span>
+                ) : null}
+
+                <div
+                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
+                  role="group"
+                  aria-label="Bereich"
+                  title="Wähle zwischen Feed und Review (Drafts)"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowReviewOnly(false);
+                      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      !showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span aria-hidden="true">📰</span>
+                    <span className="whitespace-nowrap">Feed</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowReviewOnly(true);
+                      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span aria-hidden="true">🧪</span>
+                    <span className="whitespace-nowrap">Review</span>
+                  </button>
+                </div>
+
+                <div
+                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
+                  role="group"
+                  aria-label="Abstimmungsfilter"
+                  title="Wähle, ob du noch offene oder bereits abgestimmte Fragen sehen willst"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setGuestVotedFilter("exclude")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      guestVotedFilter === "exclude"
+                        ? "bg-emerald-500/25 text-white"
+                        : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span aria-hidden="true">⭕</span>
+                    <span className="whitespace-nowrap">Noch nicht abgestimmt</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGuestVotedFilter("only")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      guestVotedFilter === "only"
+                        ? "bg-emerald-500/25 text-white"
+                        : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span aria-hidden="true">✅</span>
+                    <span className="whitespace-nowrap">Abgestimmt</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {!showReviewOnly && (
+          <section className="mt-4 space-y-4">
+            <div className="hidden">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
                 <span>{tabs.find((t) => t.id === activeTab)?.icon ?? ""}</span>
                 <span>{tabLabel}</span>
@@ -3183,7 +3283,8 @@ export default function Home() {
           </div>
         )}
 
-        <section id="review-section" className="mt-10 space-y-4">
+        {showReviewOnly ? (
+        <section id="review-section" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
               <span>🗳️</span> <span>Review-Bereich (Drafts)</span>
@@ -3219,6 +3320,7 @@ export default function Home() {
           </div>
           <div ref={draftsEndRef} className="h-1" />
         </section>
+        ) : null}
 
         {!showReviewOnly &&
         Boolean(currentUser) &&
