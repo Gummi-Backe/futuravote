@@ -71,22 +71,17 @@ export function HelpButton() {
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs font-semibold text-slate-100">1) Feed entdecken</p>
-                <p className="mt-1 text-xs text-slate-300">
-                  Scrolle durch die Kacheln, filtere nach Kategorien und schau dir Details an.
-                </p>
+                <p className="mt-1 text-xs text-slate-300">Scrolle durch die Kacheln und öffne Details.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs font-semibold text-slate-100">2) Abstimmen</p>
                 <p className="mt-1 text-xs text-slate-300">
-                  Tippe auf <span className="font-semibold">Ja</span> oder <span className="font-semibold">Nein</span> (oder wähle eine
-                  Option).
+                  Tippe auf <span className="font-semibold">Ja</span> / <span className="font-semibold">Nein</span> oder wähle eine Option.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs font-semibold text-slate-100">3) Frage vorschlagen</p>
-                <p className="mt-1 text-xs text-slate-300">
-                  Erstelle eine neue Frage. Sie geht zuerst in den Review-Bereich (Drafts).
-                </p>
+                <p className="mt-1 text-xs text-slate-300">Erstelle eine neue Frage – die Community entscheidet.</p>
               </div>
             </div>
           </div>
@@ -105,8 +100,7 @@ export function HelpButton() {
             <p>
               Mit dem Schalter <span className="font-semibold text-white">Noch nicht abgestimmt</span> /{" "}
               <span className="font-semibold text-white">Abgestimmt</span> bestimmst du, ob der Feed offene oder bereits beantwortete Fragen
-              zeigt. Eingeloggte Nutzerinnen und Nutzer finden beantwortete Fragen zusätzlich im Profil unter{" "}
-              <span className="font-semibold text-white">Abstimmungen</span>.
+              zeigt.
             </p>
             <p>
               Mit den <span className="font-semibold text-white">Kategorie-Buttons</span> filterst du nach Themen. Wenn du eine{" "}
@@ -139,12 +133,12 @@ export function HelpButton() {
         body: (
           <div className="space-y-2 text-sm text-slate-200">
             <p>
-              Wenn ein Draft angenommen wird, landet er als <span className="font-semibold text-white">Frage</span> in der Abstimmung. Dort
-              stimmst du mit <span className="font-semibold text-white">Ja</span> / <span className="font-semibold text-white">Nein</span>{" "}
-              oder über Optionen.
+              Wenn ein Draft angenommen wird, landet er als <span className="font-semibold text-white">Frage</span> im Feed. Dort stimmst du
+              mit <span className="font-semibold text-white">Ja</span> / <span className="font-semibold text-white">Nein</span> oder über
+              Optionen.
             </p>
             <p>
-              In der Detailansicht siehst du zusätzlich Trend und mehr Kontext. Über{" "}
+              In der Detailansicht siehst du zusätzlich Verlauf/Trend und mehr Kontext. Über{" "}
               <span className="font-semibold text-white">Details ansehen</span> kommst du direkt dorthin.
             </p>
           </div>
@@ -215,12 +209,11 @@ export function HelpButton() {
         id: "install",
         title: "Als App installieren (optional)",
         body: (
-          <div className="space-y-2 text-sm text-slate-200">
+          <div className="space-y-3 text-sm text-slate-200">
             <p className="text-sm text-slate-200">
               Du kannst Future-Vote optional wie eine App ablegen. Das ist kein Muss, aber praktisch: Du bekommst ein App-Icon und
               Future-Vote öffnet sich in einem eigenen Fenster.
             </p>
-
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs font-semibold text-slate-100">Android (Edge)</p>
@@ -287,7 +280,6 @@ export function HelpButton() {
                 </ol>
               </div>
             </div>
-
             <p className="text-xs text-slate-300">
               Hinweis: Wenn du keinen Install-Button siehst, bietet dein Browser das für diese Seite gerade nicht an (oder es ist bereits
               installiert).
@@ -297,16 +289,22 @@ export function HelpButton() {
       },
       {
         id: "leaderboard",
-        title: "Rangliste",
+        title: "Rangliste (Punkte)",
         body: (
-          <div className="space-y-2 text-sm text-slate-200">
+          <div className="space-y-3 text-sm text-slate-200">
             <p>
               In der <span className="font-semibold text-white">Rangliste</span> gibt es zwei Ansichten:
               <span className="font-semibold text-white"> Treffer</span> (aufgelöste Prognosen) und{" "}
-              <span className="font-semibold text-white">Community</span> (Beiträge wie Vorschläge, Kommentare und geteilte Links).
+              <span className="font-semibold text-white">Community</span> (Beiträge zur Plattform).
+            </p>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
+              <span className="font-semibold text-slate-100">Teilen-Punkte:</span> Wenn du eine Umfrage/Frage teilst und jemand über deinen
+              Link <span className="font-semibold text-slate-100">abstimmt</span>, bekommst du dafür Community-Punkte. Nur der Klick auf
+              „Teilen“ reicht nicht – es zählt erst die echte Abstimmung.
             </p>
             <p className="text-xs text-slate-300">
-              Teilen zählt erst dann, wenn jemand über deinen Link auf die Seite kommt (nicht nur beim Klicken auf den Teilen-Button).
+              Zusätzlich gibt es Community-Punkte z.B. für angenommene Vorschläge, Kommentare (mit Quelle mehr) und Beiträge zur Auflösung
+              von Prognosen.
             </p>
             <div>
               <Link
@@ -322,7 +320,7 @@ export function HelpButton() {
       },
       {
         id: "archive",
-        title: "Archiv & Statistiken",
+        title: "Archiv",
         body: (
           <div className="space-y-2 text-sm text-slate-200">
             <p>Im Archiv findest du beendete Umfragen und einen Überblick über die Plattform.</p>
@@ -356,11 +354,7 @@ export function HelpButton() {
       </button>
 
       {open ? (
-        <div
-          data-fv-help="1"
-          className="overlay-enter fixed inset-0 z-50 overflow-y-auto bg-black/55 backdrop-blur-sm"
-          onClick={close}
-        >
+        <div data-fv-help="1" className="overlay-enter fixed inset-0 z-50 overflow-y-auto bg-black/55 backdrop-blur-sm" onClick={close}>
           <div
             className="overlay-panel absolute left-1/2 top-16 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-3xl border border-white/15 bg-slate-950/95 p-5 shadow-2xl shadow-black/50 max-h-[calc(100svh-8rem)] overflow-y-auto overscroll-contain sm:top-20 sm:p-6"
             onClick={(e) => e.stopPropagation()}

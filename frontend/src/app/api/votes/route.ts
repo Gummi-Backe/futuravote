@@ -10,6 +10,7 @@ import {
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { creditReferralVote } from "@/app/data/dbSupabaseReferrals";
 
 const RATE_LIMIT_MS = 5000;
 const lastVoteBySession = new Map<string, number>();
@@ -109,6 +110,8 @@ export async function POST(request: Request) {
         path: `/questions/${questionId}`,
         meta: answerMode === "options" ? { answerMode, optionId } : { answerMode, choice: normalizedChoice },
       });
+
+      await creditReferralVote({ questionId, sessionId, viewerUserId: userId });
     }
 
     const response = NextResponse.json({ question: updated, alreadyVoted });

@@ -393,7 +393,7 @@ export async function getCommunityLeaderboard(options: {
     ensure(userId).appliedCommunitySuggestions += 1;
   });
 
-  // Referral-Punkte: zählt, wenn jemand über einen geteilten Link auf eine Frage kommt.
+  // Referral-Punkte: zählt, wenn jemand über einen geteilten Link auf eine Frage kommt UND abstimmt.
   type ReferralRow = {
     session_id: string | null;
     created_at: string | null;
@@ -403,7 +403,7 @@ export async function getCommunityLeaderboard(options: {
     supabase,
     table: "analytics_events",
     select: "session_id,created_at,meta",
-    filters: (q) => q.eq("event", "referral_visit"),
+    filters: (q) => q.eq("event", "referral_vote"),
     orderBy: { column: "created_at", ascending: false },
     maxRows: 20000,
   }).catch(() => []);
