@@ -1554,15 +1554,15 @@ export default function NewDraftPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-100">
-                {isPrivatePoll ? "Abstimmung endet am" : "Community-Review (72 Stunden)"}
+                {isPrivatePoll ? "Abstimmung endet am" : "Community entscheidet (72 Stunden)"}
               </label>
 
               {!isPrivatePoll ? (
                 <div className="mt-2 space-y-3">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-black/20">
-                    <div className="text-sm font-semibold text-white">Community-Review</div>
+                    <div className="text-sm font-semibold text-white">Community entscheidet</div>
                     <p className="mt-1 text-xs text-slate-300">
-                      Der Review-Zeitraum ist fix auf 72 Stunden gesetzt. Danach kann nicht mehr bewertet werden.
+                      Die Community hat 72 Stunden Zeit abzustimmen, ob deine Frage zur öffentlichen Abstimmung freigegeben wird. Danach ist die Entscheidung geschlossen.
                     </p>
                   </div>
 

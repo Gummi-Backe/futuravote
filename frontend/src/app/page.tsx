@@ -40,7 +40,7 @@ type FeedUiState = {
   guestVotedFilter: "exclude" | "only";
   typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
-  showReviewOnly: boolean;
+  mainView: "all" | "feed" | "review";
   showAnsweredInFeed: boolean;
   ts: number;
 };
@@ -721,7 +721,7 @@ type HomeCache = {
   guestVotedFilter: "exclude" | "only";
   typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
-  showReviewOnly: boolean;
+  mainView: "all" | "feed" | "review";
   showAnsweredInFeed: boolean;
   visibleQuestionCount: number;
   visibleDraftCount: number;
@@ -802,7 +802,11 @@ export default function Home() {
     () => homeCache?.answeredQuestionsTotal ?? null
   );
   const [draftsTotal, setDraftsTotal] = useState<number | null>(() => homeCache?.draftsTotal ?? null);
-  const [showReviewOnly, setShowReviewOnly] = useState(() => homeCache?.showReviewOnly ?? false);
+  const [mainView, setMainView] = useState<"all" | "feed" | "review">(() => {
+    const cached = (homeCache as any)?.mainView;
+    if (cached === "all" || cached === "feed" || cached === "review") return cached;
+    return (homeCache as any)?.showReviewOnly ? "review" : "all";
+  });
   const [favoriteQuestions, setFavoriteQuestions] = useState<Record<string, boolean>>(
     () => homeCache?.favoriteQuestions ?? {}
   );
@@ -1090,7 +1094,7 @@ export default function Home() {
       guestVotedFilter,
       typeFilter,
       draftStatusFilter,
-      showReviewOnly,
+      mainView,
       showAnsweredInFeed,
       visibleQuestionCount,
       visibleDraftCount,
@@ -1114,7 +1118,7 @@ export default function Home() {
     guestVotedFilter,
     typeFilter,
     draftStatusFilter,
-    showReviewOnly,
+    mainView,
     showAnsweredInFeed,
     visibleQuestionCount,
     visibleDraftCount,
@@ -1140,7 +1144,7 @@ export default function Home() {
       guestVotedFilter,
       typeFilter,
       draftStatusFilter,
-      showReviewOnly,
+      mainView,
       showAnsweredInFeed,
       ts: Date.now(),
     });
@@ -1152,7 +1156,7 @@ export default function Home() {
     guestVotedFilter,
     typeFilter,
     draftStatusFilter,
-    showReviewOnly,
+    mainView,
     showAnsweredInFeed,
   ]);
 
@@ -1365,7 +1369,11 @@ export default function Home() {
       if (stored.draftStatusFilter === "all" || stored.draftStatusFilter === "open" || stored.draftStatusFilter === "accepted" || stored.draftStatusFilter === "rejected") {
         setDraftStatusFilter(stored.draftStatusFilter);
       }
-      if (typeof stored.showReviewOnly === "boolean") setShowReviewOnly(stored.showReviewOnly);
+      if ((stored as any).mainView === "all" || (stored as any).mainView === "feed" || (stored as any).mainView === "review") {
+        setMainView((stored as any).mainView);
+      } else if (typeof (stored as any).showReviewOnly === "boolean") {
+        setMainView((stored as any).showReviewOnly ? "review" : "all");
+      }
       if (typeof stored.showAnsweredInFeed === "boolean") setShowAnsweredInFeed(stored.showAnsweredInFeed);
     } catch {
       // ignore
@@ -2081,7 +2089,7 @@ export default function Home() {
       guestVotedFilter,
       typeFilter,
       draftStatusFilter,
-      showReviewOnly,
+      mainView,
       showAnsweredInFeed,
       ts: Date.now(),
     });
@@ -2093,7 +2101,7 @@ export default function Home() {
     guestVotedFilter,
     typeFilter,
     draftStatusFilter,
-    showReviewOnly,
+    mainView,
     showAnsweredInFeed,
   ]);
 
@@ -2433,7 +2441,7 @@ export default function Home() {
             >
               Regeln
             </button>
-            {!showReviewOnly ? (
+            {mainView !== "review" ? (
               <div className="flex items-center rounded-xl border border-white/25 bg-white/5 p-1">
                 <button
                   type="button"
@@ -2673,7 +2681,7 @@ export default function Home() {
                   ) : null}
                 </div>
 
-                {!showReviewOnly ? (
+                {mainView !== "review" ? (
                   <div className="space-y-2">
                     <div
                       className="flex gap-2 overflow-x-auto overflow-y-visible py-1 text-sm text-slate-100 snap-x snap-mandatory"
@@ -2981,7 +2989,7 @@ export default function Home() {
           <div className="-mx-2 rounded-2xl border border-white/10 bg-slate-950/80 px-2 py-2 shadow-sm shadow-black/30 backdrop-blur-sm sm:px-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
-                {showReviewOnly ? (
+                {mainView === "review" ? (
                   <>
                     <span aria-hidden="true">🗳️</span>
                     <span>Review (Drafts)</span>
@@ -2995,7 +3003,7 @@ export default function Home() {
               </h2>
 
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {!showReviewOnly ? (
+                {mainView !== "review" ? (
                   <span className="hidden lg:inline text-sm text-slate-300">Engagement + Freshness + Trust</span>
                 ) : null}
 
@@ -3007,22 +3015,31 @@ export default function Home() {
                   className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
                   role="group"
                   aria-label="Bereich"
-                  title="Zwischen Feed und Review umschalten"
+                  title="Zwischen Alle, Feed und Review umschalten"
                 >
                   <button
                     type="button"
-                    onClick={() => setShowReviewOnly(false)}
+                    onClick={() => setMainView("all")}
                     className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
-                      !showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                      mainView === "all" ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="whitespace-nowrap">Alle</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainView("feed")}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                      mainView === "feed" ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
                     }`}
                   >
                     <span className="whitespace-nowrap">Feed</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowReviewOnly(true)}
+                    onClick={() => setMainView("review")}
                     className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
-                      showReviewOnly ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
+                      mainView === "review" ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
                     }`}
                   >
                     <span className="whitespace-nowrap">Review</span>
@@ -3064,7 +3081,7 @@ export default function Home() {
           </div>
         </section>
 
-        {!showReviewOnly && (
+        {mainView !== "review" && (
           <section className="mt-4 space-y-4">
             <div className="hidden">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
@@ -3240,7 +3257,7 @@ export default function Home() {
           </div>
         )}
 
-        {showReviewOnly ? (
+        {mainView !== "feed" ? (
         <section id="review-section" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
@@ -3279,7 +3296,7 @@ export default function Home() {
         </section>
         ) : null}
 
-        {!showReviewOnly &&
+        {mainView !== "review" &&
         Boolean(currentUser) &&
         showAnsweredInFeed &&
         !loading &&
