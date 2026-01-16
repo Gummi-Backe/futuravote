@@ -157,6 +157,7 @@ export default async function SharedPollPage(props: {
 
   const ownerId = poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
   const isOwner = Boolean(currentUser?.id && ownerId && currentUser.id === ownerId);
+  const showOwnerView = isOwner || isAdmin;
   const backFallbackHref =
     isAdmin && cameFromAdminReports
       ? "/admin/reports"
@@ -173,6 +174,75 @@ export default async function SharedPollPage(props: {
         : isOwner
           ? "← Zurück zum Profil"
           : "← Zurück";
+
+  if (poll.kind === "question" && !showOwnerView) {
+    return (
+      <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SmartBackButton fallbackHref={backFallbackHref} label={backLabel} />
+          </div>
+
+          <section className="mt-6 space-y-6">
+            <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
+              <div className="flex items-start gap-3">
+                {poll.question.imageUrl ? (
+                  <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]">
+                    <img
+                      src={poll.question.imageUrl}
+                      alt={poll.question.title}
+                      className="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain sm:max-h-24 sm:max-w-[7rem]"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100">
+                    Privat (nur per Link)
+                  </span>
+                  <h1 className="mt-2 text-2xl font-bold leading-tight text-white sm:text-3xl">
+                    {poll.question.title}
+                  </h1>
+                  {poll.question.imageCredit ? (
+                    <p className="mt-1 text-xs text-slate-400">{poll.question.imageCredit}</p>
+                  ) : null}
+                </div>
+              </div>
+
+              {poll.question.description ? (
+                <p className="text-sm text-slate-200 sm:text-base">{poll.question.description}</p>
+              ) : null}
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
+              <DetailVoteButtons
+                questionId={poll.question.id}
+                closesAt={poll.question.closesAt}
+                answerMode={answerMode}
+                options={options}
+                initialChoice={
+                  poll.question.userChoice === "yes" || poll.question.userChoice === "no"
+                    ? poll.question.userChoice
+                    : null
+                }
+                initialOptionId={poll.question.userOptionId ?? null}
+              />
+
+              <div className="pt-3">
+                <ReportButton
+                  kind="question"
+                  itemId={poll.question.id}
+                  itemTitle={poll.question.title}
+                  shareId={shareId}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-rose-200/40 sm:w-auto"
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
