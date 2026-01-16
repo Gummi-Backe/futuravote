@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import type { Metadata } from "next";
@@ -25,7 +24,7 @@ function getMetadataBaseUrl() {
 function clampText(value: string, maxLen: number) {
   const trimmed = value.trim().replace(/\s+/g, " ");
   if (trimmed.length <= maxLen) return trimmed;
-  return `${trimmed.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+  return `${trimmed.slice(0, Math.max(0, maxLen - 1)).trimEnd()}.`;
 }
 
 export async function generateMetadata(props: {
@@ -84,8 +83,7 @@ export async function generateMetadata(props: {
 async function getBaseUrl() {
   const headerStore = await headers();
   const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
-  const protocol =
-    headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
+  const protocol = headerStore.get("x-forwarded-proto") ?? (host?.includes("localhost") ? "http" : "https");
   const envBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim();
   if (process.env.NODE_ENV !== "production" && envBaseUrl) {
     return envBaseUrl;
@@ -144,9 +142,7 @@ export default async function SharedPollPage(props: {
   const answerMode = sharedQuestion?.answerMode ?? "binary";
   const isOptions = answerMode === "options";
   const options = sharedQuestion?.options ?? [];
-  const optionsTotalVotes = isOptions
-    ? options.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
-    : 0;
+  const optionsTotalVotes = isOptions ? options.reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0) : 0;
   const yesVotes = !isOptions ? sharedQuestion?.yesVotes ?? 0 : 0;
   const noVotes = !isOptions ? sharedQuestion?.noVotes ?? 0 : 0;
   const totalVotes = isOptions ? optionsTotalVotes : yesVotes + noVotes;
@@ -159,8 +155,7 @@ export default async function SharedPollPage(props: {
   const baseUrl = await getBaseUrl();
   const shareUrl = `${baseUrl}/p/${encodeURIComponent(shareId)}`;
 
-  const ownerId =
-    poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
+  const ownerId = poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
   const isOwner = Boolean(currentUser?.id && ownerId && currentUser.id === ownerId);
   const backFallbackHref =
     isAdmin && cameFromAdminReports
@@ -183,10 +178,7 @@ export default async function SharedPollPage(props: {
     <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
       <div className="mx-auto w-full max-w-4xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SmartBackButton
-            fallbackHref={backFallbackHref}
-            label={backLabel}
-          />
+          <SmartBackButton fallbackHref={backFallbackHref} label={backLabel} />
         </div>
 
         {isOwner ? (
@@ -218,10 +210,8 @@ export default async function SharedPollPage(props: {
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <a
-                    href={`mailto:?subject=${encodeURIComponent(
-                      "Private Umfrage (Future-Vote)"
-                    )}&body=${encodeURIComponent(
-                      `Hier ist der Link zur Umfrage:\r\n\r\n${shareUrl}\r\n\r\nFalls der Link nicht klickbar ist: bitte die ganze Zeile kopieren und im Browser einfuegen.\r\n`
+                    href={`mailto:?subject=${encodeURIComponent("Private Umfrage (Future-Vote)")}&body=${encodeURIComponent(
+                      `Hier ist der Link zur Umfrage:\r\n\r\n${shareUrl}\r\n\r\nFalls der Link nicht klickbar ist: bitte die ganze Zeile kopieren und im Browser einfügen.\r\n`
                     )}`}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-emerald-200/40"
                     aria-label="Per E-Mail senden"
@@ -263,11 +253,7 @@ export default async function SharedPollPage(props: {
                 <ReportButton kind="draft" itemId={poll.draft.id} itemTitle={poll.draft.title} shareId={shareId} />
               </div>
             ) : null}
-            <DraftReviewClient
-              initialDraft={poll.draft}
-              alreadyReviewedInitial={poll.alreadyReviewed}
-              readOnly={isOwner}
-            />
+            <DraftReviewClient initialDraft={poll.draft} alreadyReviewedInitial={poll.alreadyReviewed} readOnly={isOwner} />
           </section>
         ) : (
           <section className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -284,18 +270,12 @@ export default async function SharedPollPage(props: {
                   </div>
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
-                    {poll.question.title}
-                  </h1>
-                  {poll.question.imageCredit ? (
-                    <p className="mt-1 text-xs text-slate-400">{poll.question.imageCredit}</p>
-                  ) : null}
+                  <h1 className="text-2xl font-bold leading-tight text-white sm:text-3xl">{poll.question.title}</h1>
+                  {poll.question.imageCredit ? <p className="mt-1 text-xs text-slate-400">{poll.question.imageCredit}</p> : null}
                 </div>
               </div>
 
-              {poll.question.description ? (
-                <p className="text-sm text-slate-200 sm:text-base">{poll.question.description}</p>
-              ) : null}
+              {poll.question.description ? <p className="text-sm text-slate-200 sm:text-base">{poll.question.description}</p> : null}
 
               {isOptions ? (
                 <>
@@ -355,9 +335,7 @@ export default async function SharedPollPage(props: {
                       ))}
                   </>
                 )}
-                <span className="rounded-full bg-white/5 px-3 py-1">
-                  Insgesamt {totalVotes} Stimmen
-                </span>
+                <span className="rounded-full bg-white/5 px-3 py-1">Insgesamt {totalVotes} Stimmen</span>
               </div>
 
               {isOwner ? (
@@ -379,22 +357,18 @@ export default async function SharedPollPage(props: {
               </div>
             </div>
 
-            {!isOwner ? (
-              <div className="lg:col-span-3">
-                <DetailVoteButtons
-                  questionId={poll.question.id}
-                  closesAt={poll.question.closesAt}
-                  answerMode={answerMode}
-                  options={options}
-                  initialChoice={
-                    poll.question.userChoice === "yes" || poll.question.userChoice === "no"
-                      ? poll.question.userChoice
-                      : null
-                  }
-                  initialOptionId={poll.question.userOptionId ?? null}
-                />
-              </div>
-            ) : null}
+            <div className="lg:col-span-3">
+              <DetailVoteButtons
+                questionId={poll.question.id}
+                closesAt={poll.question.closesAt}
+                answerMode={answerMode}
+                options={options}
+                initialChoice={
+                  poll.question.userChoice === "yes" || poll.question.userChoice === "no" ? poll.question.userChoice : null
+                }
+                initialOptionId={poll.question.userOptionId ?? null}
+              />
+            </div>
           </section>
         )}
       </div>
