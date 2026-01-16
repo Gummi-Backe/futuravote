@@ -15,6 +15,7 @@ import { CommentsSection } from "./CommentsSection";
 import { QuestionViewTracker } from "@/app/components/QuestionViewTracker";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { CommunityResolutionProposals } from "./CommunityResolutionProposals";
+import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -245,6 +246,7 @@ export default async function QuestionDetail(props: {
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
+      <ReferralVisitTracker />
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-8 sm:pt-10 lg:px-6">
         <QuestionViewTracker questionId={id} />
         <SmartBackButton

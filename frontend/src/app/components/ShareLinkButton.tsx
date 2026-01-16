@@ -22,6 +22,26 @@ export function ShareLinkButton({
 }) {
   const [copied, setCopied] = useState(false);
 
+  const resolveReferralUrl = useCallback(async (): Promise<string> => {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const targetPath = `${parsed.pathname}${parsed.search}`;
+      if (!targetPath.startsWith("/questions/") && !targetPath.startsWith("/p/")) return url;
+
+      const res = await fetch("/api/referrals/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetPath }),
+      });
+      if (!res.ok) return url;
+      const json = (await res.json().catch(() => null)) as any;
+      const referralUrl = typeof json?.url === "string" ? json.url : null;
+      return referralUrl || url;
+    } catch {
+      return url;
+    }
+  }, [url]);
+
   useEffect(() => {
     if (!copied) return;
     const t = window.setTimeout(() => setCopied(false), 1200);
@@ -29,10 +49,11 @@ export function ShareLinkButton({
   }, [copied]);
 
   const onClick = useCallback(async () => {
+    const shareUrl = await resolveReferralUrl();
     if (action === "share") {
       try {
         if (typeof navigator !== "undefined" && "share" in navigator && typeof (navigator as any).share === "function") {
-          await (navigator as any).share({ url, title: shareTitle, text: shareText });
+          await (navigator as any).share({ url: shareUrl, title: shareTitle, text: shareText });
           trackShare("share", url, "native");
           return;
         }
@@ -42,14 +63,14 @@ export function ShareLinkButton({
     }
 
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       trackShare("copy", url, "clipboard");
     } catch {
-      window.prompt("Link kopieren:", url);
+      window.prompt("Link kopieren:", shareUrl);
       trackShare("copy", url, "prompt");
     }
-  }, [action, shareText, shareTitle, url]);
+  }, [action, resolveReferralUrl, shareText, shareTitle, url]);
 
   const base =
     variant === "primary"

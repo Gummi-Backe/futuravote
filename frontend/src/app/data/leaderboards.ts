@@ -28,6 +28,9 @@ export type CommunityLeaderRow = {
   tier: "none" | "bronze" | "silver" | "gold";
 };
 
+const REFERRAL_VISIT_POINTS = 10;
+const REFERRAL_DAILY_CAP_POINTS = 100;
+
 type ResolvedQuestionRow = {
   id: string;
   answer_mode: "binary" | "options" | null;
@@ -254,6 +257,7 @@ export async function getCommunityLeaderboard(options: {
       comments: Map<string, { hasSource: boolean }>;
       resolutionProposals: number;
       appliedCommunitySuggestions: number;
+      referralPoints: number;
     }
   >();
 
@@ -265,6 +269,7 @@ export async function getCommunityLeaderboard(options: {
         comments: new Map<string, { hasSource: boolean }>(),
         resolutionProposals: 0,
         appliedCommunitySuggestions: 0,
+        referralPoints: 0,
       };
     pointsByUser.set(userId, cur);
     return cur;
@@ -388,6 +393,73 @@ export async function getCommunityLeaderboard(options: {
     ensure(userId).appliedCommunitySuggestions += 1;
   });
 
+  // Referral-Punkte: zählt, wenn jemand über einen geteilten Link auf eine Frage kommt.
+  type ReferralRow = {
+    session_id: string | null;
+    created_at: string | null;
+    meta: { sharerUserId?: string | null; questionId?: string | null } | null;
+  };
+  const referralRows = await fetchAllRows<ReferralRow>({
+    supabase,
+    table: "analytics_events",
+    select: "session_id,created_at,meta",
+    filters: (q) => q.eq("event", "referral_visit"),
+    orderBy: { column: "created_at", ascending: false },
+    maxRows: 20000,
+  }).catch(() => []);
+
+  const referralQuestionIds = Array.from(
+    new Set(
+      referralRows
+        .map((r) => (r?.meta?.questionId ? String(r.meta.questionId) : null))
+        .filter((x): x is string => Boolean(x))
+    )
+  );
+  await ensureCategories(referralQuestionIds);
+
+  const referralKeysByUserDay = new Map<string, Map<string, Set<string>>>();
+  const getDayKey = (iso: string): string => {
+    try {
+      return new Date(iso).toISOString().slice(0, 10);
+    } catch {
+      return iso.slice(0, 10);
+    }
+  };
+
+  referralRows.forEach((row) => {
+    const sharerUserId = row?.meta?.sharerUserId ? String(row.meta.sharerUserId) : null;
+    const questionId = row?.meta?.questionId ? String(row.meta.questionId) : null;
+    const sessionId = row?.session_id ? String(row.session_id) : null;
+    const createdAt = row?.created_at ? String(row.created_at) : null;
+    if (!sharerUserId || !sessionId || !createdAt) return;
+    if (adminUserIds.has(sharerUserId)) return;
+    if (questionId && category !== "all") {
+      const qCat = categoryByQuestionId.get(questionId);
+      if (qCat !== category) return;
+    } else if (category !== "all") {
+      return;
+    }
+
+    const dayKey = getDayKey(createdAt);
+    const userDay = referralKeysByUserDay.get(sharerUserId) ?? new Map<string, Set<string>>();
+    referralKeysByUserDay.set(sharerUserId, userDay);
+    const set = userDay.get(dayKey) ?? new Set<string>();
+    userDay.set(dayKey, set);
+
+    const dedupeKey = `${sessionId}|${questionId ?? ""}`;
+    set.add(dedupeKey);
+  });
+
+  referralKeysByUserDay.forEach((days, userId) => {
+    const state = ensure(userId);
+    let points = 0;
+    days.forEach((keys) => {
+      const dayPoints = Math.min(keys.size * REFERRAL_VISIT_POINTS, REFERRAL_DAILY_CAP_POINTS);
+      points += dayPoints;
+    });
+    state.referralPoints += points;
+  });
+
   const userIds = Array.from(pointsByUser.keys());
   if (userIds.length === 0) return [];
 
@@ -424,14 +496,16 @@ export async function getCommunityLeaderboard(options: {
         commentsWithSource * 4 +
         commentsWithoutSource * 2 +
         s.resolutionProposals * 3 +
-        s.appliedCommunitySuggestions * 15;
+        s.appliedCommunitySuggestions * 15 +
+        s.referralPoints;
 
       const actionPoints =
         s.acceptedDrafts * 30 +
         commentsWithSource * 4 +
         commentsWithoutSource * 2 +
         s.resolutionProposals * 3 +
-        s.appliedCommunitySuggestions * 15;
+        s.appliedCommunitySuggestions * 15 +
+        s.referralPoints;
 
       return {
         userId,

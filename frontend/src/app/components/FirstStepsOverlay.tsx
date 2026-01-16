@@ -56,9 +56,7 @@ export function FirstStepsOverlay() {
         body: (
           <>
             Tippe auf <span className="font-semibold text-white">Ja</span> oder{" "}
-            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login. Im Feed kannst du zwischen{" "}
-            <span className="font-semibold text-white">Noch nicht abgestimmt</span> und{" "}
-            <span className="font-semibold text-white">Abgestimmt</span> wechseln.
+            <span className="font-semibold text-white">Nein</span>. Du brauchst dafür kein Login.
           </>
         ),
       },
@@ -70,11 +68,11 @@ export function FirstStepsOverlay() {
         title: "3) Auflösung & Archiv",
         body: (
           <>
-            Wenn eine Frage endet, wird sie <span className="font-semibold text-white">mit Quelle</span> aufgelöst. Im{" "}
+            Wenn eine Prognose endet, wird sie <span className="font-semibold text-white">mit Quelle</span> aufgelöst. Im{" "}
             <Link href="/archiv" className="font-semibold text-emerald-100 hover:text-emerald-50">
               Archiv
             </Link>{" "}
-            siehst du das Ergebnis und ob die Community richtig lag.
+            siehst du das Ergebnis.
           </>
         ),
       },
@@ -82,8 +80,8 @@ export function FirstStepsOverlay() {
         title: "4) Eigene Frage vorschlagen",
         body: (
           <>
-            Über <span className="font-semibold text-white">Frage stellen</span> kannst du neue Fragen einreichen. Sie starten
-            im <span className="font-semibold text-white">Review</span> und die Community entscheidet, ob sie live geht.
+            Über <span className="font-semibold text-white">Frage stellen</span> kannst du neue Fragen einreichen. Die Community entscheidet,
+            ob sie live geht.
           </>
         ),
       },
@@ -91,8 +89,8 @@ export function FirstStepsOverlay() {
         title: "Privat per Link (optional)",
         body: (
           <>
-            Du kannst beim Erstellen auch <span className="font-semibold text-white">Privat (nur per Link)</span> wählen. Dann
-            erscheint die Umfrage nicht im Feed – nur wer den Link hat, kann abstimmen.
+            Du kannst beim Erstellen auch <span className="font-semibold text-white">Privat (nur per Link)</span> wählen. Dann erscheint die
+            Umfrage nicht im Feed – nur wer den Link hat, kann abstimmen.
           </>
         ),
       },

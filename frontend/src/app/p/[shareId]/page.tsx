@@ -10,6 +10,7 @@ import { DraftReviewClient } from "./DraftReviewClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { ReportButton } from "@/app/components/ReportButton";
 import { getPollByShareIdFromSupabase } from "@/app/data/dbSupabase";
+import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -178,6 +179,7 @@ export default async function SharedPollPage(props: {
   if (poll.kind === "question" && !showOwnerView) {
     return (
       <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
+        <ReferralVisitTracker />
         <div className="mx-auto w-full max-w-3xl">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SmartBackButton fallbackHref={backFallbackHref} label={backLabel} />
@@ -246,6 +248,7 @@ export default async function SharedPollPage(props: {
 
   return (
     <main className="page-enter min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 pb-12 pt-8 text-slate-100 sm:px-6 sm:pt-10">
+      <ReferralVisitTracker />
       <div className="mx-auto w-full max-w-4xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SmartBackButton fallbackHref={backFallbackHref} label={backLabel} />
