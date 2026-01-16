@@ -210,10 +210,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bitte wähle eine Kategorie." }, { status: 400 });
   }
 
-  const timeLeftHours =
-    typeof body.timeLeftHours === "number" && Number.isFinite(body.timeLeftHours) && body.timeLeftHours > 0
-      ? body.timeLeftHours
-      : 72;
+  // Review-Zeitraum ist fix: 72 Stunden (keine User-Auswahl).
+  const timeLeftHours = 72;
 
   if (visibility === "public" && isResolvable && !resolutionDeadlineToSave) {
     resolutionDeadlineToSave = computeDefaultResolutionDeadlineIso({
@@ -319,4 +317,3 @@ export async function POST(request: Request) {
     { status: 201 }
   );
 }
-

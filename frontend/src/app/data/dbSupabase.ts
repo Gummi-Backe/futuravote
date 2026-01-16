@@ -1521,7 +1521,7 @@ export async function incrementViewsForQuestionInSupabase(questionId: string): P
 
 function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
   // Ursprüngliche Review-Dauer in Stunden
-  let timeLeft = row.time_left_hours ?? 72;
+  let timeLeft = 72;
 
   // Wenn ein Erstellungszeitpunkt vorhanden ist, berechnen wir die verbleibende Zeit
   if (row.created_at) {
@@ -1863,10 +1863,8 @@ export async function createDraftInSupabase(input: {
   const shareId = visibility === "link_only" ? generateShareId() : null;
   const answerMode = normalizeAnswerMode(input.answerMode ?? "binary");
   const isResolvable = typeof input.isResolvable === "boolean" ? input.isResolvable : true;
-  const timeLeft =
-    typeof input.timeLeftHours === "number" && Number.isFinite(input.timeLeftHours) && input.timeLeftHours > 0
-      ? Math.round(input.timeLeftHours)
-      : 72;
+  // Review-Zeitraum ist fix: 72 Stunden (keine User-Auswahl).
+  const timeLeft = 72;
 
   const { data, error } = await supabase
     .from("drafts")
@@ -2191,6 +2189,26 @@ export async function voteOnDraftInSupabase(
   if (!row) return { draft: null, alreadyVoted: false };
 
   const draftRow = row as DraftRow;
+  const status = draftRow.status ?? "open";
+  if (status !== "open") {
+    const optionsMap =
+      normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
+        ? await fetchDraftOptionsMap({ supabase, draftIds: [draftRow.id] })
+        : new Map<string, PollOption[]>();
+    return { draft: mapDraftRow(draftRow, optionsMap.get(draftRow.id)), alreadyVoted: true };
+  }
+
+  // Harter Cutoff: nach Ablauf des Review-Zeitraums dürfen keine Reviews mehr gespeichert werden.
+  const createdMs = Date.parse(String(draftRow.created_at ?? ""));
+  const reviewHours = 72;
+  if (Number.isFinite(createdMs)) {
+    const diffHours = (Date.now() - createdMs) / (1000 * 60 * 60);
+    if (diffHours >= reviewHours) {
+      const err = new Error("Review-Zeitraum abgelaufen.");
+      (err as any).status = 410;
+      throw err;
+    }
+  }
 
   // Prevent multiple reviews for the same draft within the same anonymous session.
   const { error: reviewInsertError } = await supabase

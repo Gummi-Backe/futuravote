@@ -1451,7 +1451,7 @@ export default function Home() {
       }
     }
     // Startansicht bewusst simpel: Review-Bereich zeigt nur offene Drafts.
-    result = result.filter((d) => (d.status ?? "open") === "open");
+    result = result.filter((d) => (d.status ?? "open") === "open" && (d.timeLeftHours ?? 0) > 0);
 
     // Gleiche Logik wie im Feed: "Noch nicht abgestimmt" zeigt nur noch nicht bewertete Drafts,
     // "Abgestimmt" zeigt die bereits bewerteten Drafts (gerätebasiert).
@@ -1968,9 +1968,11 @@ export default function Home() {
           rememberDraftChoice(draftId, choice);
           showToast("Dein Review wurde gespeichert.", "success");
         }
-      } catch {
-        setError("Draft-Review fehlgeschlagen. Bitte versuche es erneut.");
-        showToast("Draft-Review fehlgeschlagen. Bitte versuche es erneut.", "error");
+      } catch (e: unknown) {
+        const message =
+          e instanceof Error && e.message ? e.message : "Draft-Review fehlgeschlagen. Bitte versuche es erneut.";
+        setError(message);
+        showToast(message, "error");
       } finally {
         setDraftSubmittingId(null);
         setPendingDraftChoice((prev) => {

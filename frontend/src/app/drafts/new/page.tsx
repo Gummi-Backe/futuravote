@@ -165,7 +165,7 @@ export default function NewDraftPage() {
   const [resolutionDeadlineDate, setResolutionDeadlineDate] = useState<string>("");
   const [resolutionDeadlineTime, setResolutionDeadlineTime] = useState<string>("");
 
-  const [timeLeftHours, setTimeLeftHours] = useState<number>(72);
+  const [timeLeftHours] = useState<number>(72);
   const [endDate, setEndDate] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
   const minEndDate = getTodayDateString();
@@ -443,10 +443,7 @@ export default function NewDraftPage() {
       setCustomRegion(regionValue);
     }
 
-    const reviewHours = Number(s.reviewHours);
-    if (Number.isFinite(reviewHours) && reviewHours > 0) {
-      setTimeLeftHours(Math.round(reviewHours));
-    }
+    // Review-Zeitraum ist fix (72h) und wird nicht aus der KI übernommen.
 
     const pollEndMs = Date.parse(s.pollEndAt);
     if (Number.isFinite(pollEndMs)) {
@@ -1557,76 +1554,16 @@ export default function NewDraftPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-100">
-                {isPrivatePoll ? "Abstimmung endet am" : "Review-Zeitraum (Community-Review)"}
+                {isPrivatePoll ? "Abstimmung endet am" : "Community-Review (72 Stunden)"}
               </label>
 
               {!isPrivatePoll ? (
                 <div className="mt-2 space-y-3">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-black/20">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white">Dauer (Stunden)</div>
-                      <p className="mt-0.5 text-xs text-slate-300">
-                        Wie lange die Community Zeit hat, deine Frage im Review-Bereich zu bewerten. Standard: 72 Stunden.
-                      </p>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                          {[
-                            { label: "24h", hours: 24, hint: "1 Tag" },
-                            { label: "48h", hours: 48, hint: "2 Tage" },
-                            { label: "72h", hours: 72, hint: "3 Tage" },
-                            { label: "168h", hours: 168, hint: "7 Tage" },
-                            { label: "336h", hours: 336, hint: "14 Tage" },
-                          ].map((preset) => (
-                            <button
-                              key={preset.hours}
-                              type="button"
-                              onClick={() => setTimeLeftHours(preset.hours)}
-                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${
-                                timeLeftHours === preset.hours
-                                  ? "border-emerald-300/60 bg-emerald-500/20 text-white"
-                                  : "border-white/15 bg-white/5 text-slate-100 hover:border-emerald-200/30"
-                              }`}
-                            >
-                              <span>{preset.label}</span>
-                              <span className="text-[11px] text-slate-300/90">{preset.hint}</span>
-                            </button>
-                          ))}
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setTimeLeftHours((prev) => Math.max(1, Math.round((prev || 72) - 1)))}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition hover:-translate-y-0.5 hover:border-emerald-200/30"
-                            aria-label="Eine Stunde weniger"
-                          >
-                            -
-                          </button>
-                          <input
-                            id="timeLeft"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={String(timeLeftHours)}
-                            onChange={(e) => {
-                              const raw = e.target.value.replace(/[^\d]/g, "");
-                              const parsed = raw ? Number.parseInt(raw, 10) : 0;
-                              const clamped = Math.min(24 * 365, Math.max(1, Number.isFinite(parsed) ? parsed : 72));
-                              setTimeLeftHours(clamped);
-                            }}
-                            className="h-10 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setTimeLeftHours((prev) => Math.min(24 * 365, Math.round((prev || 72) + 1)))}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition hover:-translate-y-0.5 hover:border-emerald-200/30"
-                            aria-label="Eine Stunde mehr"
-                          >
-                            +
-                          </button>
-                    </div>
-
-                    <p className="mt-2 text-xs text-slate-400">Tipp: Wenn du unsicher bist, nimm 72 Stunden.</p>
+                    <div className="text-sm font-semibold text-white">Community-Review</div>
+                    <p className="mt-1 text-xs text-slate-300">
+                      Der Review-Zeitraum ist fix auf 72 Stunden gesetzt. Danach kann nicht mehr bewertet werden.
+                    </p>
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-black/20">
