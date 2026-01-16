@@ -50,8 +50,14 @@ function computeDefaultResolutionDeadlineIso({
   closesAtIso?: string;
   timeLeftHours: number;
 }): string {
-  const baseIso = closesAtIso && !Number.isNaN(Date.parse(closesAtIso)) ? closesAtIso : new Date(Date.now() + timeLeftHours * 60 * 60 * 1000).toISOString();
-  return addDaysIso(baseIso, 31) ?? new Date(Date.now() + (timeLeftHours * 60 * 60 + 31 * 24 * 60 * 60) * 1000).toISOString();
+  const baseIso =
+    closesAtIso && !Number.isNaN(Date.parse(closesAtIso))
+      ? closesAtIso
+      : new Date(Date.now() + timeLeftHours * 60 * 60 * 1000).toISOString();
+  return (
+    addDaysIso(baseIso, 31) ??
+    new Date(Date.now() + (timeLeftHours * 60 * 60 + 31 * 24 * 60 * 60) * 1000).toISOString()
+  );
 }
 
 function isAllowedGptImageUrl(rawUrl: string): boolean {
@@ -74,7 +80,6 @@ function isAllowedGptImageUrl(rawUrl: string): boolean {
       if (url.hostname === defaultHost) return true;
     }
 
-    // Fallback: erlaube Supabase Public Storage URLs (eigene Assets).
     if (url.hostname.endsWith(".supabase.co") && url.pathname.includes("/storage/v1/object/public/")) {
       return true;
     }
@@ -107,24 +112,18 @@ export async function POST(request: Request) {
         const msg = typeof error?.message === "string" ? error.message : "unknown";
         if (msg.toLowerCase().includes("oauth_tokens")) {
           return NextResponse.json(
-            { error: "OAuth ist noch nicht aktiviert. Bitte fuehre `supabase/oauth_gpt.sql` in Supabase aus." },
+            { error: "OAuth ist noch nicht aktiviert. Bitte führe `supabase/oauth_gpt.sql` in Supabase aus." },
             { status: 503 }
           );
         }
         console.error("Draft OAuth lookup failed", error);
-        return NextResponse.json(
-          { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: "Bitte melde dich an, bevor du eine Frage vorschlägst." }, { status: 401 });
       }
     }
   }
 
   if (!user) {
-    return NextResponse.json(
-      { error: "Bitte melde dich an, bevor du eine Frage vorschlägst." },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "Bitte melde dich an, bevor du eine Frage vorschlägst." }, { status: 401 });
   }
 
   let body: DraftInput;
@@ -134,21 +133,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
+  const visibility: PollVisibility =
+    body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
+  const isPrivatePoll = visibility === "link_only";
+
   const title = (body.title ?? "").trim();
-  const category = (body.category ?? "").trim();
+  const categoryRaw = (body.category ?? "").trim();
+  const category = isPrivatePoll ? categoryRaw || "Privat" : categoryRaw;
   const description = (body.description ?? "").trim() || undefined;
-  const region = (body.region ?? "").trim() || undefined;
+  const region = isPrivatePoll ? undefined : (body.region ?? "").trim() || undefined;
+
   let imageUrl = normalizeImageUrl(body.imageUrl);
   let imageCredit = (body.imageCredit ?? "").trim() || undefined;
 
-  // Fuer GPT/OAuth: Externe Bild-URLs (z.B. Unsplash) werden nicht akzeptiert.
-  // Wenn ein Bild gewuenscht ist, nutzen wir stattdessen das Standardbild aus FV_GPT_DEFAULT_IMAGE_URL.
   if (isOauthGpt && imageUrl && !isAllowedGptImageUrl(imageUrl)) {
     imageUrl = undefined;
     imageCredit = undefined;
   }
 
-  // Fuer GPT/OAuth: wenn kein Bild uebergeben wurde, nutze ein Standardbild (z.B. eigenes KI-Logo in Supabase Storage).
   if (isOauthGpt && !imageUrl) {
     imageUrl = normalizeImageUrl(process.env.FV_GPT_DEFAULT_IMAGE_URL);
     if (!imageCredit) {
@@ -157,8 +159,8 @@ export async function POST(request: Request) {
   }
 
   const closesAtRaw = (body.closesAt ?? "").trim();
-  const targetClosesAt =
-    closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
+  const targetClosesAt = closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
+
   const resolutionCriteria = (body.resolutionCriteria ?? "").trim() || undefined;
   const resolutionSource = (body.resolutionSource ?? "").trim() || undefined;
   const resolutionDeadlineRaw = (body.resolutionDeadline ?? "").trim();
@@ -166,7 +168,9 @@ export async function POST(request: Request) {
     resolutionDeadlineRaw && !Number.isNaN(Date.parse(resolutionDeadlineRaw)) ? resolutionDeadlineRaw : undefined;
 
   const answerMode: AnswerMode = body.answerMode === "options" ? "options" : "binary";
-  const isResolvable = typeof body.isResolvable === "boolean" ? body.isResolvable : true;
+  const isResolvableRaw = typeof body.isResolvable === "boolean" ? body.isResolvable : true;
+  const isResolvable = isPrivatePoll ? false : isResolvableRaw;
+
   const resolutionCriteriaToSave = isResolvable ? resolutionCriteria : undefined;
   const resolutionSourceToSave = isResolvable ? resolutionSource : undefined;
   let resolutionDeadlineToSave = isResolvable ? resolutionDeadline : undefined;
@@ -190,7 +194,7 @@ export async function POST(request: Request) {
       }
       const key = label.toLocaleLowerCase("de-DE");
       if (seen.has(key)) {
-        return NextResponse.json({ error: "Antwortoptionen muessen eindeutig sein." }, { status: 400 });
+        return NextResponse.json({ error: "Antwortoptionen müssen eindeutig sein." }, { status: 400 });
       }
       seen.add(key);
     }
@@ -201,20 +205,16 @@ export async function POST(request: Request) {
   if (!title) {
     return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
   }
-  if (!category) {
+
+  if (!isPrivatePoll && !category) {
     return NextResponse.json({ error: "Bitte wähle eine Kategorie." }, { status: 400 });
   }
-
-  const visibility: PollVisibility =
-    body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
 
   const timeLeftHours =
     typeof body.timeLeftHours === "number" && Number.isFinite(body.timeLeftHours) && body.timeLeftHours > 0
       ? body.timeLeftHours
       : 72;
 
-  // Fail-safe: Bei oeffentlichen Prognosen soll es keine "missing resolutionDeadline" Fehler geben.
-  // Wenn kein Datum uebergeben wurde, setzen wir automatisch eine Pruef-Deadline 31 Tage nach dem Enddatum.
   if (visibility === "public" && isResolvable && !resolutionDeadlineToSave) {
     resolutionDeadlineToSave = computeDefaultResolutionDeadlineIso({
       closesAtIso: targetClosesAt,
@@ -225,7 +225,7 @@ export async function POST(request: Request) {
   if (visibility === "public" && isResolvable) {
     if (!resolutionCriteria) {
       return NextResponse.json(
-        { error: "Bitte beschreibe, wie die Frage aufgeloest wird (Aufloesungs-Regeln)." },
+        { error: "Bitte beschreibe, wie die Frage aufgelöst wird (Auflösungs-Regeln)." },
         { status: 400 }
       );
     }
@@ -236,20 +236,7 @@ export async function POST(request: Request) {
       );
     }
     if (!resolutionDeadlineToSave) {
-      return NextResponse.json(
-        { error: "Bitte setze eine Aufloesungs-Deadline (Datum/Uhrzeit)." },
-        { status: 400 }
-      );
-    }
-  }
-
-  if (visibility === "link_only") {
-    const anyResolution = Boolean(resolutionCriteria || resolutionSource || resolutionDeadline);
-    if (anyResolution && !resolutionDeadline) {
-      return NextResponse.json(
-        { error: "Wenn du Aufloesungs-Regeln angibst, setze bitte auch eine Aufloesungs-Deadline (Datum/Uhrzeit)." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Bitte setze eine Auflösungs-Deadline (Datum/Uhrzeit)." }, { status: 400 });
     }
   }
 
@@ -258,19 +245,20 @@ export async function POST(request: Request) {
       title,
       category,
       description,
-      region,
+      region: undefined,
       imageUrl,
       imageCredit,
       timeLeftHours,
       targetClosesAt,
       creatorId: user.id,
       answerMode,
-      isResolvable,
+      isResolvable: false,
       options,
-      resolutionCriteria: resolutionCriteriaToSave,
-      resolutionSource: resolutionSourceToSave,
-      resolutionDeadline: resolutionDeadlineToSave,
+      resolutionCriteria: undefined,
+      resolutionSource: undefined,
+      resolutionDeadline: undefined,
     });
+
     await logAnalyticsEventServer({
       event: "create_private_poll",
       sessionId: sessionId ?? "unknown",
@@ -313,6 +301,7 @@ export async function POST(request: Request) {
     resolutionSource: resolutionSourceToSave,
     resolutionDeadline: resolutionDeadlineToSave,
   });
+
   await logAnalyticsEventServer({
     event: "create_draft",
     sessionId: sessionId ?? "unknown",
@@ -320,6 +309,7 @@ export async function POST(request: Request) {
     path: "/drafts/new",
     meta: { visibility },
   });
+
   return NextResponse.json(
     {
       kind: "draft",
@@ -329,3 +319,4 @@ export async function POST(request: Request) {
     { status: 201 }
   );
 }
+

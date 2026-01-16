@@ -177,6 +177,12 @@ export default function NewDraftPage() {
 
   useEffect(() => {
     if (!isPrivatePoll) return;
+    setPollKind("meinung");
+    setShowTypeHelp(false);
+  }, [isPrivatePoll]);
+
+  useEffect(() => {
+    if (!isPrivatePoll) return;
     if (!endDate) {
       setEndDate(minEndDate);
     }
@@ -537,7 +543,7 @@ export default function NewDraftPage() {
       return;
     }
 
-    let finalCategory = useCustomCategory ? customCategory.trim() : category.trim();
+    let finalCategory = isPrivatePoll ? "Privat" : useCustomCategory ? customCategory.trim() : category.trim();
     if (!finalCategory) {
       setError("Bitte wähle eine Kategorie oder gib eine eigene ein.");
       return;
@@ -693,10 +699,10 @@ export default function NewDraftPage() {
           title: trimmedTitle,
           description: trimmedDescription || undefined,
           category: finalCategory,
-          region: finalRegion || "Global",
+          region: isPrivatePoll ? undefined : finalRegion || "Global",
           visibility,
           answerMode,
-          isResolvable,
+          isResolvable: isPrivatePoll ? false : isResolvable,
           options: optionsToSend,
           imageUrl: finalImageUrl,
           imageCredit: trimmedImageCredit || undefined,
@@ -988,9 +994,10 @@ export default function NewDraftPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-sm font-medium text-slate-100">Typ</label>
+              {!isPrivatePoll ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm font-medium text-slate-100">Typ</label>
                   <button
                     type="button"
                     onClick={() => setShowTypeHelp((v) => !v)}
@@ -1060,7 +1067,8 @@ export default function NewDraftPage() {
                     </div>
                   </div>
                 ) : null}
-              </div>
+                </div>
+              ) : null}
 
               <div className="space-y-2 border-t border-white/10 pt-4">
                 <div className="flex items-center justify-between gap-3">
@@ -1475,6 +1483,7 @@ export default function NewDraftPage() {
               </div>
             </div>
 
+            {!isPrivatePoll ? (
             <div className="space-y-2">
               <label htmlFor="category" className="text-sm font-medium text-slate-100">
                 Kategorie
@@ -1511,7 +1520,9 @@ export default function NewDraftPage() {
                 />
               )}
             </div>
+            ) : null}
 
+            {!isPrivatePoll ? (
             <div className="space-y-2">
               <label htmlFor="region" className="text-sm font-medium text-slate-100">
                 Region (optional)
@@ -1542,6 +1553,7 @@ export default function NewDraftPage() {
                 Frage global.
               </p>
             </div>
+            ) : null}
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-100">
