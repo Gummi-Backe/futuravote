@@ -9,11 +9,18 @@ type Body = {
   size?: "1024x1024" | "1024x1536" | "1536x1024";
 };
 
-type ImageModel = "dall-e-3" | "dall-e-2" | "gpt-image-1";
+type ImageModel = "dall-e-3" | "dall-e-2" | "gpt-image-1" | "gpt-image-1-mini" | "gpt-image-1.5";
 
 function getImageModel(): ImageModel {
   const raw = process.env.OPENAI_IMAGE_MODEL?.trim();
-  if (raw === "dall-e-3" || raw === "dall-e-2" || raw === "gpt-image-1") return raw;
+  if (
+    raw === "dall-e-3" ||
+    raw === "dall-e-2" ||
+    raw === "gpt-image-1" ||
+    raw === "gpt-image-1-mini" ||
+    raw === "gpt-image-1.5"
+  )
+    return raw;
   // Default: DALL·E 3 works for most accounts without org verification (unlike gpt-image-1).
   return "dall-e-3";
 }
