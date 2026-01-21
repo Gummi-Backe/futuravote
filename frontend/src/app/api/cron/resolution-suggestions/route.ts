@@ -361,7 +361,7 @@ export async function GET(request: Request) {
     created,
     failed,
     skippedExisting,
-    todayUtc: todayIso,
+    todayUtc: nowIso.slice(0, 10),
     nowUtc: nowIso,
   });
 }
