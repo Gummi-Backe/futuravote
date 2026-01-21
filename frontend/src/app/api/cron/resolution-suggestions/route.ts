@@ -98,10 +98,6 @@ async function callPerplexity(opts: { apiKey: string; model: string; prompt: str
   return { ok: true as const, content: content.trim() };
 }
 
-function todayUtcDateIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? "25");
@@ -122,7 +118,6 @@ export async function GET(request: Request) {
 
   const supabase = getSupabaseAdminClient();
   const nowIso = new Date().toISOString();
-  const todayIso = todayUtcDateIso();
 
   // Kandidaten laden (mehr als limit, weil wir danach filtern).
   const { data: rows, error } = await supabase
@@ -131,7 +126,9 @@ export async function GET(request: Request) {
       "id,title,description,category,region,closes_at,resolution_criteria,resolution_source,resolution_deadline,visibility,resolved_outcome,resolved_option_id,answer_mode,is_resolvable"
     )
     .eq("visibility", "public")
-    .lt("closes_at", todayIso)
+    // Wichtig: Wir filtern nach "wirklich beendet" (Zeitstempel), nicht nur nach "vor heute".
+    // Sonst würden Fragen, die heute schon abgelaufen sind, erst morgen in die Queue kommen.
+    .lt("closes_at", nowIso)
     .limit(limit * 4);
 
   if (error) {
