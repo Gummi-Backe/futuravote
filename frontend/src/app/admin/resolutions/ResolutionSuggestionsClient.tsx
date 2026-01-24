@@ -77,6 +77,23 @@ export default function ResolutionSuggestionsClient() {
   const [rows, setRows] = useState<SuggestionRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cronLoading, setCronLoading] = useState(false);
+  const [cronMessage, setCronMessage] = useState<string | null>(null);
+  const [cronLast, setCronLast] = useState<{ at: string | null; meta: any | null } | null>(null);
+
+  const fetchCronStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/resolution-status", { cache: "no-store" });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!res.ok) return;
+      setCronLast({
+        at: typeof json?.lastCronAt === "string" ? json.lastCronAt : null,
+        meta: json?.lastCronMeta ?? null,
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchRows = useCallback(async (nextStatus: Status) => {
     setLoading(true);
@@ -101,6 +118,37 @@ export default function ResolutionSuggestionsClient() {
   useEffect(() => {
     void fetchRows(status);
   }, [fetchRows, status]);
+
+  useEffect(() => {
+    void fetchCronStatus();
+  }, [fetchCronStatus]);
+
+  const runCronNow = useCallback(async () => {
+    setCronLoading(true);
+    setCronMessage(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/cron/resolution-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 25 }),
+      });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!res.ok) throw new Error(json?.error ?? "Cron konnte nicht ausgeführt werden.");
+
+      const created = Number(json?.created ?? 0) || 0;
+      const checked = Number(json?.checked ?? 0) || 0;
+      const failed = Number(json?.failed ?? 0) || 0;
+      setCronMessage(`Cron fertig: geprüft ${checked}, neu erstellt ${created}, Fehler ${failed}.`);
+      await fetchRows(status);
+      await fetchCronStatus();
+    } catch (e) {
+      setCronMessage(null);
+      setError(e instanceof Error ? e.message : "Cron konnte nicht ausgeführt werden.");
+    } finally {
+      setCronLoading(false);
+    }
+  }, [fetchCronStatus, fetchRows, status]);
 
   const doAction = useCallback(
     async (id: string, action: "apply" | "dismiss") => {
@@ -139,8 +187,33 @@ export default function ResolutionSuggestionsClient() {
             Täglicher Cron legt KI-Vorschläge an; zusätzlich können Nutzer nach Ende einer Frage das Ergebnis mit Quellen vorschlagen.
           </p>
         </div>
-        <SmartBackButton fallbackHref="/admin" label="← Zurück" />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runCronNow()}
+            disabled={cronLoading}
+            className="rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-xs font-semibold text-amber-100 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 hover:border-amber-300/70 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            title="Erstellt neue KI-Vorschläge für fällige Prognosen"
+          >
+            {cronLoading ? "Cron läuft..." : "Cron jetzt anstoßen"}
+          </button>
+          <SmartBackButton fallbackHref="/admin" label="← Zurück" />
+        </div>
       </div>
+
+      {cronLast?.at ? (
+        <div className="mt-4 text-xs text-slate-300">
+          Zuletzt geprüft: {formatDate(cronLast.at)}
+          {cronLast.meta ? (
+            <span className="text-slate-400">
+              {" "}
+              (neu {Number(cronLast.meta?.created ?? 0) || 0}, Fehler {Number(cronLast.meta?.failed ?? 0) || 0})
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {cronMessage ? <div className="mt-3 text-sm text-emerald-100">{cronMessage}</div> : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         {(

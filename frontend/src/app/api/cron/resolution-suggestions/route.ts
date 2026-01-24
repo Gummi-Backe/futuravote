@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -102,6 +103,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? "25");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(60, Math.trunc(limitRaw))) : 25;
+  const source = String(url.searchParams.get("source") ?? "").trim().slice(0, 40);
 
   const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
   const providedSecret = url.searchParams.get("secret") ?? "";
@@ -109,6 +111,8 @@ export async function GET(request: Request) {
   if (!isVercelCron(request) && secret && providedSecret !== secret) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
+
+  const trigger = isVercelCron(request) ? (source === "admin" ? "admin" : "vercel_cron") : "manual";
 
   const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
   if (!apiKey) {
@@ -152,7 +156,14 @@ export async function GET(request: Request) {
   });
 
   if (candidatesAll.length === 0) {
-    return NextResponse.json({ ok: true, checked: 0, created: 0, skippedExisting: 0, note: "Keine faelligen Fragen." });
+    const payload = { ok: true, checked: 0, considered: 0, created: 0, failed: 0, skippedExisting: 0, todayUtc: nowIso.slice(0, 10), nowUtc: nowIso };
+    await logAnalyticsEventServer({
+      event: "cron_resolution_suggestions_run",
+      sessionId: "cron_resolution_suggestions",
+      path: "/api/cron/resolution-suggestions",
+      meta: { trigger, source: source || null, limit, ...payload },
+    });
+    return NextResponse.json({ ...payload, note: "Keine faelligen Fragen." });
   }
 
   // Bereits pending? (idempotent)
@@ -355,13 +366,26 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    ok: true,
-    checked: candidatesAll.length,
-    considered: candidates.length,
-    created,
-    failed,
-    skippedExisting,
-    todayUtc: nowIso.slice(0, 10),
-    nowUtc: nowIso,
+    ...(await (async () => {
+      const payload = {
+        ok: true,
+        checked: candidatesAll.length,
+        considered: candidates.length,
+        created,
+        failed,
+        skippedExisting,
+        todayUtc: nowIso.slice(0, 10),
+        nowUtc: nowIso,
+      };
+
+      await logAnalyticsEventServer({
+        event: "cron_resolution_suggestions_run",
+        sessionId: "cron_resolution_suggestions",
+        path: "/api/cron/resolution-suggestions",
+        meta: { trigger, source: source || null, limit, ...payload },
+      });
+
+      return payload;
+    })()),
   });
 }

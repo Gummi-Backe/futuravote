@@ -15,6 +15,7 @@ import {
 } from "./lib/voteCooldown";
 import { ReportButton } from "./components/ReportButton";
 import { FirstStepsOverlay } from "./components/FirstStepsOverlay";
+import { AdminResolutionBanner } from "./components/AdminResolutionBanner";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -2401,6 +2402,10 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {currentUser?.role === "admin" ? (
+            <AdminResolutionBanner enabled onOpen={() => navigateWithTransition("/admin/resolutions")} />
+          ) : null}
 
           <div className="hidden md:flex flex-wrap items-center gap-2 sm:gap-3">
             <button
