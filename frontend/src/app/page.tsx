@@ -998,8 +998,7 @@ export default function Home() {
       const basePageSize = Math.max(QUESTIONS_PAGE_SIZE, DRAFTS_PAGE_SIZE);
       const pageSize = searchQuery.trim().length >= 2 ? Math.max(basePageSize, 24) : basePageSize;
 
-      // Fragen und Drafts getrennt laden, damit der Abstimmungs-Filter
-      // (Noch nicht abgestimmt / Abgestimmt) nur die Fragen beeinflusst.
+      // Fragen und Drafts getrennt laden, damit beide Listen unabhängig paginiert werden können.
       const questionParams = new URLSearchParams();
       questionParams.set("pageSize", String(pageSize));
       questionParams.set("include", "questions");
@@ -1012,8 +1011,9 @@ export default function Home() {
       const draftParams = new URLSearchParams();
       draftParams.set("pageSize", String(pageSize));
       draftParams.set("include", "drafts");
-      // Review-Bereich: offene Drafts, bereits bewertete in dieser Session ausblenden.
-      draftParams.set("voted", "exclude");
+      // Drafts: "Noch nicht abgestimmt" / "Abgestimmt" soll auch hier funktionieren.
+      // Serverseitig wird (gerätebasiert) über fv_session gefiltert.
+      draftParams.set("voted", guestVotedFilter);
       if (activeCategory) draftParams.set("category", activeCategory);
       if (activeRegion) draftParams.set("region", activeRegion);
       if (searchQuery.trim().length >= 2) draftParams.set("q", searchQuery.trim());
@@ -1281,9 +1281,13 @@ export default function Home() {
     const submitted = params.get("draft");
     if (submitted === "submitted") {
       showToast("Deine Frage wurde eingereicht und erscheint im Review-Bereich.", "success");
+      // Wichtig: Nach dem Einreichen kommen wir meist per Client-Navigation zurück auf "/".
+      // Dabei kann der Home-Cache greifen und das frische Draft noch nicht enthalten.
+      // Deshalb hier einmal aktiv neu laden.
+      void fetchLatest();
       window.history.replaceState(null, "", "/");
     }
-  }, [showToast]);
+  }, [fetchLatest, showToast]);
 
   useEffect(() => {
     try {
@@ -1462,17 +1466,9 @@ export default function Home() {
     // Startansicht bewusst simpel: Review-Bereich zeigt nur offene Drafts.
     result = result.filter((d) => (d.status ?? "open") === "open" && (d.timeLeftHours ?? 0) > 0);
 
-    // Gleiche Logik wie im Feed: "Noch nicht abgestimmt" zeigt nur noch nicht bewertete Drafts,
-    // "Abgestimmt" zeigt die bereits bewerteten Drafts (gerätebasiert).
-    if (guestVotedFilter === "exclude") {
-      result = result.filter((d) => !reviewedDrafts[d.id]);
-    } else {
-      result = result.filter((d) => Boolean(reviewedDrafts[d.id]));
-    }
-
     // Reihenfolge so lassen, wie sie vom Server kommt (Cursor-Pagination + Ranking).
     return result;
-  }, [activeCategory, activeRegion, drafts, draftStatusFilter, guestVotedFilter, reviewedDrafts]);
+  }, [activeCategory, activeRegion, drafts, draftStatusFilter]);
 
   useEffect(() => {
     // Der Filter ist in der UI entfernt; wir halten ihn defensiv auf "open".
@@ -1498,12 +1494,13 @@ export default function Home() {
   const draftVisibilityKey = useMemo(() => {
     return [
       activeTab,
+      guestVotedFilter,
       activeCategory ?? "",
       activeRegion ?? "",
       draftStatusFilter,
       searchQuery,
     ].join("|");
-  }, [activeTab, activeCategory, activeRegion, draftStatusFilter, searchQuery]);
+  }, [activeTab, activeCategory, activeRegion, draftStatusFilter, guestVotedFilter, searchQuery]);
 
   const lastQuestionVisibilityKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1707,8 +1704,7 @@ export default function Home() {
           params.set("include", "drafts");
           if (draftsCursor) params.set("draftsCursor", draftsCursor);
           params.set("tab", activeTab);
-          // Review-Bereich: offene Drafts, bereits bewertete in dieser Session ausblenden.
-          params.set("voted", "exclude");
+          params.set("voted", guestVotedFilter);
           if (activeCategory) params.set("category", activeCategory);
           if (activeRegion) params.set("region", activeRegion);
           if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
@@ -1751,6 +1747,7 @@ export default function Home() {
     visibleDraftCount,
     loadingMoreDrafts,
     searchQuery,
+    guestVotedFilter,
   ]);
 
   const handleVote = useCallback(
@@ -1967,7 +1964,15 @@ export default function Home() {
         }
 
         const updated = data.draft as Draft;
-        setDrafts((prev) => prev.map((d) => (d.id === draftId ? updated : d)));
+        setDrafts((prev) => {
+          const patched = prev.map((d) => (d.id === draftId ? updated : d));
+          // UX: Wenn wir gerade "Noch nicht abgestimmt" anzeigen, soll der Draft nach dem Review
+          // sofort verschwinden (ohne einen kompletten Reload).
+          if (guestVotedFilter === "exclude") {
+            return patched.filter((d) => d.id !== draftId);
+          }
+          return patched;
+        });
         markDraftReviewed(draftId);
         invalidateProfileCaches();
 
@@ -1991,7 +1996,7 @@ export default function Home() {
         });
       }
     },
-    [markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
+    [guestVotedFilter, markDraftReviewed, rememberDraftChoice, reviewedDrafts, showToast]
   );
 
   const handleAdminDraftAction = useCallback(
@@ -3288,14 +3293,14 @@ export default function Home() {
                      key={draft.id}
                      draft={draft}
                      onVote={(choice) => handleDraftVote(draft.id, choice)}
-                    onAdminAction={
-                      currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined
-                     }
-                     isSubmitting={draftSubmittingId === draft.id}
-                      hasVoted={Boolean(reviewedDrafts[draft.id])}
-                     votedChoice={pendingDraftChoice[draft.id] ?? reviewedDraftChoices[draft.id] ?? null}
-                   />
-                 ))}
+                      onAdminAction={
+                       currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined
+                      }
+                      isSubmitting={draftSubmittingId === draft.id}
+                       hasVoted={guestVotedFilter === "only" || Boolean(reviewedDrafts[draft.id])}
+                      votedChoice={pendingDraftChoice[draft.id] ?? reviewedDraftChoices[draft.id] ?? null}
+                    />
+                  ))}
           </div>
           <div ref={draftsEndRef} className="h-1" />
         </section>
