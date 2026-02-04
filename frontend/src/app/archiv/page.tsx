@@ -645,9 +645,22 @@ export default async function ArchivPage(props: {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end sm:justify-start">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${winnerClassName}`}>
-                          {winnerLabel}
-                        </span>
+                        <div className="flex flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
+                          {resolvedLabel ? (
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                resolvedLabel === "Ja"
+                                  ? "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
+                                  : "border-rose-300/30 bg-rose-500/15 text-rose-100"
+                              }`}
+                            >
+                              Ergebnis: {resolvedLabel}
+                            </span>
+                          ) : null}
+                          <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${winnerClassName}`}>
+                            {winnerLabel}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2">
                           {resolvedLabel ? (
                             <ShareLinkButton
