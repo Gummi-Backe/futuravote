@@ -852,7 +852,7 @@ export default function NewDraftPage() {
                     style={{ width: `${width}%` }}
                     aria-hidden="true"
                   />
-                  <span className="relative z-10 truncate">{label}</span>
+                  <span className="relative z-10 block w-full truncate">{label}</span>
                 </button>
               );
             })}
