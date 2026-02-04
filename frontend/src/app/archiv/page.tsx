@@ -590,7 +590,7 @@ export default async function ArchivPage(props: {
                 const resolvedCardClassName = isResolvedBinary
                   ? "relative overflow-hidden rounded-3xl border border-emerald-200/25 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.22),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(99,102,241,0.18),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(16,185,129,0.16)] backdrop-blur sm:p-6"
                   : !isResolvable
-                    ? "relative overflow-hidden rounded-3xl border border-sky-200/25 bg-[radial-gradient(ellipse_at_top,_rgba(56,189,248,0.18),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(168,85,247,0.16),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(56,189,248,0.12)] backdrop-blur sm:p-6"
+                    ? "relative overflow-hidden rounded-3xl border border-amber-200/25 bg-[radial-gradient(ellipse_at_top,_rgba(245,158,11,0.20),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(249,115,22,0.16),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(245,158,11,0.14)] backdrop-blur sm:p-6"
                     : "rounded-3xl border border-white/10 bg-white/5 p-4";
 
                 const resolvedOutcome = isResolvedBinary ? (q.resolved_outcome as "yes" | "no") : null;
@@ -723,6 +723,7 @@ export default async function ArchivPage(props: {
                         </div>
                       </div>
                     </div>
+
                   </article>
                 );
               })}
