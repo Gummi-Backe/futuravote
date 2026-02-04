@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
-import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 
@@ -125,6 +124,10 @@ function pct(part: number, total: number) {
 function getMajorityChoice(yesVotes: number, noVotes: number): "yes" | "no" | null {
   if (yesVotes === noVotes) return null;
   return yesVotes > noVotes ? "yes" : "no";
+}
+
+function outcomeText(choice: "yes" | "no") {
+  return choice === "yes" ? "Ja" : "Nein";
 }
 
 function normalizeAnswerMode(value: unknown): "binary" | "options" {
@@ -539,26 +542,6 @@ export default async function ArchivPage(props: {
             </div>
           ) : (
             <div className="mt-4 space-y-3">
-              {(() => {
-                const resolved = ended.filter((q) => q.resolved_outcome === "yes" || q.resolved_outcome === "no");
-                if (resolved.length === 0) return null;
-                const best = resolved.reduce((acc, cur) => {
-                  const accTotal = Math.max(0, (acc.yes_votes ?? 0) + (acc.no_votes ?? 0));
-                  const curTotal = Math.max(0, (cur.yes_votes ?? 0) + (cur.no_votes ?? 0));
-                  return curTotal > accTotal ? cur : acc;
-                }, resolved[0]);
-
-                return (
-                  <ResolvedSuccessCard
-                    title={best.title}
-                    url={`${baseUrl}/questions/${encodeURIComponent(best.id)}`}
-                    resolvedOutcome={best.resolved_outcome as "yes" | "no"}
-                    yesVotes={best.yes_votes ?? 0}
-                    noVotes={best.no_votes ?? 0}
-                  />
-                );
-              })()}
-
               {ended.map((q) => {
                 const answerMode = normalizeAnswerMode(q.answer_mode);
                 const isResolvable = normalizeResolvable(q.is_resolvable);
@@ -602,6 +585,23 @@ export default async function ArchivPage(props: {
                       ? opts.find((o) => o.id === q.resolved_option_id)?.label ?? "Option"
                       : null;
 
+                const isResolvedBinary = isResolvable && answerMode === "binary" && (q.resolved_outcome === "yes" || q.resolved_outcome === "no");
+
+                const resolvedCardClassName = isResolvedBinary
+                  ? "relative overflow-hidden rounded-3xl border border-emerald-200/25 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.22),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(99,102,241,0.18),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(16,185,129,0.16)] backdrop-blur sm:p-6"
+                  : "rounded-3xl border border-white/10 bg-white/5 p-4";
+
+                const resolvedOutcome = isResolvedBinary ? (q.resolved_outcome as "yes" | "no") : null;
+                const communityMajority = isResolvedBinary
+                  ? q.yes_votes === q.no_votes
+                    ? "tie"
+                    : (q.yes_votes ?? 0) > (q.no_votes ?? 0)
+                      ? "yes"
+                      : "no"
+                  : null;
+                const yesPctResolved = isResolvedBinary ? pct(q.yes_votes ?? 0, total) : 0;
+                const noPctResolved = isResolvedBinary ? 100 - yesPctResolved : 0;
+
                 const shareText =
                   answerMode === "binary"
                     ? `${q.title}\nErgebnis: ${resolvedLabel ?? "ausstehend"}. Community: ${pct(q.yes_votes ?? 0, total)}% Ja · ${pct(q.no_votes ?? 0, total)}% Nein (${total} Stimmen).`
@@ -609,8 +609,9 @@ export default async function ArchivPage(props: {
                         .slice(0, 3)
                         .map((o) => `${o.label} ${pct(o.votesCount, total)}%`)
                         .join(" · ")} (${total} Stimmen).`;
+
                 return (
-                  <article key={q.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                  <article key={q.id} className={resolvedCardClassName}>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -631,6 +632,47 @@ export default async function ArchivPage(props: {
                           ) : null}
                         </div>
                         <h3 className="mt-2 card-title-wrap text-base font-semibold text-white">{q.title}</h3>
+
+                        {isResolvedBinary && resolvedOutcome ? (
+                          <>
+                            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-indigo-200/90">Ergebnis ist da</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                              <span
+                                className={`rounded-full border px-3 py-1 ${
+                                  resolvedOutcome === "yes"
+                                    ? "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
+                                    : "border-rose-300/30 bg-rose-500/15 text-rose-100"
+                                }`}
+                              >
+                                Tatsächliches Ergebnis: {outcomeText(resolvedOutcome)}
+                              </span>
+
+                              {communityMajority === "tie" ? (
+                                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">
+                                  Community‑Mehrheit: Unentschieden
+                                </span>
+                              ) : communityMajority === "yes" || communityMajority === "no" ? (
+                                <span
+                                  className={`rounded-full border px-3 py-1 ${
+                                    communityMajority === "yes"
+                                      ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
+                                      : "border-rose-300/20 bg-rose-500/10 text-rose-100"
+                                  }`}
+                                >
+                                  Community‑Mehrheit: {outcomeText(communityMajority)}
+                                </span>
+                              ) : null}
+
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-200">
+                                {yesPctResolved}% Ja · {noPctResolved}% Nein <span className="text-slate-400">({total})</span>
+                              </span>
+                            </div>
+                            <p className="mt-3 text-xs text-slate-200/90">
+                              Teilen hilft, neue Stimmen zu sammeln — und zeigt transparent, wie die Community lag.
+                            </p>
+                          </>
+                        ) : null}
+
                         <p className="mt-1 text-xs text-slate-300">
                           {answerMode === "binary" ? (
                             <>
@@ -646,17 +688,6 @@ export default async function ArchivPage(props: {
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end sm:justify-start">
                         <div className="flex flex-wrap items-center justify-end gap-2 sm:flex-col sm:items-end">
-                          {resolvedLabel ? (
-                            <span
-                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                                resolvedLabel === "Ja"
-                                  ? "border-emerald-300/30 bg-emerald-500/15 text-emerald-100"
-                                  : "border-rose-300/30 bg-rose-500/15 text-rose-100"
-                              }`}
-                            >
-                              Ergebnis: {resolvedLabel}
-                            </span>
-                          ) : null}
                           <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${winnerClassName}`}>
                             {winnerLabel}
                           </span>
@@ -666,7 +697,17 @@ export default async function ArchivPage(props: {
                             <ShareLinkButton
                               url={`${baseUrl}/questions/${encodeURIComponent(q.id)}`}
                               variant="icon"
-                              label="Ergebnis teilen"
+                              label="Teilen"
+                              shareTitle="Future‑Vote Ergebnis"
+                              shareText={shareText}
+                            />
+                          ) : null}
+                          {resolvedLabel ? (
+                            <ShareLinkButton
+                              url={`${baseUrl}/questions/${encodeURIComponent(q.id)}`}
+                              variant="icon"
+                              label="Link kopieren"
+                              action="copy"
                               shareTitle="Future‑Vote Ergebnis"
                               shareText={shareText}
                             />
