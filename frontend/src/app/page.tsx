@@ -2510,6 +2510,7 @@ export default function Home() {
                   ⌕
                 </span>
                 <input
+                  name="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Titel suchen…"
@@ -2666,6 +2667,7 @@ export default function Home() {
                       🔎
                     </span>
                     <input
+                      name="search"
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
                       placeholder="Titel suchen…"
