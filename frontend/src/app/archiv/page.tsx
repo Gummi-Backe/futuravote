@@ -171,8 +171,7 @@ export default async function ArchivPage(props: {
     .from("questions")
     .select("id", { count: "exact", head: true })
     .eq("visibility", "public")
-    .lt("closes_at", nowIso)
-    .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null");
+    .or(`closes_at.lt.${nowIso},resolved_outcome.not.is.null,resolved_option_id.not.is.null`);
   const endedQuestions = endedQuestionsError ? 0 : endedQuestionsRaw ?? 0;
 
   const { count: totalVotesRaw, error: totalVotesError } = await supabase
@@ -251,8 +250,7 @@ export default async function ArchivPage(props: {
       { count: "exact" }
     )
     .eq("visibility", "public")
-    .lt("closes_at", nowIso)
-    .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null")
+    .or(`closes_at.lt.${nowIso},resolved_outcome.not.is.null,resolved_option_id.not.is.null`)
     .order("closes_at", { ascending: false });
 
   if (typeFilter === "prognose") {
@@ -292,7 +290,6 @@ export default async function ArchivPage(props: {
     .from("questions")
     .select("id,answer_mode,is_resolvable,yes_votes,no_votes,resolved_outcome,resolved_option_id")
     .eq("visibility", "public")
-    .lt("closes_at", nowIso)
     .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null")
     .limit(5000);
 
