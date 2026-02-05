@@ -20,6 +20,7 @@ export async function getUserByOauthAccessTokenSupabase(accessToken: string): Pr
     .from("oauth_tokens")
     .select(
       `
+      scope,
       access_expires_at,
       revoked_at,
       users (
@@ -47,3 +48,50 @@ export async function getUserByOauthAccessTokenSupabase(accessToken: string): Pr
   return mapUser((data as any).users as DbUser);
 }
 
+export type OauthAccessContext = {
+  user: User;
+  scope: string;
+};
+
+export async function getOauthAccessContextByTokenSupabase(accessToken: string): Promise<OauthAccessContext | null> {
+  const token = accessToken.trim();
+  if (!token) return null;
+
+  const supabase = getSupabaseAdminClient();
+  const hash = sha256Hex(token);
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("oauth_tokens")
+    .select(
+      `
+      scope,
+      access_expires_at,
+      revoked_at,
+      users (
+        id,
+        email,
+        password_hash,
+        display_name,
+        role,
+        email_verified,
+        created_at,
+        default_region
+      )
+    `
+    )
+    .eq("access_token_hash", hash)
+    .is("revoked_at", null)
+    .gt("access_expires_at", nowIso)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase getOauthAccessContextByToken fehlgeschlagen: ${error.message}`);
+  }
+  if (!data || !(data as any).users) return null;
+
+  return {
+    user: mapUser((data as any).users as DbUser),
+    scope: String((data as any).scope ?? ""),
+  };
+}

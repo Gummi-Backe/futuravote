@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
-import { getUserByOauthAccessTokenSupabase } from "@/app/data/dbSupabaseOauth";
+import { getOauthAccessContextByTokenSupabase } from "@/app/data/dbSupabaseOauth";
 import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/data/dbSupabase";
 import type { AnswerMode, PollVisibility } from "@/app/data/mock";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
@@ -10,6 +10,16 @@ export const revalidate = 0;
 
 function getBaseUrl(): string {
   return process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de";
+}
+
+function hasOAuthScope(scope: string, required: string): boolean {
+  const raw = String(scope ?? "").trim();
+  if (!raw) return false;
+  const parts = raw
+    .split(/[,\s]+/g)
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return parts.includes(required);
 }
 
 type DraftInput = {
@@ -103,8 +113,16 @@ export async function POST(request: Request) {
 
     if (token) {
       try {
-        user = await getUserByOauthAccessTokenSupabase(token);
-        if (user) {
+        const ctx = await getOauthAccessContextByTokenSupabase(token);
+        if (ctx?.user) {
+          if (!hasOAuthScope(ctx.scope, "drafts:write")) {
+            return NextResponse.json(
+              { error: "OAuth Scope fehlt: drafts:write" },
+              { status: 403 }
+            );
+          }
+
+          user = ctx.user;
           sessionId = "oauth_gpt";
           isOauthGpt = true;
         }
