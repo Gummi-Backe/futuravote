@@ -11,3 +11,30 @@ Ki Antworten.txt
 # Local how-to notes (local only)
 In Github Hochladen.txt
 Webseite Lokal starten.txt
+
+# Local OAuth test artifacts
+frontend/token*.json
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Node/Next build artifacts (repo root safety-net)
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/build/
+**/.vercel/
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+*.log
+*.tmp
+*.bak

@@ -69,6 +69,13 @@ export async function POST(request: Request) {
     const lastVote = lastVoteBySession.get(sessionId) ?? 0;
     const diff = now - lastVote;
     if (diff < RATE_LIMIT_MS) {
+      await logAnalyticsEventServer({
+        event: "rate_limit_vote",
+        sessionId,
+        userId,
+        path: `/questions/${questionId ?? ""}`,
+        meta: { retryAfterMs: RATE_LIMIT_MS - diff },
+      });
       return NextResponse.json(
         { error: "Too Many Requests", retryAfterMs: RATE_LIMIT_MS - diff },
         { status: 429, headers: { "Retry-After": `${Math.ceil((RATE_LIMIT_MS - diff) / 1000)}` } }

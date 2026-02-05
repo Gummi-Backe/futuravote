@@ -129,6 +129,8 @@ export default async function AdminHomePage() {
           <Card title="Meldungen" desc="Gemeldete Inhalte prüfen und moderieren." href="/admin/reports" action="Öffnen" />
           <Card title="Analytics" desc="Basis-Kennzahlen (7 Tage) ohne IP/E-Mail." href="/admin/analytics" action="Öffnen" />
           <Card title="Auflösungen" desc="KI-Vorschläge für abgelaufene Fragen prüfen." href="/admin/resolutions" action="Öffnen" />
+          <Card title="Monitoring" desc="Cron-Jobs und Rate-Limits auf einen Blick." href="/admin/monitoring" action="Öffnen" />
+          <Card title="Einstellungen" desc="Schwellwerte für Quarantäne und Review." href="/admin/settings" action="Öffnen" />
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">

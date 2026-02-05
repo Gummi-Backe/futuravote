@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { categories, type AnswerMode, type Draft, type PollOption, type PollVisibility, type Question } from "./mock";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { getAdminSettings } from "@/app/lib/adminSettings";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
 export type VoteChoice = "yes" | "no";
@@ -16,6 +17,7 @@ export type QuestionWithVotes = Question & {
   views: number;
   rankingScore: number;
   createdAt: string;
+  isQuarantined?: boolean;
 };
 
 export type QuestionWithUserVote = QuestionWithVotes & {
@@ -62,6 +64,56 @@ type QuestionsRankCursor = {
   createdAt: string;
   id: string;
 };
+
+type ReportsCountRow = {
+  item_id: string;
+  reporter_session_id: string | null;
+};
+
+async function fetchOpenReportDistinctSessionsByItemId(options: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>;
+  kind: "question" | "draft";
+  itemIds: string[];
+}): Promise<Map<string, number>> {
+  const { supabase, kind, itemIds } = options;
+  const ids = itemIds.filter((id) => typeof id === "string" && id.length > 0).slice(0, 500);
+  if (ids.length === 0) return new Map();
+
+  try {
+    const { data, error } = await supabase
+      .from("reports")
+      .select("item_id,reporter_session_id")
+      .eq("kind", kind)
+      .eq("status", "open")
+      .in("item_id", ids)
+      .limit(5000);
+
+    if (error) {
+      const code = (error as any)?.code as string | undefined;
+      if (code === "42P01") return new Map();
+      return new Map();
+    }
+
+    const map = new Map<string, Set<string>>();
+    for (const row of (data as ReportsCountRow[]) ?? []) {
+      const itemId = String((row as any).item_id ?? "");
+      if (!itemId) continue;
+      const session = String((row as any).reporter_session_id ?? "");
+      if (!session) continue;
+      const set = map.get(itemId) ?? new Set<string>();
+      set.add(session);
+      map.set(itemId, set);
+    }
+
+    const counts = new Map<string, number>();
+    for (const [itemId, sessions] of map.entries()) {
+      counts.set(itemId, sessions.size);
+    }
+    return counts;
+  } catch {
+    return new Map();
+  }
+}
 
 type QuestionsNewCursor = {
   v: 1;
@@ -726,6 +778,8 @@ export async function getQuestionsPageFromSupabase(options: {
   const { sessionId, userId, voted, limit, offset, cursor, tab, category, region, query: titleQuery } = options;
   const supabase = getSupabaseAdminClient();
   const cursorMode = Boolean(cursor);
+  const adminSettings = await getAdminSettings();
+  const quarantineThreshold = Math.max(1, adminSettings.reportQuarantineThreshold);
 
   const stopwords = new Set([
     "der",
@@ -1046,10 +1100,25 @@ export async function getQuestionsPageFromSupabase(options: {
       .map((row) => row.id);
     const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
     const userVotesMap = await fetchUserVotesForQuestions(picked.map((row) => row.id));
-    const items = picked.map((row) => {
+    const rawItems = picked.map((row) => {
       const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
       return mapQuestion(row, vote, optionsMap.get(row.id));
     });
+
+    const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
+      supabase,
+      kind: "question",
+      itemIds: rawItems.map((i) => i.id),
+    });
+
+    const items = rawItems
+      .map((item) => {
+        const reports = reportCounts.get(item.id) ?? 0;
+        const isQuarantined = reports >= quarantineThreshold;
+        return { ...item, isQuarantined };
+      })
+      .filter((item) => !item.isQuarantined);
+
     return { items, total: scored.length, nextCursor: null };
   }
 
@@ -1063,10 +1132,24 @@ export async function getQuestionsPageFromSupabase(options: {
   const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
 
   const userVotesMap = await fetchUserVotesForQuestions(pageRows.map((row) => row.id));
-  const items = pageRows.map((row) => {
+  const rawItems = pageRows.map((row) => {
     const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
     return mapQuestion(row, vote, optionsMap.get(row.id));
   });
+
+  const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
+    supabase,
+    kind: "question",
+    itemIds: rawItems.map((i) => i.id),
+  });
+
+  const items = rawItems
+    .map((item) => {
+      const reports = reportCounts.get(item.id) ?? 0;
+      const isQuarantined = reports >= quarantineThreshold;
+      return { ...item, isQuarantined };
+    })
+    .filter((item) => !item.isQuarantined);
 
   const lastRow = pageRows[pageRows.length - 1];
   let nextCursor: string | null = null;
@@ -1104,6 +1187,8 @@ export async function getQuestionByIdFromSupabase(
   userId?: string | null
 ): Promise<QuestionWithVotes | null> {
   const supabase = getSupabaseAdminClient();
+  const adminSettings = await getAdminSettings();
+  const quarantineThreshold = Math.max(1, adminSettings.reportQuarantineThreshold);
 
   const { data: row, error } = await supabase
     .from("questions")
@@ -1163,7 +1248,11 @@ export async function getQuestionByIdFromSupabase(
   ]);
 
   // Eingeloggte Nutzer: Account-Vote hat Vorrang vor Session-Vote (geräteübergreifend konsistent).
-  return mapQuestion(questionRow, userVote ?? sessionVote, optionsMap.get(id));
+  const mapped = mapQuestion(questionRow, userVote ?? sessionVote, optionsMap.get(id));
+  const reportCounts = await fetchOpenReportDistinctSessionsByItemId({ supabase, kind: "question", itemIds: [id] });
+  const reports = reportCounts.get(id) ?? 0;
+  const isQuarantined = reports >= quarantineThreshold;
+  return { ...mapped, isQuarantined };
 }
 
 export type SharedPoll =
@@ -1618,6 +1707,8 @@ export async function getDraftsPageFromSupabase(options: {
 }): Promise<{ items: Draft[]; total: number; nextCursor: string | null }> {
   const { sessionId, limit, offset, cursor, category, region, status, query: titleQuery, voted } = options;
   const supabase = getSupabaseAdminClient();
+  const adminSettings = await getAdminSettings();
+  const quarantineThreshold = Math.max(1, adminSettings.reportQuarantineThreshold);
   const cursorMode = Boolean(cursor);
   const votedFilter: "include" | "exclude" | "only" = voted ?? "include";
   const shouldFilterReviewedDrafts = votedFilter !== "include";
@@ -1813,7 +1904,15 @@ export async function getDraftsPageFromSupabase(options: {
       .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
       .map((row) => row.id);
     const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
-    const items = picked.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
+    const rawItems = picked.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
+
+    const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
+      supabase,
+      kind: "draft",
+      itemIds: rawItems.map((i) => i.id),
+    });
+
+    const items = rawItems.filter((item) => (reportCounts.get(item.id) ?? 0) < quarantineThreshold);
     return { items, total: scored.length, nextCursor: null };
   }
 
@@ -1824,7 +1923,15 @@ export async function getDraftsPageFromSupabase(options: {
     .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
     .map((row) => row.id);
   const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
-  const items = pageRows.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
+  const rawItems = pageRows.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
+
+  const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
+    supabase,
+    kind: "draft",
+    itemIds: rawItems.map((i) => i.id),
+  });
+
+  const items = rawItems.filter((item) => (reportCounts.get(item.id) ?? 0) < quarantineThreshold);
 
   const lastRow = pageRows[pageRows.length - 1];
   const nextCursor =
@@ -2096,12 +2203,16 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
   const status = row.status ?? "open";
   if (status !== "open") return;
 
+  const settings = await getAdminSettings();
+  const minTotal = Math.max(1, settings.draftMinTotalReviews);
+  const minLead = Math.max(1, settings.draftMinLead);
+
   const votesFor = row.votes_for ?? 0;
   const votesAgainst = row.votes_against ?? 0;
   const total = votesFor + votesAgainst;
-  if (total < 5) return;
+  if (total < minTotal) return;
 
-  if (votesFor >= votesAgainst + 2) {
+  if (votesFor >= votesAgainst + minLead) {
     const answerMode = normalizeAnswerMode(row.answer_mode ?? "binary");
     const isResolvable = typeof row.is_resolvable === "boolean" ? row.is_resolvable : true;
     const cat = categories.find((c) => c.label === row.category) ?? categories[0];
@@ -2164,7 +2275,7 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
     if (updateDraftError) {
       throw new Error(`Supabase maybePromoteDraft (update draft) fehlgeschlagen: ${updateDraftError.message}`);
     }
-  } else if (votesAgainst >= votesFor + 2) {
+  } else if (votesAgainst >= votesFor + minLead) {
     const { error: updateDraftError } = await supabase
       .from("drafts")
       .update({ status: "rejected" })

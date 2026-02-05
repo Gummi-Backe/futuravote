@@ -18,9 +18,11 @@ export async function GET(_: Request, context: Params) {
 
   const userSessionId = cookieStore.get("fv_user")?.value;
   let userId: string | null = null;
+  let isAdmin = false;
   if (userSessionId) {
     const user = await getUserBySessionSupabase(userSessionId).catch(() => null);
     if (user?.id) userId = user.id;
+    if (user?.role === "admin") isAdmin = true;
   }
 
   const question = await getQuestionByIdFromSupabase(id, sessionId, userId);
@@ -28,6 +30,9 @@ export async function GET(_: Request, context: Params) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
   if (question.visibility === "link_only") {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
+  }
+  if (!isAdmin && question.isQuarantined) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 

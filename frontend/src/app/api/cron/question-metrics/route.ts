@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const daysBackRaw = Number(url.searchParams.get("daysBack") ?? "120");
   const daysBack = Number.isFinite(daysBackRaw) ? Math.max(1, Math.min(3650, Math.trunc(daysBackRaw))) : 120;
+  const nowIso = new Date().toISOString();
 
   const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
   const providedSecret = url.searchParams.get("secret") ?? "";
@@ -27,6 +29,17 @@ export async function GET(request: Request) {
 
   if (error) {
     console.error("refresh_question_metrics_daily failed", error);
+    await logAnalyticsEventServer({
+      event: "cron_question_metrics_run",
+      sessionId: "cron_question_metrics",
+      path: "/api/cron/question-metrics",
+      meta: {
+        ok: false,
+        daysBack,
+        nowUtc: nowIso,
+        details: error.message,
+      },
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -37,6 +50,13 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+
+  await logAnalyticsEventServer({
+    event: "cron_question_metrics_run",
+    sessionId: "cron_question_metrics",
+    path: "/api/cron/question-metrics",
+    meta: { ok: true, daysBack, nowUtc: nowIso, result: data ?? null },
+  });
 
   return NextResponse.json({ ok: true, result: data });
 }

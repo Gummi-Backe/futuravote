@@ -39,7 +39,7 @@ export async function generateMetadata(props: {
   const canonical = `/questions/${encodeURIComponent(id)}`;
 
   const question = await getQuestionByIdFromSupabase(id).catch(() => null);
-  if (!question || question.visibility === "link_only") {
+  if (!question || question.visibility === "link_only" || question.isQuarantined) {
     return {
       metadataBase,
       title: "Frage nicht gefunden - Future-Vote",
@@ -172,6 +172,9 @@ export default async function QuestionDetail(props: {
     notFound();
   }
   if (question.visibility === "link_only") {
+    notFound();
+  }
+  if (!isAdmin && question.isQuarantined) {
     notFound();
   }
 

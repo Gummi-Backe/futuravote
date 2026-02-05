@@ -39,7 +39,7 @@ export default async function QuestionWidgetPage(props: { params: Promise<{ id: 
   const id = resolvedParams.id;
 
   const question = await getQuestionByIdFromSupabase(id).catch(() => null);
-  if (!question || question.visibility !== "public") notFound();
+  if (!question || question.visibility !== "public" || question.isQuarantined) notFound();
 
   const answerMode = question.answerMode ?? "binary";
   const options = question.options ?? [];

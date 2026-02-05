@@ -4,6 +4,7 @@ import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { addQuestionComment, listQuestionComments, type CommentStance } from "@/app/data/dbSupabaseComments";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -166,6 +167,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   const last = lastCommentByUser.get(user.id) ?? 0;
   const diff = now - last;
   if (diff < RATE_LIMIT_MS) {
+    await logAnalyticsEventServer({
+      event: "rate_limit_comment",
+      sessionId: sessionId,
+      userId: user.id,
+      path: `/questions/${questionId}`,
+      meta: { retryAfterMs: RATE_LIMIT_MS - diff },
+    });
     return NextResponse.json(
       { error: "Bitte kurz warten.", retryAfterMs: RATE_LIMIT_MS - diff },
       { status: 429, headers: { "Retry-After": `${Math.ceil((RATE_LIMIT_MS - diff) / 1000)}` } }

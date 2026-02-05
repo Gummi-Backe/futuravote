@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import {
   sendCreatorPublicQuestionEndedEmail,
   sendCreatorPublicQuestionResolvedEmail,
@@ -106,6 +107,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? "100");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.trunc(limitRaw))) : 100;
+  const nowIso = new Date().toISOString();
 
   const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
   const providedSecret = url.searchParams.get("secret") ?? "";
@@ -431,7 +433,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({
+  const payload = {
     ok: true,
     endedChecked: endedRows.length,
     endedPending: endedPending.length,
@@ -444,5 +446,15 @@ export async function GET(request: Request) {
     draftDecisionSent,
     skipped,
     todayUtc: todayUtcIso,
+    nowUtc: nowIso,
+  };
+
+  await logAnalyticsEventServer({
+    event: "cron_creator_notifications_run",
+    sessionId: "cron_creator_notifications",
+    path: "/api/cron/creator-notifications",
+    meta: { ...payload, limit },
   });
+
+  return NextResponse.json(payload);
 }

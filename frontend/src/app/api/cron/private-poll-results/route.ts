@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { sendPrivatePollResultEmail } from "@/app/lib/email";
+import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
@@ -50,6 +51,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? "50");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, Math.trunc(limitRaw))) : 50;
+  const nowIso = new Date().toISOString();
 
   const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
   const providedSecret = url.searchParams.get("secret") ?? "";
@@ -86,7 +88,14 @@ export async function GET(request: Request) {
 
   const rows = (questions ?? []) as any[];
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, skipped: 0, checked: 0, note: "Keine faelligen privaten Umfragen." });
+    const payload = { ok: true, sent: 0, skipped: 0, checked: 0, note: "Keine faelligen privaten Umfragen." };
+    await logAnalyticsEventServer({
+      event: "cron_private_poll_results_run",
+      sessionId: "cron_private_poll_results",
+      path: "/api/cron/private-poll-results",
+      meta: { ...payload, limit, nowUtc: nowIso },
+    });
+    return NextResponse.json(payload);
   }
 
   // 2) Bereits versendet? (idempotent)
@@ -191,7 +200,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({
+  const payload = {
     ok: true,
     checked: rows.length,
     pending: pending.length,
@@ -199,5 +208,15 @@ export async function GET(request: Request) {
     suppressed,
     skipped,
     todayUtc: todayUtcIso,
+    nowUtc: nowIso,
+  };
+
+  await logAnalyticsEventServer({
+    event: "cron_private_poll_results_run",
+    sessionId: "cron_private_poll_results",
+    path: "/api/cron/private-poll-results",
+    meta: { ...payload, limit },
   });
+
+  return NextResponse.json(payload);
 }
