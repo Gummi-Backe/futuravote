@@ -241,14 +241,14 @@ export default function NewDraftPage() {
     ended: boolean;
     status: string | null;
     score: number;
+    severity: "high" | "medium" | "low";
+    matchedKeywords?: string[];
   };
 
   const [similarMatches, setSimilarMatches] = useState<SimilarMatch[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [similarError, setSimilarError] = useState<string | null>(null);
   const similarCacheRef = useRef(new Map<string, SimilarMatch[]>());
-  const lastSimilarQueryRef = useRef<string>("");
-  const lastSimilarWordsRef = useRef<string[]>([]);
 
   const vagueTitleHits = useMemo(() => {
     const t = title.toLowerCase();
@@ -285,7 +285,8 @@ export default function NewDraftPage() {
     setSimilarError(null);
 
     const normalizedQuery = query.replace(/\s+/g, " ").trim();
-    const cacheKey = normalizedQuery.toLowerCase();
+    const normalizedDescription = description.replace(/\s+/g, " ").trim().slice(0, 220);
+    const cacheKey = `${normalizedQuery} || ${normalizedDescription}`.toLowerCase();
     const cached = similarCacheRef.current.get(cacheKey);
     if (cached) {
       setSimilarMatches(cached);
@@ -293,25 +294,12 @@ export default function NewDraftPage() {
       return;
     }
 
-    const prevQuery = lastSimilarQueryRef.current;
-    const prevWords = lastSimilarWordsRef.current;
-    const currentWords = normalizedQuery.toLowerCase().split(" ").filter(Boolean);
-
-    if (prevQuery) {
-      const lengthDelta = Math.abs(normalizedQuery.length - prevQuery.length);
-      const sameWordCount = currentWords.length === prevWords.length;
-      const endsWithSpace = query.endsWith(" ");
-      const significantChange = lengthDelta >= 4 || !sameWordCount || endsWithSpace;
-      if (!significantChange) {
-        setSimilarLoading(false);
-        return;
-      }
-    }
-
     setSimilarLoading(true);
 
     const handle = setTimeout(() => {
-      void fetch(`/api/questions/similar?q=${encodeURIComponent(normalizedQuery)}`)
+      const params = new URLSearchParams({ q: normalizedQuery });
+      if (normalizedDescription.length >= 20) params.set("d", normalizedDescription);
+      void fetch(`/api/questions/similar?${params.toString()}`)
         .then((res) => res.json())
         .then((data) => {
           if (!data?.ok) {
@@ -321,8 +309,6 @@ export default function NewDraftPage() {
           }
           const matches = (data?.matches ?? []) as SimilarMatch[];
           similarCacheRef.current.set(cacheKey, matches);
-          lastSimilarQueryRef.current = normalizedQuery;
-          lastSimilarWordsRef.current = currentWords;
           setSimilarMatches(matches);
         })
         .catch(() => {
@@ -333,7 +319,42 @@ export default function NewDraftPage() {
     }, 900);
 
     return () => clearTimeout(handle);
-  }, [title]);
+  }, [title, description]);
+
+  const similarLevel = useMemo<"high" | "medium" | "low">(() => {
+    if (!similarMatches.length) return "low";
+    if (similarMatches.some((m) => m.severity === "high")) return "high";
+    if (similarMatches.some((m) => m.severity === "medium")) return "medium";
+    return "low";
+  }, [similarMatches]);
+
+  const similarUi = useMemo(() => {
+    if (similarLevel === "high") {
+      return {
+        boxClass: "rounded-2xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100",
+        titleClass: "mb-2 font-semibold text-rose-50",
+        metaClass: "mt-0.5 block text-[11px] text-rose-100/80",
+        noteClass: "mt-2 text-[11px] text-rose-100/80",
+        heading: "Achtung: Sehr ähnliche Fragen gefunden",
+      };
+    }
+    if (similarLevel === "medium") {
+      return {
+        boxClass: "rounded-2xl border border-amber-300/35 bg-amber-500/10 p-3 text-xs text-amber-100",
+        titleClass: "mb-2 font-semibold text-amber-50",
+        metaClass: "mt-0.5 block text-[11px] text-amber-100/80",
+        noteClass: "mt-2 text-[11px] text-amber-100/80",
+        heading: "Hinweis: Ähnliche Fragen gefunden",
+      };
+    }
+    return {
+      boxClass: "rounded-2xl border border-slate-300/20 bg-slate-500/10 p-3 text-xs text-slate-100",
+      titleClass: "mb-2 font-semibold text-slate-50",
+      metaClass: "mt-0.5 block text-[11px] text-slate-200/80",
+      noteClass: "mt-2 text-[11px] text-slate-200/80",
+      heading: "Thematisch verwandte Fragen gefunden",
+    };
+  }, [similarLevel]);
 
   useEffect(() => {
     // aktuellen User laden
@@ -1190,8 +1211,8 @@ export default function NewDraftPage() {
                   <p className="text-xs text-rose-300">{similarError}</p>
                 ) : null}
                 {!similarLoading && !similarError && similarMatches.length > 0 ? (
-                  <div className="rounded-2xl border border-amber-300/30 bg-amber-500/10 p-3 text-xs text-amber-50/90">
-                    <p className="mb-2 font-semibold text-amber-50">Achtung: Ähnliche Fragen gefunden</p>
+                  <div className={similarUi.boxClass}>
+                    <p className={similarUi.titleClass}>{similarUi.heading}</p>
                     <div className="space-y-2">
                       {similarMatches.map((m) => (
                         <div key={m.id} className="flex items-start justify-between gap-3">
@@ -1200,19 +1221,31 @@ export default function NewDraftPage() {
                             className="min-w-0 flex-1 text-white hover:text-emerald-100"
                           >
                             <span className="block truncate font-semibold">{m.title}</span>
-                            <span className="mt-0.5 block text-[11px] text-amber-100/80">
-                              {m.ended ? "Beendet" : "Aktiv"} · Ähnlichkeit {m.score}%
+                            <span className={similarUi.metaClass}>
+                              {m.ended ? "Beendet" : "Aktiv"} · Ähnlichkeit {m.score}% · Stufe{" "}
+                              {m.severity === "high" ? "hoch" : m.severity === "medium" ? "mittel" : "niedrig"}
                             </span>
+                            {m.matchedKeywords && m.matchedKeywords.length > 0 ? (
+                              <span className={similarUi.metaClass}>
+                                Gemeinsame Schlüsselwörter: {m.matchedKeywords.join(", ")}
+                              </span>
+                            ) : null}
                           </a>
-                          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-200">
-                            {m.ended ? "Archiv" : "Feed"}
-                          </span>
+                          <div className="shrink-0 space-y-1">
+                            <span className="block rounded-full border border-white/10 bg-white/5 px-3 py-1 text-center text-[11px] font-semibold text-slate-200">
+                              {m.ended ? "Archiv" : "Feed"}
+                            </span>
+                            <span className="block rounded-full border border-white/10 bg-black/20 px-3 py-1 text-center text-[11px] font-semibold text-slate-100">
+                              {m.severity === "high" ? "Hoch" : m.severity === "medium" ? "Mittel" : "Niedrig"}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <p className="mt-2 text-[11px] text-amber-100/80">
+                    <p className={similarUi.noteClass}>
                       Hinweis: Beendete Fragen zeigen nur, dass es das Thema schon gab. Du kannst trotzdem eine neue Frage
-                      stellen, wenn Zeitraum/Details anders sind.
+                      stellen, wenn Zeitraum, Quelle oder Details anders sind. Diese Prüfung ist ein Hinweis und blockiert
+                      das Einreichen nicht.
                     </p>
                   </div>
                 ) : null}
