@@ -82,13 +82,47 @@ paths:
                 additionalProperties: true
         "400":
           description: Validierungsfehler
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Nicht eingeloggt / OAuth fehlt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Scope fehlt oder Zugriff nicht erlaubt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "503":
           description: OAuth/DB nicht vorbereitet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
-  schemas: {}
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        errorCode:
+          type: string
+        details:
+          oneOf:
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+            - type: object
+              additionalProperties: true
+      required: [error, errorCode]
   securitySchemes:
     oauth2:
       type: oauth2

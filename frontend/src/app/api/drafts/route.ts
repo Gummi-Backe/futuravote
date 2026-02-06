@@ -40,6 +40,46 @@ type DraftInput = {
   resolutionDeadline?: string;
 };
 
+type ErrorDetail = {
+  field?: string;
+  issue: string;
+  value?: unknown;
+};
+
+const ALLOWED_DRAFT_KEYS = new Set<keyof DraftInput>([
+  "title",
+  "description",
+  "category",
+  "region",
+  "imageUrl",
+  "imageCredit",
+  "timeLeftHours",
+  "closesAt",
+  "visibility",
+  "answerMode",
+  "isResolvable",
+  "options",
+  "resolutionCriteria",
+  "resolutionSource",
+  "resolutionDeadline",
+]);
+
+function errorResponse(
+  status: number,
+  error: string,
+  errorCode: string,
+  details?: ErrorDetail[] | Record<string, unknown>
+) {
+  return NextResponse.json(
+    {
+      error,
+      errorCode,
+      ...(details ? { details } : {}),
+    },
+    { status }
+  );
+}
+
 function normalizeImageUrl(raw?: string | null): string | undefined {
   const trimmed = String(raw ?? "").trim();
   if (!trimmed || trimmed.length <= 4 || trimmed.length >= 500) return undefined;
@@ -116,9 +156,11 @@ export async function POST(request: Request) {
         const ctx = await getOauthAccessContextByTokenSupabase(token);
         if (ctx?.user) {
           if (!hasOAuthScope(ctx.scope, "drafts:write")) {
-            return NextResponse.json(
-              { error: "OAuth Scope fehlt: drafts:write" },
-              { status: 403 }
+            return errorResponse(
+              403,
+              "OAuth Scope fehlt: drafts:write",
+              "insufficient_scope",
+              [{ field: "scope", issue: "required_scope_missing", value: "drafts:write" }]
             );
           }
 
@@ -129,42 +171,114 @@ export async function POST(request: Request) {
       } catch (error: any) {
         const msg = typeof error?.message === "string" ? error.message : "unknown";
         if (msg.toLowerCase().includes("oauth_tokens")) {
-          return NextResponse.json(
-            { error: "OAuth ist noch nicht aktiviert. Bitte führe `supabase/oauth_gpt.sql` in Supabase aus." },
-            { status: 503 }
+          return errorResponse(
+            503,
+            "OAuth ist noch nicht aktiviert. Bitte führe `supabase/oauth_gpt.sql` in Supabase aus.",
+            "oauth_not_configured"
           );
         }
         console.error("Draft OAuth lookup failed", error);
-        return NextResponse.json({ error: "Bitte melde dich an, bevor du eine Frage vorschlägst." }, { status: 401 });
+        return errorResponse(401, "Bitte melde dich an, bevor du eine Frage vorschlägst.", "unauthorized");
       }
     }
   }
 
   if (!user) {
-    return NextResponse.json({ error: "Bitte melde dich an, bevor du eine Frage vorschlägst." }, { status: 401 });
+    return errorResponse(401, "Bitte melde dich an, bevor du eine Frage vorschlägst.", "unauthorized");
   }
 
   let body: DraftInput;
   try {
     body = (await request.json()) as DraftInput;
   } catch {
-    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
+    return errorResponse(400, "Ungültiger Request-Body.", "invalid_json");
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return errorResponse(400, "Request-Body muss ein JSON-Objekt sein.", "invalid_payload_type");
+  }
+
+  const unsupportedKeys = Object.keys(body).filter(
+    (key) => !ALLOWED_DRAFT_KEYS.has(key as keyof DraftInput)
+  );
+  if (unsupportedKeys.length > 0) {
+    return errorResponse(400, "Unbekannte Felder im Payload.", "unsupported_fields", {
+      unsupportedFields: unsupportedKeys,
+    });
   }
 
   const visibility: PollVisibility =
     body.visibility === "link_only" || body.visibility === "public" ? body.visibility : "public";
   const isPrivatePoll = visibility === "link_only";
 
+  if (body.visibility && body.visibility !== "public" && body.visibility !== "link_only") {
+    return errorResponse(
+      400,
+      "Ungültige visibility. Erlaubt sind nur 'public' oder 'link_only'.",
+      "invalid_visibility",
+      [{ field: "visibility", issue: "must_be_public_or_link_only", value: body.visibility }]
+    );
+  }
+
   const title = (body.title ?? "").trim();
   const categoryRaw = (body.category ?? "").trim();
   const category = isPrivatePoll ? categoryRaw || "Privat" : categoryRaw;
   const description = (body.description ?? "").trim() || undefined;
   const region = isPrivatePoll ? undefined : (body.region ?? "").trim() || undefined;
+  const warnings: string[] = [];
+
+  if (title.length < 12) {
+    return errorResponse(400, "Titel ist zu kurz (mindestens 12 Zeichen).", "title_too_short", [
+      { field: "title", issue: "min_length_12" },
+    ]);
+  }
+  if (title.length > 220) {
+    return errorResponse(400, "Titel ist zu lang (maximal 220 Zeichen).", "title_too_long", [
+      { field: "title", issue: "max_length_220" },
+    ]);
+  }
+
+  if (!isPrivatePoll && !category) {
+    return errorResponse(400, "Bitte wähle eine Kategorie.", "category_required", [
+      { field: "category", issue: "required_for_public" },
+    ]);
+  }
+  if (category.length > 60) {
+    return errorResponse(400, "Kategorie ist zu lang (maximal 60 Zeichen).", "category_too_long", [
+      { field: "category", issue: "max_length_60" },
+    ]);
+  }
+  if (description && description.length > 3000) {
+    return errorResponse(400, "Beschreibung ist zu lang (maximal 3000 Zeichen).", "description_too_long", [
+      { field: "description", issue: "max_length_3000" },
+    ]);
+  }
+  if (region && region.length > 80) {
+    return errorResponse(400, "Region ist zu lang (maximal 80 Zeichen).", "region_too_long", [
+      { field: "region", issue: "max_length_80" },
+    ]);
+  }
 
   let imageUrl = normalizeImageUrl(body.imageUrl);
   let imageCredit = (body.imageCredit ?? "").trim() || undefined;
 
+  if (imageUrl) {
+    try {
+      const parsed = new URL(imageUrl);
+      if (parsed.protocol !== "https:") {
+        return errorResponse(400, "imageUrl muss mit https:// beginnen.", "invalid_image_url", [
+          { field: "imageUrl", issue: "https_required" },
+        ]);
+      }
+    } catch {
+      return errorResponse(400, "imageUrl ist keine gültige URL.", "invalid_image_url", [
+        { field: "imageUrl", issue: "invalid_url_format" },
+      ]);
+    }
+  }
+
   if (isOauthGpt && imageUrl && !isAllowedGptImageUrl(imageUrl)) {
+    warnings.push("imageUrl wurde ignoriert, weil der Host für GPT-OAuth nicht freigegeben ist.");
     imageUrl = undefined;
     imageCredit = undefined;
   }
@@ -174,20 +288,58 @@ export async function POST(request: Request) {
     if (!imageCredit) {
       imageCredit = (process.env.FV_GPT_DEFAULT_IMAGE_CREDIT ?? "").trim() || undefined;
     }
+    if (imageUrl) {
+      warnings.push("Standardbild wurde automatisch gesetzt.");
+    }
   }
 
   const closesAtRaw = (body.closesAt ?? "").trim();
   const targetClosesAt = closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
+  if (closesAtRaw && !targetClosesAt) {
+    return errorResponse(400, "closesAt muss ein gültiges ISO-Datum sein.", "invalid_closes_at", [
+      { field: "closesAt", issue: "invalid_iso_datetime", value: closesAtRaw },
+    ]);
+  }
 
   const resolutionCriteria = (body.resolutionCriteria ?? "").trim() || undefined;
   const resolutionSource = (body.resolutionSource ?? "").trim() || undefined;
   const resolutionDeadlineRaw = (body.resolutionDeadline ?? "").trim();
   const resolutionDeadline =
     resolutionDeadlineRaw && !Number.isNaN(Date.parse(resolutionDeadlineRaw)) ? resolutionDeadlineRaw : undefined;
+  if (resolutionDeadlineRaw && !resolutionDeadline) {
+    return errorResponse(
+      400,
+      "resolutionDeadline muss ein gültiges ISO-Datum sein.",
+      "invalid_resolution_deadline",
+      [{ field: "resolutionDeadline", issue: "invalid_iso_datetime", value: resolutionDeadlineRaw }]
+    );
+  }
 
+  if (body.answerMode && body.answerMode !== "binary" && body.answerMode !== "options") {
+    return errorResponse(
+      400,
+      "Ungültiger answerMode. Erlaubt sind nur 'binary' oder 'options'.",
+      "invalid_answer_mode",
+      [{ field: "answerMode", issue: "must_be_binary_or_options", value: body.answerMode }]
+    );
+  }
   const answerMode: AnswerMode = body.answerMode === "options" ? "options" : "binary";
+
+  if (typeof body.isResolvable !== "undefined" && typeof body.isResolvable !== "boolean") {
+    return errorResponse(400, "isResolvable muss true oder false sein.", "invalid_is_resolvable", [
+      { field: "isResolvable", issue: "must_be_boolean", value: body.isResolvable },
+    ]);
+  }
   const isResolvableRaw = typeof body.isResolvable === "boolean" ? body.isResolvable : true;
   const isResolvable = isPrivatePoll ? false : isResolvableRaw;
+  if (isPrivatePoll && isResolvableRaw) {
+    return errorResponse(
+      400,
+      "Bei visibility='link_only' sind nur Meinungs-Umfragen erlaubt (isResolvable=false).",
+      "invalid_private_resolvable_combo",
+      [{ field: "isResolvable", issue: "must_be_false_for_link_only", value: body.isResolvable }]
+    );
+  }
 
   const resolutionCriteriaToSave = isResolvable ? resolutionCriteria : undefined;
   const resolutionSourceToSave = isResolvable ? resolutionSource : undefined;
@@ -202,34 +354,42 @@ export async function POST(request: Request) {
       .slice(0, 6);
 
     if (cleaned.length < 2) {
-      return NextResponse.json({ error: "Bitte gib mindestens 2 Antwortoptionen an." }, { status: 400 });
+      return errorResponse(400, "Bitte gib mindestens 2 Antwortoptionen an.", "options_min_2", [
+        { field: "options", issue: "min_items_2" },
+      ]);
     }
 
     const seen = new Set<string>();
     for (const label of cleaned) {
       if (label.length > 80) {
-        return NextResponse.json({ error: "Eine Option ist zu lang (max. 80 Zeichen)." }, { status: 400 });
+        return errorResponse(400, "Eine Option ist zu lang (max. 80 Zeichen).", "option_too_long", [
+          { field: "options", issue: "option_max_length_80" },
+        ]);
       }
       const key = label.toLocaleLowerCase("de-DE");
       if (seen.has(key)) {
-        return NextResponse.json({ error: "Antwortoptionen müssen eindeutig sein." }, { status: 400 });
+        return errorResponse(400, "Antwortoptionen müssen eindeutig sein.", "options_not_unique", [
+          { field: "options", issue: "duplicate_values" },
+        ]);
       }
       seen.add(key);
     }
 
     options = cleaned;
-  }
-
-  if (!title) {
-    return NextResponse.json({ error: "Bitte gib einen Titel ein." }, { status: 400 });
-  }
-
-  if (!isPrivatePoll && !category) {
-    return NextResponse.json({ error: "Bitte wähle eine Kategorie." }, { status: 400 });
+  } else if (Array.isArray(body.options) && body.options.length > 0) {
+    return errorResponse(
+      400,
+      "options darf nur gesetzt werden, wenn answerMode='options' ist.",
+      "options_not_allowed_for_binary",
+      [{ field: "options", issue: "not_allowed_with_binary" }]
+    );
   }
 
   // Review-Zeitraum ist fix: 72 Stunden (keine User-Auswahl).
   const timeLeftHours = 72;
+  if (typeof body.timeLeftHours === "number" && body.timeLeftHours !== timeLeftHours) {
+    warnings.push("timeLeftHours wird ignoriert. Der Review-Zeitraum ist fest auf 72 Stunden gesetzt.");
+  }
 
   if (visibility === "public" && isResolvable && !resolutionDeadlineToSave) {
     resolutionDeadlineToSave = computeDefaultResolutionDeadlineIso({
@@ -240,20 +400,41 @@ export async function POST(request: Request) {
 
   if (visibility === "public" && isResolvable) {
     if (!resolutionCriteria) {
-      return NextResponse.json(
-        { error: "Bitte beschreibe, wie die Frage aufgelöst wird (Auflösungs-Regeln)." },
-        { status: 400 }
+      return errorResponse(
+        400,
+        "Bitte beschreibe, wie die Frage aufgelöst wird (Auflösungs-Regeln).",
+        "resolution_criteria_required",
+        [{ field: "resolutionCriteria", issue: "required_for_public_resolvable" }]
       );
     }
     if (!resolutionSource) {
-      return NextResponse.json(
-        { error: "Bitte gib eine Quelle an (z. B. offizielle Seite/Institution oder Link)." },
-        { status: 400 }
+      return errorResponse(
+        400,
+        "Bitte gib eine Quelle an (z. B. offizielle Seite/Institution oder Link).",
+        "resolution_source_required",
+        [{ field: "resolutionSource", issue: "required_for_public_resolvable" }]
       );
     }
     if (!resolutionDeadlineToSave) {
-      return NextResponse.json({ error: "Bitte setze eine Auflösungs-Deadline (Datum/Uhrzeit)." }, { status: 400 });
+      return errorResponse(
+        400,
+        "Bitte setze eine Auflösungs-Deadline (Datum/Uhrzeit).",
+        "resolution_deadline_required",
+        [{ field: "resolutionDeadline", issue: "required_for_public_resolvable" }]
+      );
     }
+  } else if (resolutionCriteria || resolutionSource || resolutionDeadline) {
+    return errorResponse(
+      400,
+      "resolutionCriteria, resolutionSource und resolutionDeadline sind nur bei öffentlichen Prognosen erlaubt.",
+      "resolution_fields_not_allowed",
+      [
+        {
+          field: "resolutionCriteria/resolutionSource/resolutionDeadline",
+          issue: "only_allowed_for_public_resolvable",
+        },
+      ]
+    );
   }
 
   if (visibility === "link_only") {
@@ -294,6 +475,7 @@ export async function POST(request: Request) {
         shareId,
         shareUrl,
         question,
+        ...(warnings.length ? { warnings } : {}),
       },
       { status: 201 }
     );
@@ -331,6 +513,7 @@ export async function POST(request: Request) {
       kind: "draft",
       id: draft.id,
       draft,
+      ...(warnings.length ? { warnings } : {}),
     },
     { status: 201 }
   );
