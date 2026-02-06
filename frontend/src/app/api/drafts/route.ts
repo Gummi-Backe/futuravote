@@ -278,19 +278,21 @@ export async function POST(request: Request) {
   }
 
   if (isOauthGpt && imageUrl && !isAllowedGptImageUrl(imageUrl)) {
-    warnings.push("imageUrl wurde ignoriert, weil der Host für GPT-OAuth nicht freigegeben ist.");
-    imageUrl = undefined;
-    imageCredit = undefined;
+    return errorResponse(
+      400,
+      "imageUrl-Host ist für GPT-OAuth nicht freigegeben. Bitte nutze zuerst /api/gpt/generate-image.",
+      "invalid_image_host_for_gpt",
+      [{ field: "imageUrl", issue: "host_not_allowed_for_gpt" }]
+    );
   }
 
   if (isOauthGpt && !imageUrl) {
-    imageUrl = normalizeImageUrl(process.env.FV_GPT_DEFAULT_IMAGE_URL);
-    if (!imageCredit) {
-      imageCredit = (process.env.FV_GPT_DEFAULT_IMAGE_CREDIT ?? "").trim() || undefined;
-    }
-    if (imageUrl) {
-      warnings.push("Standardbild wurde automatisch gesetzt.");
-    }
+    return errorResponse(
+      400,
+      "Für GPT-OAuth ist imageUrl Pflicht. Bitte zuerst /api/gpt/generate-image aufrufen.",
+      "image_required_for_gpt",
+      [{ field: "imageUrl", issue: "required_for_gpt_oauth" }]
+    );
   }
 
   const closesAtRaw = (body.closesAt ?? "").trim();
