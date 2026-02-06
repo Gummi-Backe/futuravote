@@ -106,9 +106,7 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: "#/components/schemas/CreateDraftPublicResolvable"
-                - $ref: "#/components/schemas/CreateDraft"
+              $ref: "#/components/schemas/CreateDraft"
       responses:
         "201":
           description: Draft oder Question erstellt
@@ -203,14 +201,6 @@ components:
           nullable: true
           description: "Required wenn visibility=public und isResolvable=true (ISO Datum/Uhrzeit). Server setzt sonst automatisch closesAt+31 Tage."
       required: [title, category]
-    CreateDraftPublicResolvable:
-      allOf:
-        - $ref: "#/components/schemas/CreateDraft"
-        - type: object
-          properties:
-            visibility: { type: string, enum: [public] }
-            isResolvable: { type: boolean, enum: [true] }
-          required: [visibility, isResolvable, resolutionCriteria, resolutionSource, resolutionDeadline]
     ErrorResponse:
       type: object
       properties:
