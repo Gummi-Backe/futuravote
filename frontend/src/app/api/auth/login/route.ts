@@ -6,6 +6,7 @@ import {
   getUserPasswordHashByEmailSupabase,
 } from "@/app/data/dbSupabaseUsers";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { getFvUserCookieOptions } from "@/app/lib/fvUserCookie";
 
 export const revalidate = 0;
 
@@ -49,13 +50,7 @@ export async function POST(request: Request) {
 
     // Persistente Login-Session: Cookie bleibt auch nach Browser-Neustart erhalten,
     // bis der Nutzer sich aktiv ausloggt (oder die Session abgelaufen/geloescht wird).
-    response.cookies.set("fv_user", sessionId, {
-      path: "/",
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 30, // 30 Tage in Sekunden
-    });
+    response.cookies.set("fv_user", sessionId, getFvUserCookieOptions(request));
 
     return response;
   } catch (error) {

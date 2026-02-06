@@ -10,6 +10,7 @@ import {
 import { createEmailVerificationTokenSupabase } from "@/app/data/dbSupabaseUsers";
 import { sendVerificationEmail } from "@/app/lib/email";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { getFvUserCookieOptions } from "@/app/lib/fvUserCookie";
 
 export const revalidate = 0;
 
@@ -105,12 +106,7 @@ export async function POST(request: Request) {
       path: "/auth",
     });
 
-    response.cookies.set("fv_user", sessionId, {
-      path: "/",
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
+    response.cookies.set("fv_user", sessionId, getFvUserCookieOptions(request));
 
     return response;
   } catch (error) {

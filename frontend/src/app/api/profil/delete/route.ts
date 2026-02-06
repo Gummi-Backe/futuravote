@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase, getUserPasswordHashByIdSupabase } from "@/app/data/dbSupabaseUsers";
+import { getFvUserClearCookieOptions } from "@/app/lib/fvUserCookie";
 
 export const revalidate = 0;
 
@@ -13,15 +14,15 @@ function verifyPassword(password: string, stored: string): boolean {
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(computed, "hex"));
 }
 
-function logoutResponse(payload: unknown, status: number) {
+function logoutResponse(payload: unknown, status: number, request: Request) {
   const response = NextResponse.json(payload, { status });
-  response.cookies.set("fv_user", "", {
-    path: "/",
-    httpOnly: true,
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 0,
-  });
+  const clearOptions = getFvUserClearCookieOptions(request);
+  response.cookies.set("fv_user", "", clearOptions);
+  // Legacy host-only Cookie ebenfalls entfernen, falls vorhanden.
+  if ("domain" in clearOptions) {
+    const { domain: _domain, ...hostOnlyClear } = clearOptions;
+    response.cookies.set("fv_user", "", hostOnlyClear);
+  }
   return response;
 }
 
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Account konnte nicht gelöscht werden: ${userDelError.message}` }, { status: 500 });
     }
 
-    return logoutResponse({ ok: true }, 200);
+    return logoutResponse({ ok: true }, 200, request);
   } catch (error: any) {
     const msg = typeof error?.message === "string" ? error.message : "Unbekannter Fehler";
     return NextResponse.json({ error: msg }, { status: 500 });
