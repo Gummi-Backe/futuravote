@@ -21,6 +21,16 @@ function normalizeTargetPath(input: unknown): string | null {
   return trimmed.slice(0, 300);
 }
 
+function addQueryParams(path: string, params: Array<[string, string]>): string {
+  const [pathname, hash = ""] = path.split("#", 2);
+  const separator = pathname.includes("?") ? "&" : "?";
+  const query = params
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+  const hashed = hash ? `#${hash}` : "";
+  return `${pathname}${separator}${query}${hashed}`;
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const userSessionId = cookieStore.get("fv_user")?.value;
@@ -44,9 +54,15 @@ export async function POST(request: Request) {
 
   const headerStore = await headers();
   const baseUrl = getBaseUrlFromHeaders(headerStore);
-  const sep = targetPath.includes("?") ? "&" : "?";
-  const fullUrl = `${baseUrl}${targetPath}${sep}fv_ref=${encodeURIComponent(token)}`;
+  const utmContent = targetPath.startsWith("/p/") ? "private_question" : "public_question";
+  const targetWithParams = addQueryParams(targetPath, [
+    ["fv_ref", token],
+    ["utm_source", "futurevote"],
+    ["utm_medium", "share"],
+    ["utm_campaign", "referral"],
+    ["utm_content", utmContent],
+  ]);
+  const fullUrl = `${baseUrl}${targetWithParams}`;
 
   return NextResponse.json({ ok: true, url: fullUrl }, { status: 200 });
 }
-

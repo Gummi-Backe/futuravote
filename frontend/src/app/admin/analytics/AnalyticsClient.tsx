@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Summary = {
   uniqueSessions7d: number;
+  uniqueSessions30d?: number;
   pageViews7d: number;
   votes7d: number;
   draftReviews7d: number;
@@ -12,11 +13,29 @@ type Summary = {
   copies7d: number;
   logins7d: number;
   registers7d: number;
+  referralVisits7d?: number;
+  referralVotes7d?: number;
+  sharesAndCopies7d?: number;
+  shareToVisitPct?: number;
+  visitToVotePct?: number;
+  shareToVotePct?: number;
   sampleLimits?: { uniqueSessions?: number; topPages?: number };
 };
 
 type TopPage = { path: string; count: number };
 type LatestRow = { event: string; path: string | null; created_at: string; meta: any };
+type Kpis = {
+  growth?: { wau: number; mau: number; wauMauRatioPct: number };
+  referral?: {
+    sharesAndCopies7d: number;
+    referralVisits7d: number;
+    referralVotes7d: number;
+    shareToVisitPct: number;
+    visitToVotePct: number;
+    shareToVotePct: number;
+  };
+  topSharers?: { userId: string; displayName: string; conversions: number }[];
+};
 
 function formatDate(value: string) {
   const ms = Date.parse(value);
@@ -47,6 +66,7 @@ export default function AnalyticsClient() {
   const [topPages, setTopPages] = useState<TopPage[]>([]);
   const [latest, setLatest] = useState<LatestRow[]>([]);
   const [since7d, setSince7d] = useState<string | null>(null);
+  const [kpis, setKpis] = useState<Kpis | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -56,12 +76,14 @@ export default function AnalyticsClient() {
       const json: any = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error ?? "Analytics konnten nicht geladen werden.");
       setSummary((json?.summary ?? null) as Summary | null);
+      setKpis((json?.kpis ?? null) as Kpis | null);
       setTopPages((Array.isArray(json?.topPages) ? json.topPages : []) as TopPage[]);
       setLatest((Array.isArray(json?.latest) ? json.latest : []) as LatestRow[]);
       setSince7d(typeof json?.since7d === "string" ? json.since7d : null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Analytics konnten nicht geladen werden.");
       setSummary(null);
+      setKpis(null);
       setTopPages([]);
       setLatest([]);
     } finally {
@@ -109,13 +131,47 @@ export default function AnalyticsClient() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card label="Sessions" value={`${summary?.uniqueSessions7d ?? 0}`} hint="Unique (7 Tage)" />
+        <Card label="MAU (Proxy)" value={`${summary?.uniqueSessions30d ?? 0}`} hint="Unique Sessions (30 Tage)" />
         <Card label="Page Views" value={`${summary?.pageViews7d ?? 0}`} hint="page_view (7 Tage)" />
         <Card label="Votes" value={`${summary?.votes7d ?? 0}`} hint="Fragen (7 Tage)" />
         <Card label="Draft-Reviews" value={`${summary?.draftReviews7d ?? 0}`} hint="Gute Frage/Ablehnen (7 Tage)" />
         <Card label="Shares" value={`${summary?.shares7d ?? 0}`} hint="native share (7 Tage)" />
         <Card label="Copies" value={`${summary?.copies7d ?? 0}`} hint="Link kopiert (7 Tage)" />
+        <Card label="Referral Visits" value={`${summary?.referralVisits7d ?? 0}`} hint="Share-Link geöffnet (7 Tage)" />
+        <Card label="Referral Votes" value={`${summary?.referralVotes7d ?? 0}`} hint="Vote nach Share-Link (7 Tage)" />
         <Card label="Logins" value={`${summary?.logins7d ?? 0}`} hint="Login (7 Tage)" />
         <Card label="Registrierungen" value={`${summary?.registers7d ?? 0}`} hint="Register (7 Tage)" />
+      </div>
+
+      <div className="mt-8 rounded-3xl border border-white/10 bg-black/20 p-4">
+        <div className="text-sm font-semibold text-white">KPI-Board (Growth & Viral)</div>
+        <div className="mt-1 text-xs text-slate-400">
+          Share→Visit, Visit→Vote, Share→Vote und WAU/MAU-Ratio als laufender Trend-Check.
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card label="Share → Visit" value={`${kpis?.referral?.shareToVisitPct ?? 0}%`} hint="referral_visit / (share+copy)" />
+          <Card label="Visit → Vote" value={`${kpis?.referral?.visitToVotePct ?? 0}%`} hint="referral_vote / referral_visit" />
+          <Card label="Share → Vote" value={`${kpis?.referral?.shareToVotePct ?? 0}%`} hint="referral_vote / (share+copy)" />
+          <Card label="WAU/MAU" value={`${kpis?.growth?.wauMauRatioPct ?? 0}%`} hint="7T Unique / 30T Unique" />
+        </div>
+
+        <div className="mt-6">
+          <div className="text-sm font-semibold text-white">Top Sharer (Conversions, 7 Tage)</div>
+          <div className="mt-3 space-y-2 text-sm text-slate-200">
+            {(kpis?.topSharers ?? []).length === 0 ? (
+              <div className="text-sm text-slate-400">Noch keine Referral-Conversions.</div>
+            ) : (
+              (kpis?.topSharers ?? []).map((row) => (
+                <div key={row.userId} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate">{row.displayName}</span>
+                  <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-100">
+                    {row.conversions}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
