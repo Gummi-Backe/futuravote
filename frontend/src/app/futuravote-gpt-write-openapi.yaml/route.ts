@@ -8,6 +8,89 @@ info:
 servers:
   - url: https://gpt-write.future-vote.de
 paths:
+  /api/gpt/generate-image:
+    post:
+      operationId: generateDraftImage
+      summary: Bild fuer Draft erzeugen und speichern
+      security:
+        - oauth2: [drafts:write]
+      description: |
+        Erzeugt ein KI-Bild fuer eine Umfrage, skaliert es auf Kachelformat
+        und speichert es im FutureVote-Storage. Ergebnis ist eine imageUrl,
+        die direkt in createDraft genutzt werden kann.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+                  description: "Bildbeschreibung (mind. 10 Zeichen)."
+                size:
+                  type: string
+                  enum: [1024x1024, 1024x1536, 1536x1024]
+                  nullable: true
+                  description: "Optionales Seitenverhaeltnis fuer die Generierung."
+              required: [prompt]
+      responses:
+        "201":
+          description: Bild erzeugt und gespeichert
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imageUrl:
+                    type: string
+                    description: "Oeffentliche URL des gespeicherten Bildes."
+                  imageCredit:
+                    type: string
+                    description: "Vorschlag fuer Bildquelle/Credit."
+                  width:
+                    type: number
+                  height:
+                    type: number
+                  model:
+                    type: string
+                required: [imageUrl, imageCredit]
+        "400":
+          description: Validierungsfehler
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Nicht eingeloggt / OAuth fehlt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Scope fehlt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Bild konnte nicht gespeichert/verarbeitet werden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: KI-Bildgenerierung fehlgeschlagen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: OpenAI nicht konfiguriert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/drafts:
     post:
       operationId: createDraft
