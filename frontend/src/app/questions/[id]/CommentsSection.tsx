@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type CommentStance = "yes" | "no" | "neutral";
+type AnswerMode = "binary" | "options";
 
 type QuestionComment = {
   id: string;
@@ -39,7 +40,13 @@ function avatarLetters(name: string) {
   return letters || "U";
 }
 
-function stanceLabel(stance: CommentStance) {
+function stanceLabel(answerMode: AnswerMode, stance: CommentStance) {
+  if (answerMode === "options") {
+    if (stance === "yes") return "Pro";
+    if (stance === "no") return "Contra";
+    return "Neutral";
+  }
+
   if (stance === "yes") return "Ja";
   if (stance === "no") return "Nein";
   return "Neutral";
@@ -51,12 +58,26 @@ function stanceClass(stance: CommentStance) {
   return "border-white/10 bg-white/5 text-slate-100";
 }
 
+function stanceCardClass(stance: CommentStance) {
+  if (stance === "yes") {
+    return "border-emerald-300/25 bg-gradient-to-br from-emerald-500/10 via-black/20 to-black/10";
+  }
+  if (stance === "no") {
+    return "border-rose-300/25 bg-gradient-to-br from-rose-500/10 via-black/20 to-black/10";
+  }
+  return "border-white/10 bg-black/20";
+}
+
 export function CommentsSection({
   questionId,
+  answerMode,
+  userChoice,
   isLoggedIn,
   canPost,
 }: {
   questionId: string;
+  answerMode: AnswerMode;
+  userChoice: "yes" | "no" | null;
   isLoggedIn: boolean;
   canPost: boolean;
 }) {
@@ -64,7 +85,8 @@ export function CommentsSection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [stance, setStance] = useState<CommentStance>("neutral");
+  const [stance, setStance] = useState<CommentStance | null>(answerMode === "options" ? null : "neutral");
+  const [stanceTouched, setStanceTouched] = useState(false);
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -92,13 +114,28 @@ export function CommentsSection({
     void fetchComments();
   }, [fetchComments]);
 
+  useEffect(() => {
+    if (answerMode === "options") {
+      // For options questions: no preselection.
+      setStance(null);
+      setStanceTouched(false);
+      return;
+    }
+
+    // For binary questions: default to user's vote (still changeable).
+    if (!stanceTouched) {
+      setStance(userChoice === "yes" ? "yes" : userChoice === "no" ? "no" : "neutral");
+    }
+  }, [answerMode, stanceTouched, userChoice]);
+
   const canSubmit = useMemo(() => {
     if (!canPost) return false;
+    if (!stance) return false;
     const text = body.trim();
     if (text.length < 5) return false;
     if (text.length > 2000) return false;
     return true;
-  }, [body, canPost]);
+  }, [body, canPost, stance]);
 
   const submit = useCallback(async () => {
     if (!canSubmit || submitting) return;
@@ -124,13 +161,14 @@ export function CommentsSection({
       }
       setBody("");
       setSourceUrl("");
-      setStance("neutral");
+      setStance(answerMode === "options" ? null : "neutral");
+      setStanceTouched(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Kommentar konnte nicht gespeichert werden.");
     } finally {
       setSubmitting(false);
     }
-  }, [body, canSubmit, fetchComments, questionId, sourceUrl, stance, submitting]);
+  }, [answerMode, body, canSubmit, fetchComments, questionId, sourceUrl, stance, submitting]);
 
   const voteOnComment = useCallback(
     async (commentId: string) => {
@@ -208,16 +246,24 @@ export function CommentsSection({
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setStance(s)}
+                  onClick={() => {
+                    setStance(s);
+                    setStanceTouched(true);
+                  }}
                   className={`rounded-full border px-3 py-1 text-xs font-semibold transition hover:-translate-y-0.5 ${
                     active ? stanceClass(s) : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/30"
                   }`}
                   aria-pressed={active}
                 >
-                  {stanceLabel(s)}
+                  {stanceLabel(answerMode, s)}
                 </button>
               );
             })}
+            {answerMode === "options" && stance === null ? (
+              <span className="ml-1 text-[11px] font-semibold text-slate-300">
+                Bitte wähle Pro, Contra oder Neutral.
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -229,7 +275,7 @@ export function CommentsSection({
                   onChange={(e) => setBody(e.target.value)}
                   rows={4}
                   className="mt-1 w-full resize-none rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-emerald-300/50"
-                  placeholder="Was spricht dafuer/dagegen?"
+                  placeholder="Was spricht dafür oder dagegen?"
                 />
               </label>
               <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
@@ -289,7 +335,7 @@ export function CommentsSection({
           comments.map((c) => (
             <article
               key={c.id}
-              className="rounded-3xl border border-white/10 bg-black/20 px-4 py-3 shadow-sm shadow-black/20"
+              className={`rounded-3xl border px-4 py-3 shadow-sm shadow-black/20 ${stanceCardClass(c.stance)}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
@@ -300,7 +346,7 @@ export function CommentsSection({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-semibold text-white">{c.authorName}</span>
                       <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${stanceClass(c.stance)}`}>
-                        {stanceLabel(c.stance)}
+                        {stanceLabel(answerMode, c.stance)}
                       </span>
                       <span className="text-[11px] text-slate-400">{formatTime(c.createdAt)}</span>
                     </div>

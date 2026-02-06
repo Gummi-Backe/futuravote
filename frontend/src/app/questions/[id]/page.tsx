@@ -562,7 +562,13 @@ export default async function QuestionDetail(props: {
           </div>
         </section>
 
-        <CommentsSection questionId={id} isLoggedIn={Boolean(currentUser)} canPost={Boolean(currentUser?.emailVerified)} />
+        <CommentsSection
+          questionId={id}
+          answerMode={answerMode === "options" ? "options" : "binary"}
+          userChoice={answerMode === "binary" ? (question.userChoice ?? null) : null}
+          isLoggedIn={Boolean(currentUser)}
+          canPost={Boolean(currentUser?.emailVerified)}
+        />
       </div>
     </main>
   );
