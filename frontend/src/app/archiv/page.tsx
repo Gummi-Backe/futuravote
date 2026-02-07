@@ -480,6 +480,18 @@ export default async function ArchivPage(props: {
               ].map((t) => {
                 const active = typeFilter === t.key;
                 const href = `/archiv?page=1${t.key === "all" ? "" : `&type=${encodeURIComponent(t.key)}`}`;
+                const activeClass =
+                  t.key === "prognose"
+                    ? "border-emerald-300/60 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.26),transparent_65%),radial-gradient(ellipse_at_bottom,_rgba(99,102,241,0.2),transparent_65%)] text-white"
+                    : t.key === "umfrage"
+                      ? "border-amber-300/45 bg-[radial-gradient(ellipse_at_top,_rgba(245,158,11,0.14),transparent_65%),radial-gradient(ellipse_at_bottom,_rgba(249,115,22,0.10),transparent_65%)] text-white"
+                      : "border-emerald-300/60 bg-emerald-500/20 text-white";
+                const inactiveClass =
+                  t.key === "prognose"
+                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-300/50"
+                    : t.key === "umfrage"
+                      ? "border-amber-400/20 bg-amber-500/5 text-amber-100 hover:border-amber-300/35"
+                      : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/30";
                 return (
                   <Link
                     key={t.key}
@@ -487,9 +499,7 @@ export default async function ArchivPage(props: {
                     replace
                     scroll={false}
                     className={`rounded-full border px-4 py-2 shadow-sm shadow-black/20 transition hover:-translate-y-0.5 ${
-                      active
-                        ? "border-emerald-300/60 bg-emerald-500/20 text-white"
-                        : "border-white/10 bg-white/5 text-slate-100 hover:border-emerald-200/30"
+                      active ? activeClass : inactiveClass
                     }`}
                   >
                     {t.label}
@@ -590,7 +600,7 @@ export default async function ArchivPage(props: {
                 const resolvedCardClassName = isResolvedBinary
                   ? "relative overflow-hidden rounded-3xl border border-emerald-200/25 bg-[radial-gradient(ellipse_at_top,_rgba(16,185,129,0.22),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(99,102,241,0.18),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(16,185,129,0.16)] backdrop-blur sm:p-6"
                   : !isResolvable
-                    ? "relative overflow-hidden rounded-3xl border border-amber-200/25 bg-[radial-gradient(ellipse_at_top,_rgba(245,158,11,0.20),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(249,115,22,0.16),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(245,158,11,0.14)] backdrop-blur sm:p-6"
+                    ? "relative overflow-hidden rounded-3xl border border-amber-200/15 bg-[radial-gradient(ellipse_at_top,_rgba(245,158,11,0.12),transparent_60%),radial-gradient(ellipse_at_bottom,_rgba(249,115,22,0.08),transparent_60%)] p-4 shadow-[0_25px_80px_rgba(245,158,11,0.10)] backdrop-blur sm:p-6"
                     : "rounded-3xl border border-white/10 bg-white/5 p-4";
 
                 const resolvedOutcome = isResolvedBinary ? (q.resolved_outcome as "yes" | "no") : null;
