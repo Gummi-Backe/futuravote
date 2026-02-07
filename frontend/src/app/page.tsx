@@ -220,6 +220,7 @@ function EventCard({
   const badge = statusBadge(question.status);
   const answerMode = question.answerMode ?? "binary";
   const isOptions = answerMode === "options";
+  const isResolvable = question.isResolvable === true;
   const votedChoice = question.userChoice;
   const voted = isOptions ? Boolean(question.userOptionId) : Boolean(votedChoice);
   const votedTooltip = voted
@@ -251,12 +252,18 @@ function EventCard({
     : "";
 
   return (
-    <article
-      data-feed-item-id={`q:${question.id}`}
-      className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-emerald-500/15 transition hover:-translate-y-1 hover:border-emerald-300/40 hover:shadow-emerald-400/25 mx-auto ${
-        voted ? "ring-1 ring-emerald-300/25 border-emerald-300/35 shadow-emerald-400/25" : ""
+      <article
+        data-feed-item-id={`q:${question.id}`}
+        className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border p-6 shadow-xl transition hover:-translate-y-1 mx-auto ${
+          isResolvable
+            ? "border-white/10 bg-white/5 shadow-emerald-500/15 hover:border-emerald-300/40 hover:shadow-emerald-400/25"
+            : "border-amber-200/7 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.09),rgba(2,6,23,0.95)_70%)] shadow-amber-500/8 hover:border-amber-200/14 hover:shadow-amber-400/12"
       } ${
-        isClosingSoon ? "border-amber-300/60 shadow-amber-400/30" : ""
+        voted
+          ? isResolvable
+            ? "ring-1 ring-emerald-300/25"
+            : "ring-1 ring-amber-200/20"
+          : ""
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
