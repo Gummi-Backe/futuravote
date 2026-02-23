@@ -274,6 +274,14 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
   return mapUser(userRow);
 }
 
+export async function deleteUserSessionSupabase(sessionId: string): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("user_sessions").delete().eq("id", sessionId);
+  if (error) {
+    throw new Error(`Supabase deleteUserSession fehlgeschlagen: ${error.message}`);
+  }
+}
+
 export async function updateUserDefaultRegionSupabase(
   userId: string,
   region: string | null
