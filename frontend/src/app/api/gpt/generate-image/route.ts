@@ -11,15 +11,15 @@ export const revalidate = 0;
 
 type Body = {
   prompt?: string;
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  size?: "1024x1024";
 };
 
 type ImageModel = "dall-e-3" | "gpt-image-1.5";
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 const MAX_PROMPT_LENGTH = 1500;
-const TARGET_WIDTH = 250;
-const TARGET_HEIGHT = 150;
+const TARGET_WIDTH = 512;
+const TARGET_HEIGHT = 512;
 
 function hasOAuthScope(scope: string, required: string): boolean {
   const raw = String(scope ?? "").trim();
@@ -38,10 +38,8 @@ function getImageModel(): ImageModel {
 }
 
 function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
-  const selected = size === "1024x1536" || size === "1536x1024" ? size : "1024x1024";
+  const selected = size === "1024x1024" ? "1024x1024" : "1024x1024";
   if (model === "dall-e-3") {
-    if (selected === "1536x1024") return "1792x1024";
-    if (selected === "1024x1536") return "1024x1792";
     return "1024x1024";
   }
   return selected;
@@ -49,7 +47,7 @@ function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
 
 function buildSafePrompt(rawPrompt: string): string {
   return [
-    "Erstelle ein fotorealistisches, journalistisches Bild als Thumbnail fuer eine Umfragekarte.",
+    "Erstelle ein fotorealistisches, journalistisches, quadratisches Bild als Thumbnail fuer eine Umfragekarte.",
     "Keine Logos, keine Wasserzeichen, keine Marken, keine bekannten Personen, keine Politiker.",
     "Neutrale Stimmung, klarer Fokus, ohne manipulative Symbolik.",
     "Kein lesbarer Text im Bild.",
@@ -123,6 +121,12 @@ export async function POST(request: Request) {
   if (prompt.length > MAX_PROMPT_LENGTH) {
     return NextResponse.json(
       { error: "Prompt ist zu lang.", errorCode: "prompt_too_long" },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+  if (typeof body.size !== "undefined" && body.size !== "1024x1024") {
+    return NextResponse.json(
+      { error: "Nur size=1024x1024 ist erlaubt.", errorCode: "invalid_size" },
       { status: 400, headers: { "Cache-Control": "no-store" } }
     );
   }
@@ -201,7 +205,7 @@ export async function POST(request: Request) {
   let resizedJpeg: Buffer;
   try {
     resizedJpeg = await sharp(sourceBuffer)
-      .resize(TARGET_WIDTH, TARGET_HEIGHT, { fit: "inside", withoutEnlargement: true })
+      .resize(TARGET_WIDTH, TARGET_HEIGHT, { fit: "cover", position: "centre" })
       .jpeg({ quality: 80 })
       .toBuffer();
   } catch {

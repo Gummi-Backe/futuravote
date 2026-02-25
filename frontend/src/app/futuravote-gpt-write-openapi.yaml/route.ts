@@ -15,7 +15,7 @@ paths:
       security:
         - oauth2: [drafts:write]
       description: |
-        Erzeugt ein KI-Bild fuer eine Umfrage, skaliert es auf Kachelformat
+        Erzeugt ein KI-Bild fuer eine Umfrage, skaliert es quadratisch
         und speichert es im FutureVote-Storage. Ergebnis ist eine imageUrl,
         die direkt in createDraft genutzt werden kann.
       requestBody:
@@ -30,9 +30,9 @@ paths:
                   description: "Bildbeschreibung (mind. 10 Zeichen)."
                 size:
                   type: string
-                  enum: [1024x1024, 1024x1536, 1536x1024]
+                  enum: [1024x1024]
                   nullable: true
-                  description: "Optionales Seitenverhaeltnis fuer die Generierung."
+                  description: "Optional. Es ist nur 1024x1024 erlaubt."
               required: [prompt]
       responses:
         "201":
@@ -101,6 +101,12 @@ paths:
         Erstellt:
         - bei visibility=public einen Draft (landet im Review),
         - bei visibility=link_only direkt eine private Frage (per Link abstimmbar).
+        Sicherheitsregeln fuer GPT-OAuth:
+        - confirmSubmit muss true sein.
+        - imageUrl und imageCredit sind Pflicht.
+        - Bei visibility=public muss description 100-200 Woerter haben.
+        - Bei visibility=public und isResolvable=true muss longDescription 600-1000 Woerter haben,
+          ausser allowWithoutLongDescription=true ist gesetzt.
       requestBody:
         required: true
         content:
@@ -117,16 +123,24 @@ paths:
                   type: string
                   nullable: true
                   description: "Optionaler Langtext fuer die Detailansicht (bei oeffentlichen Prognosen empfohlen: 600-1000 Woerter). Strukturierte Absaetze und Markups wie bei description sind erlaubt."
+                allowWithoutLongDescription:
+                  type: boolean
+                  nullable: true
+                  description: "Nur fuer GPT-OAuth relevant: Bei oeffentlichen Prognosen kann damit longDescription explizit abgeschaltet werden."
+                confirmSubmit:
+                  type: boolean
+                  nullable: true
+                  description: "Pflicht fuer GPT-OAuth: muss true sein und signalisiert explizite Nutzerfreigabe nach Vorschau."
                 category: { type: string }
                 region: { type: string, nullable: true }
                 imageUrl:
                   type: string
                   nullable: true
-                  description: "Optional. Fuer GPT-OAuth wird ein Standardbild genutzt, wenn leer; externe URLs werden ggf. ignoriert."
+                  description: "Pflicht fuer GPT-OAuth. Muss aus /api/gpt/generate-image stammen."
                 imageCredit:
                   type: string
                   nullable: true
-                  description: "Optional. Wird fuer Standardbild automatisch gesetzt (falls konfiguriert)."
+                  description: "Pflicht fuer GPT-OAuth. Wird i.d.R. aus /api/gpt/generate-image uebernommen."
                 timeLeftHours: { type: number, nullable: true, description: "Standard: 72" }
                 closesAt: { type: string, nullable: true, description: "Optionales Enddatum (ISO)" }
                 visibility:
@@ -143,7 +157,7 @@ paths:
                 resolutionCriteria: { type: string, nullable: true }
                 resolutionSource: { type: string, nullable: true }
                 resolutionDeadline: { type: string, nullable: true, description: "ISO Datum/Uhrzeit" }
-              required: [title, category]
+              required: [title, category, confirmSubmit, imageUrl, imageCredit]
       responses:
         "201":
           description: Draft oder Question erstellt

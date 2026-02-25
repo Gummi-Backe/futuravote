@@ -27,6 +27,8 @@ type DraftInput = {
   title?: string;
   description?: string;
   longDescription?: string;
+  allowWithoutLongDescription?: boolean;
+  confirmSubmit?: boolean;
   category?: string;
   region?: string;
   imageUrl?: string;
@@ -52,6 +54,8 @@ const ALLOWED_DRAFT_KEYS = new Set<keyof DraftInput>([
   "title",
   "description",
   "longDescription",
+  "allowWithoutLongDescription",
+  "confirmSubmit",
   "category",
   "region",
   "imageUrl",
@@ -68,6 +72,11 @@ const ALLOWED_DRAFT_KEYS = new Set<keyof DraftInput>([
 ]);
 
 const DESCRIPTION_MAX_CHARS = 12_000;
+const IMAGE_CREDIT_MAX_CHARS = 140;
+const GPT_SHORT_DESCRIPTION_MIN_WORDS = 100;
+const GPT_SHORT_DESCRIPTION_MAX_WORDS = 200;
+const GPT_LONG_DESCRIPTION_MIN_WORDS = 600;
+const GPT_LONG_DESCRIPTION_MAX_WORDS = 1000;
 
 function errorResponse(
   status: number,
@@ -89,6 +98,21 @@ function normalizeImageUrl(raw?: string | null): string | undefined {
   const trimmed = String(raw ?? "").trim();
   if (!trimmed || trimmed.length <= 4 || trimmed.length >= 500) return undefined;
   return trimmed;
+}
+
+function countWords(raw: string): number {
+  if (!raw) return 0;
+  const cleaned = raw
+    .replace(/\[size=(sm|lg|xl|xxl)\]/gi, " ")
+    .replace(/\[\/size\]/gi, " ")
+    .replace(/\*\*/g, " ")
+    .replace(/__/g, " ")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, "$1 ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return 0;
+  return cleaned.split(" ").filter(Boolean).length;
 }
 
 function addDaysIso(iso: string, days: number): string | null {
@@ -290,6 +314,24 @@ export async function POST(request: Request) {
 
   let imageUrl = normalizeImageUrl(body.imageUrl);
   let imageCredit = (body.imageCredit ?? "").trim() || undefined;
+  const shortDescriptionWordCount = countWords(shortDescription);
+  const longDescriptionWordCount = countWords(effectiveLongDescription);
+  const allowWithoutLongDescription = body.allowWithoutLongDescription === true;
+  const confirmSubmit = body.confirmSubmit === true;
+
+  if (typeof body.confirmSubmit !== "undefined" && typeof body.confirmSubmit !== "boolean") {
+    return errorResponse(400, "confirmSubmit muss true oder false sein.", "invalid_confirm_submit", [
+      { field: "confirmSubmit", issue: "must_be_boolean", value: body.confirmSubmit },
+    ]);
+  }
+  if (typeof body.allowWithoutLongDescription !== "undefined" && typeof body.allowWithoutLongDescription !== "boolean") {
+    return errorResponse(
+      400,
+      "allowWithoutLongDescription muss true oder false sein.",
+      "invalid_allow_without_long_description",
+      [{ field: "allowWithoutLongDescription", issue: "must_be_boolean", value: body.allowWithoutLongDescription }]
+    );
+  }
 
   if (imageUrl) {
     try {
@@ -321,6 +363,30 @@ export async function POST(request: Request) {
       "Für GPT-OAuth ist imageUrl Pflicht. Bitte zuerst /api/gpt/generate-image aufrufen.",
       "image_required_for_gpt",
       [{ field: "imageUrl", issue: "required_for_gpt_oauth" }]
+    );
+  }
+  if (imageCredit && imageCredit.length > IMAGE_CREDIT_MAX_CHARS) {
+    return errorResponse(
+      400,
+      `imageCredit ist zu lang (maximal ${IMAGE_CREDIT_MAX_CHARS} Zeichen).`,
+      "image_credit_too_long",
+      [{ field: "imageCredit", issue: `max_length_${IMAGE_CREDIT_MAX_CHARS}` }]
+    );
+  }
+  if (isOauthGpt && !imageCredit) {
+    return errorResponse(
+      400,
+      "Für GPT-OAuth ist imageCredit Pflicht.",
+      "image_credit_required_for_gpt",
+      [{ field: "imageCredit", issue: "required_for_gpt_oauth" }]
+    );
+  }
+  if (isOauthGpt && !confirmSubmit) {
+    return errorResponse(
+      400,
+      "Für GPT-OAuth ist confirmSubmit=true Pflicht. Zeige zuerst die Vorschau und frage nach Freigabe.",
+      "explicit_confirmation_required",
+      [{ field: "confirmSubmit", issue: "must_be_true_for_gpt_oauth" }]
     );
   }
 
@@ -466,6 +532,64 @@ export async function POST(request: Request) {
         },
       ]
     );
+  }
+
+  if (isOauthGpt && visibility === "public") {
+    if (!shortDescription) {
+      return errorResponse(
+        400,
+        "Für GPT-OAuth und öffentliche Fragen ist description Pflicht.",
+        "description_required_for_gpt_public",
+        [{ field: "description", issue: "required_for_gpt_public" }]
+      );
+    }
+    if (
+      shortDescriptionWordCount < GPT_SHORT_DESCRIPTION_MIN_WORDS ||
+      shortDescriptionWordCount > GPT_SHORT_DESCRIPTION_MAX_WORDS
+    ) {
+      return errorResponse(
+        400,
+        `description muss fuer GPT-OAuth bei öffentlichen Fragen ${GPT_SHORT_DESCRIPTION_MIN_WORDS}-${GPT_SHORT_DESCRIPTION_MAX_WORDS} Wörter haben (aktuell ${shortDescriptionWordCount}).`,
+        "description_word_count_out_of_range",
+        [
+          {
+            field: "description",
+            issue: `word_count_${GPT_SHORT_DESCRIPTION_MIN_WORDS}_${GPT_SHORT_DESCRIPTION_MAX_WORDS}`,
+            value: shortDescriptionWordCount,
+          },
+        ]
+      );
+    }
+  }
+
+  if (isOauthGpt && visibility === "public" && isResolvable) {
+    if (!effectiveLongDescription && !allowWithoutLongDescription) {
+      return errorResponse(
+        400,
+        "Für öffentliche Prognosen via GPT-OAuth ist longDescription Pflicht (oder allowWithoutLongDescription=true).",
+        "long_description_required_for_gpt_public_prediction",
+        [{ field: "longDescription", issue: "required_unless_explicitly_disabled" }]
+      );
+    }
+    if (effectiveLongDescription) {
+      if (
+        longDescriptionWordCount < GPT_LONG_DESCRIPTION_MIN_WORDS ||
+        longDescriptionWordCount > GPT_LONG_DESCRIPTION_MAX_WORDS
+      ) {
+        return errorResponse(
+          400,
+          `longDescription muss fuer GPT-OAuth bei öffentlichen Prognosen ${GPT_LONG_DESCRIPTION_MIN_WORDS}-${GPT_LONG_DESCRIPTION_MAX_WORDS} Wörter haben (aktuell ${longDescriptionWordCount}).`,
+          "long_description_word_count_out_of_range",
+          [
+            {
+              field: "longDescription",
+              issue: `word_count_${GPT_LONG_DESCRIPTION_MIN_WORDS}_${GPT_LONG_DESCRIPTION_MAX_WORDS}`,
+              value: longDescriptionWordCount,
+            },
+          ]
+        );
+      }
+    }
   }
 
   if (visibility === "link_only") {
