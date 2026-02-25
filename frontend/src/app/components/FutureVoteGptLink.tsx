@@ -16,6 +16,8 @@ export function FutureVoteGptLink({
   label = "Mit FutureVote GPT sprechen",
 }: FutureVoteGptLinkProps) {
   const [copied, setCopied] = useState(false);
+  const baseClassName =
+    "inline-flex items-center justify-center rounded-xl border border-cyan-200/40 bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-50 shadow-lg shadow-cyan-900/20 transition hover:-translate-y-0.5 hover:border-cyan-200/70 hover:bg-cyan-500/25";
 
   const handleClick = useCallback(
     async (event: React.MouseEvent<HTMLAnchorElement>) => {
@@ -41,10 +43,7 @@ export function FutureVoteGptLink({
       }
 
       if (typeof window !== "undefined") {
-        const opened = window.open(href, "_blank", "noopener,noreferrer");
-        if (!opened) {
-          window.location.href = href;
-        }
+        window.open(href, "_blank", "noopener,noreferrer");
       }
     },
     [href, prompt]
@@ -56,10 +55,7 @@ export function FutureVoteGptLink({
       target="_blank"
       rel="noreferrer"
       onClick={handleClick}
-      className={
-        className ??
-        "inline-flex items-center justify-center rounded-xl border border-cyan-200/40 bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-50 shadow-lg shadow-cyan-900/20 transition hover:-translate-y-0.5 hover:border-cyan-200/70 hover:bg-cyan-500/25"
-      }
+      className={`${baseClassName} ${className ?? ""}`}
       title="Öffnet den FutureVote GPT. Kontext wird in die Zwischenablage kopiert."
     >
       {copied ? "Kontext kopiert - GPT geöffnet" : label}
