@@ -19,6 +19,18 @@ export function buildFutureVoteGptDiscussUrl(input: {
   isResolvable?: boolean | null;
   sourceUrl?: string | null;
 }): string {
+  return buildFutureVoteGptDiscussPayload(input).url;
+}
+
+export function buildFutureVoteGptDiscussPayload(input: {
+  title: string;
+  category?: string | null;
+  region?: string | null;
+  description?: string | null;
+  answerMode?: AnswerMode | null;
+  isResolvable?: boolean | null;
+  sourceUrl?: string | null;
+}): { url: string; prompt: string } {
   const title = clamp(input.title, 180);
   const category = clamp(input.category ?? "", 60);
   const region = clamp(input.region ?? "", 60);
@@ -44,8 +56,8 @@ export function buildFutureVoteGptDiscussUrl(input: {
     "Antworte auf Deutsch.",
   ].filter(Boolean);
 
+  const prompt = promptParts.join("\n");
   const url = new URL(FUTURE_VOTE_GPT_URL);
-  url.searchParams.set("q", promptParts.join("\n"));
-  return url.toString();
+  url.searchParams.set("q", prompt);
+  return { url: url.toString(), prompt };
 }
-

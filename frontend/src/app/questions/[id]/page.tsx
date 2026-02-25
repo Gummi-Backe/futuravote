@@ -360,10 +360,28 @@ export default async function QuestionDetail(props: {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <FutureVoteGptLink href={discussWithGptUrl} />
-              <ShareLinkButton url={shareUrl} label="Teilen" action="share" />
-              <EmbedWidgetButton widgetUrl={widgetUrl} title={question.title} />
-              <ReportButton kind="question" itemId={id} itemTitle={question.title} shareId={question.shareId ?? null} />
+              <FutureVoteGptLink
+                href={discussWithGptUrl}
+                className="h-11 rounded-xl px-4 text-sm"
+              />
+              <ShareLinkButton
+                url={shareUrl}
+                label="Teilen"
+                action="share"
+                className="!h-11 !rounded-xl !px-4 text-sm"
+              />
+              <EmbedWidgetButton
+                widgetUrl={widgetUrl}
+                title={question.title}
+                className="!h-11 !rounded-xl !px-4 text-sm"
+              />
+              <ReportButton
+                kind="question"
+                itemId={id}
+                itemTitle={question.title}
+                shareId={question.shareId ?? null}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:border-rose-200/40"
+              />
             </div>
           </div>
 
