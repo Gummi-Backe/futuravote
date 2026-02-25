@@ -89,6 +89,7 @@ type UploadImageJson = { imageUrl?: string; error?: string };
 
 const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
 const DESCRIPTION_MAX_CHARS = 12_000;
+const LONGTEXT_MARKER = "[[LANGTEXT]]";
 
 function uploadImageWithProgress(
   formData: FormData,
@@ -144,6 +145,8 @@ export default function NewDraftPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [longDescription, setLongDescription] = useState("");
+  const [longTextEnabled, setLongTextEnabled] = useState(false);
   const [aiImagePrompt, setAiImagePrompt] = useState("");
   const [category, setCategory] = useState<string>(categories[0]?.label ?? "");
   const [useCustomCategory, setUseCustomCategory] = useState(false);
@@ -440,6 +443,7 @@ export default function NewDraftPage() {
 
     setTitle(s.title ?? "");
     setDescription(s.description ?? "");
+    setLongDescription(longTextEnabled ? (s.longDescription ?? "").trim() : "");
     setAiImagePrompt(typeof (s as any).imagePrompt === "string" ? (s as any).imagePrompt : "");
 
     const knownCategory = categories.some((c) => c.label === s.category);
@@ -500,7 +504,7 @@ export default function NewDraftPage() {
       setResolutionDeadlineDate("");
       setResolutionDeadlineTime("");
     }
-  }, []);
+  }, [longTextEnabled]);
 
   const adoptAiImageFile = useCallback((file: File, previewUrl: string) => {
     setImageError(null);
@@ -552,6 +556,10 @@ export default function NewDraftPage() {
 
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
+    const trimmedLongDescription = longTextEnabled ? longDescription.trim() : "";
+    const mergedDescription = trimmedLongDescription
+      ? `${trimmedDescription}\n\n${LONGTEXT_MARKER}\n\n${trimmedLongDescription}`.trim()
+      : trimmedDescription;
 
     if (!trimmedTitle) {
       setError("Bitte gib einen Titel für deine Frage ein.");
@@ -563,6 +571,14 @@ export default function NewDraftPage() {
     }
     if (trimmedDescription.length > DESCRIPTION_MAX_CHARS) {
       setError(`Die Beschreibung ist zu lang (max. ${DESCRIPTION_MAX_CHARS} Zeichen).`);
+      return;
+    }
+    if (longTextEnabled && trimmedLongDescription && !trimmedDescription) {
+      setError("Bitte gib zuerst eine kurze Beschreibung ein und ergänze darunter den Langtext.");
+      return;
+    }
+    if (longTextEnabled && mergedDescription.length > DESCRIPTION_MAX_CHARS) {
+      setError(`Kurz- und Langtext zusammen sind zu lang (max. ${DESCRIPTION_MAX_CHARS} Zeichen).`);
       return;
     }
 
@@ -720,7 +736,7 @@ export default function NewDraftPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: trimmedTitle,
-          description: trimmedDescription || undefined,
+          description: mergedDescription || undefined,
           category: finalCategory,
           region: isPrivatePoll ? undefined : finalRegion || "Global",
           visibility,
@@ -1184,6 +1200,8 @@ export default function NewDraftPage() {
                 requestedIsResolvable={pollKind === "prognose"}
                 requestedAnswerMode={answerMode}
                 requestedVisibility={visibility}
+                longTextEnabled={longTextEnabled}
+                onLongTextEnabledChange={setLongTextEnabled}
               />
             ) : null}
 
@@ -1274,10 +1292,42 @@ export default function NewDraftPage() {
                   sondern in der Detailansicht der Frage.
                 </p>
                 <p className="text-xs text-slate-500">
-                  Zeichen: {description.length}/{DESCRIPTION_MAX_CHARS}. Für einen langen ausklappbaren Text kannst du
-                  den Marker <span className="font-mono text-slate-300">[[LANGTEXT]]</span> nutzen.
+                  Zeichen: {description.length}/{DESCRIPTION_MAX_CHARS}.
                 </p>
+                <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={longTextEnabled}
+                    onChange={(e) => setLongTextEnabled(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/40 bg-slate-900 text-emerald-500 focus:ring-emerald-400"
+                  />
+                  Langtext (SEO) aktivieren
+                </label>
               </div>
+
+              {longTextEnabled ? (
+                <div className="space-y-2">
+                  <label htmlFor="longDescription" className="text-sm font-medium text-slate-100">
+                    Ausführlicher Langtext (optional, für Detailansicht/SEO)
+                  </label>
+                  <textarea
+                    id="longDescription"
+                    value={longDescription}
+                    onChange={(e) => setLongDescription(e.target.value)}
+                    rows={8}
+                    maxLength={DESCRIPTION_MAX_CHARS}
+                    className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                    placeholder="Hier kannst du den langen Hintergrundtext einfügen (empfohlen: 600-1000 Wörter)."
+                  />
+                  <p className="text-xs text-slate-400">
+                    Wird automatisch als ausklappbarer Bereich in der Detailansicht angezeigt. Beim Speichern wird der
+                    Marker <span className="font-mono text-slate-300"> {LONGTEXT_MARKER} </span> intern gesetzt.
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Langtext Zeichen: {longDescription.length}/{DESCRIPTION_MAX_CHARS}.
+                  </p>
+                </div>
+              ) : null}
 
               {answerMode === "options" ? (
                 <div className="space-y-2 list-enter">

@@ -8,6 +8,7 @@ type Mode = "category" | "theme";
 export type QuestionSuggestion = {
   title: string;
   description: string;
+  longDescription?: string;
   category: string;
   region: string | null;
   isResolvable: boolean;
@@ -54,12 +55,16 @@ export function AdminAiAssistant({
   requestedIsResolvable,
   requestedAnswerMode,
   requestedVisibility,
+  longTextEnabled,
+  onLongTextEnabledChange,
 }: {
   isAdmin: boolean;
   onApply: (s: QuestionSuggestion) => void;
   requestedIsResolvable?: boolean;
   requestedAnswerMode?: "binary" | "options";
   requestedVisibility?: "public" | "link_only";
+  longTextEnabled: boolean;
+  onLongTextEnabledChange: (next: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("category");
@@ -117,6 +122,7 @@ export function AdminAiAssistant({
         optionsCount:
           requestedAnswerMode === "options" ? Math.max(2, Math.min(6, Math.round(optionsCount))) : undefined,
         visibility: requestedVisibility,
+        withLongDescription: longTextEnabled,
       };
 
       const res = await fetch("/api/admin/question-suggest", {
@@ -144,7 +150,17 @@ export function AdminAiAssistant({
     } finally {
       setLoading(false);
     }
-  }, [category, count, mode, region, requestedAnswerMode, requestedIsResolvable, requestedVisibility, theme]);
+  }, [
+    category,
+    count,
+    longTextEnabled,
+    mode,
+    region,
+    requestedAnswerMode,
+    requestedIsResolvable,
+    requestedVisibility,
+    theme,
+  ]);
 
   if (!isAdmin) return null;
 
@@ -175,6 +191,16 @@ export function AdminAiAssistant({
             <Chip active={mode === "category"} label="Kategorie" onClick={() => setMode("category")} />
             <Chip active={mode === "theme"} label="Thema (Freitext)" onClick={() => setMode("theme")} />
           </div>
+
+          <label className="inline-flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={longTextEnabled}
+              onChange={(e) => onLongTextEnabledChange(e.target.checked)}
+              className="h-4 w-4 rounded border-white/40 bg-slate-900 text-emerald-500 focus:ring-emerald-400"
+            />
+            Langtext (SEO) für KI-Vorschläge aktivieren
+          </label>
 
           {mode === "category" ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -331,6 +357,14 @@ export function AdminAiAssistant({
                       </div>
                       <h3 className="mt-2 text-base font-semibold text-white">{s.title}</h3>
                       <p className="mt-2 text-sm text-slate-200">{s.description}</p>
+                      {longTextEnabled && s.longDescription ? (
+                        <details className="mt-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <summary className="cursor-pointer text-xs font-semibold text-slate-100">
+                            Langtext-Vorschau ({s.longDescription.split(/\s+/).filter(Boolean).length} Wörter)
+                          </summary>
+                          <p className="mt-2 line-clamp-6 text-xs text-slate-300">{s.longDescription}</p>
+                        </details>
+                      ) : null}
                       {s.answerMode === "options" && Array.isArray(s.options) && s.options.length > 0 ? (
                         <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
                           <div className="text-xs font-semibold text-slate-100">Optionen</div>

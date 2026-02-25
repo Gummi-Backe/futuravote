@@ -14,11 +14,13 @@ type Body = {
   answerMode?: "binary" | "options";
   optionsCount?: number;
   visibility?: "public" | "link_only";
+  withLongDescription?: boolean;
 };
 
 export type QuestionSuggestion = {
   title: string;
   description: string;
+  longDescription?: string;
   category: string;
   region: string | null;
   isResolvable: boolean;
@@ -165,10 +167,17 @@ function safeJsonFromText(text: string): any | null {
 
 function normalizeSuggestion(
   raw: any,
-  defaults?: { isResolvable?: boolean; answerMode?: "binary" | "options"; optionsCount?: number },
+  defaults?: {
+    isResolvable?: boolean;
+    answerMode?: "binary" | "options";
+    optionsCount?: number;
+    withLongDescription?: boolean;
+  },
 ): QuestionSuggestion | null {
+  const countWords = (value: string) => value.split(/\s+/).filter(Boolean).length;
   const title = typeof raw?.title === "string" ? raw.title.trim() : "";
   const description = typeof raw?.description === "string" ? raw.description.trim() : "";
+  const longDescription = typeof raw?.longDescription === "string" ? raw.longDescription.trim() : "";
   const category = typeof raw?.category === "string" ? raw.category.trim() : "";
   const region = typeof raw?.region === "string" ? raw.region.trim() : "";
 
@@ -232,9 +241,15 @@ function normalizeSuggestion(
 
   const imagePrompt = typeof raw?.imagePrompt === "string" ? raw.imagePrompt.trim() : "";
   const normalizedImagePrompt = imagePrompt.length >= 20 ? imagePrompt.slice(0, 900) : "";
+  const wantsLongDescription = defaults?.withLongDescription === true;
 
   if (!title || title.length < 8) return null;
   if (!description || description.length < 20) return null;
+  if (wantsLongDescription) {
+    if (!longDescription || longDescription.length < 1200) return null;
+    const longWords = countWords(longDescription);
+    if (longWords < 500 || longWords > 1200) return null;
+  }
   if (!category) return null;
   if (!pollEndAt || Number.isNaN(Date.parse(pollEndAt))) return null;
   if (answerMode === "options" && uniqueOptions.length < 2) return null;
@@ -248,6 +263,7 @@ function normalizeSuggestion(
   return {
     title: title.slice(0, 180),
     description: description.slice(0, 2500),
+    longDescription: wantsLongDescription ? longDescription.slice(0, 9500) : undefined,
     category: category.slice(0, 80),
     region: region ? region.slice(0, 100) : null,
     isResolvable,
@@ -274,6 +290,7 @@ function buildPrompt(opts: {
   requestedAnswerMode?: "binary" | "options";
   requestedOptionsCount?: number;
   requestedVisibility?: "public" | "link_only";
+  withLongDescription?: boolean;
 }): string {
   const category = (opts.category ?? "").trim();
   const region = (opts.region ?? "").trim();
@@ -302,8 +319,9 @@ function buildPrompt(opts: {
     .join("\n");
 
   const formatLine = (() => {
-    const base =
-      `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`;
+    const base = opts.withLongDescription
+      ? `{"suggestions":[{"title":"...","description":"...","longDescription":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`
+      : `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`;
 
     if (opts.requestedAnswerMode === "binary") {
       return base.replace(`"answerMode":"binary|options","options":["..."]`, `"answerMode":"binary","options":[]`);
@@ -331,7 +349,13 @@ function buildPrompt(opts: {
     "",
     "WICHTIG:",
     "- Titel: klar, eindeutig, max. 140 Zeichen.",
-    "- Beschreibung: 3-5 Saetze Kontext (DE), kurz halten, keine echten Zeilenumbrueche.",
+    "- description: kurze Einleitung (ca. 100-220 Woerter, DE), neutral.",
+    opts.withLongDescription
+      ? "- longDescription: ausfuehrlicher Hintergrund (ca. 600-1000 Woerter, DE), neutral, faktenbasiert, mit Zwischenueberschriften moeglich."
+      : "",
+    opts.withLongDescription
+      ? "- longDescription soll eigenstaendig verstaendlich sein (Kontext, Einordnung, Messbarkeit, Risiken, offene Punkte)."
+      : "",
     typeof opts.requestedIsResolvable === "boolean"
       ? `- Erstelle ausschliesslich ${
           opts.requestedIsResolvable ? "Prognosen (isResolvable=true)" : "Meinungs-Umfragen (isResolvable=false)"
@@ -452,10 +476,14 @@ export async function POST(request: Request) {
   if (body.visibility && body.visibility !== "public" && body.visibility !== "link_only") {
     return NextResponse.json({ error: "visibility muss 'public' oder 'link_only' sein." }, { status: 400 });
   }
+  if (typeof body.withLongDescription !== "undefined" && typeof body.withLongDescription !== "boolean") {
+    return NextResponse.json({ error: "withLongDescription muss true oder false sein." }, { status: 400 });
+  }
 
   const requestedIsResolvable = typeof body.isResolvable === "boolean" ? body.isResolvable : undefined;
   const requestedAnswerMode = body.answerMode === "binary" || body.answerMode === "options" ? body.answerMode : undefined;
   const requestedVisibility = body.visibility === "public" || body.visibility === "link_only" ? body.visibility : undefined;
+  const withLongDescription = body.withLongDescription === true;
 
   const requestedOptionsCountRaw = typeof body.optionsCount === "number" ? body.optionsCount : null;
   if (requestedOptionsCountRaw !== null && requestedAnswerMode !== "options") {
@@ -486,11 +514,11 @@ export async function POST(request: Request) {
   let lastRaw: string | null = null;
   let lastFinishReason: string | null = null;
 
-  // Batching verhindert abgeschnittenes JSON (Token-Limit) bei vielen Vorschlägen.
-  const maxAttempts = 4;
+  // Bei Longtext nur 1 Vorschlag pro Call (Token-lastig), sonst bis zu 3 pro Call.
+  const maxAttempts = withLongDescription ? Math.max(4, count + 2) : 4;
   for (let attempt = 0; attempt < maxAttempts && collected.length < count; attempt++) {
     const remaining = count - collected.length;
-    const batchCount = Math.min(3, remaining);
+    const batchCount = withLongDescription ? Math.min(1, remaining) : Math.min(3, remaining);
 
     const prompt = buildPrompt({
       category: category || undefined,
@@ -503,9 +531,15 @@ export async function POST(request: Request) {
       requestedAnswerMode,
       requestedOptionsCount,
       requestedVisibility,
+      withLongDescription,
     });
 
-    const resp = await callPerplexity({ apiKey, model, prompt, maxTokens: 2200 });
+    const resp = await callPerplexity({
+      apiKey,
+      model,
+      prompt,
+      maxTokens: withLongDescription ? 4200 : 2200,
+    });
     if (!resp.ok) {
       return NextResponse.json({ error: resp.error }, { status: 502 });
     }
@@ -525,6 +559,7 @@ export async function POST(request: Request) {
           isResolvable: requestedIsResolvable,
           answerMode: requestedAnswerMode,
           optionsCount: requestedOptionsCount,
+          withLongDescription,
         })
       )
       .filter(Boolean) as QuestionSuggestion[];
