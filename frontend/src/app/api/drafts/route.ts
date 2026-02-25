@@ -64,6 +64,8 @@ const ALLOWED_DRAFT_KEYS = new Set<keyof DraftInput>([
   "resolutionDeadline",
 ]);
 
+const DESCRIPTION_MAX_CHARS = 12_000;
+
 function errorResponse(
   status: number,
   error: string,
@@ -248,10 +250,13 @@ export async function POST(request: Request) {
       { field: "category", issue: "max_length_60" },
     ]);
   }
-  if (description && description.length > 3000) {
-    return errorResponse(400, "Beschreibung ist zu lang (maximal 3000 Zeichen).", "description_too_long", [
-      { field: "description", issue: "max_length_3000" },
-    ]);
+  if (description && description.length > DESCRIPTION_MAX_CHARS) {
+    return errorResponse(
+      400,
+      `Beschreibung ist zu lang (maximal ${DESCRIPTION_MAX_CHARS} Zeichen).`,
+      "description_too_long",
+      [{ field: "description", issue: `max_length_${DESCRIPTION_MAX_CHARS}` }]
+    );
   }
   if (region && region.length > 80) {
     return errorResponse(400, "Region ist zu lang (maximal 80 Zeichen).", "region_too_long", [

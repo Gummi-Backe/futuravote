@@ -16,6 +16,7 @@ import { QuestionViewTracker } from "@/app/components/QuestionViewTracker";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { CommunityResolutionProposals } from "./CommunityResolutionProposals";
 import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
+import { ExpandableDescription } from "./ExpandableDescription";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,36 @@ function clampText(value: string, maxLen: number) {
   const trimmed = value.trim().replace(/\s+/g, " ");
   if (trimmed.length <= maxLen) return trimmed;
   return `${trimmed.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
+function splitDescriptionForDetails(raw?: string | null): { shortText: string; longText: string | null } {
+  const normalized = String(raw ?? "").trim();
+  if (!normalized) {
+    return { shortText: "", longText: null };
+  }
+
+  const markerMatch = normalized.match(/\n\s*\[\[\s*LANGTEXT\s*\]\]\s*\n/i);
+  if (markerMatch && typeof markerMatch.index === "number") {
+    const shortText = normalized.slice(0, markerMatch.index).trim();
+    const longText = normalized.slice(markerMatch.index + markerMatch[0].length).trim();
+    if (shortText && longText) {
+      return { shortText, longText };
+    }
+  }
+
+  const paragraphs = normalized
+    .split(/\n\s*\n+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  if (paragraphs.length >= 2 && normalized.length >= 500) {
+    return {
+      shortText: paragraphs[0] ?? normalized,
+      longText: paragraphs.slice(1).join("\n\n"),
+    };
+  }
+
+  return { shortText: normalized, longText: null };
 }
 
 export async function generateMetadata(props: {
@@ -48,8 +79,9 @@ export async function generateMetadata(props: {
   }
 
   const title = `${question.title} - Future-Vote`;
+  const { shortText: questionShortDescription } = splitDescriptionForDetails(question.description);
   const baseDesc =
-    question.description?.trim() ||
+    questionShortDescription ||
     `Prognosefrage in ${question.category}${question.region ? ` · ${question.region}` : ""}.`;
   const description = clampText(baseDesc, 180);
 
@@ -226,6 +258,7 @@ export default async function QuestionDetail(props: {
       ? options.find((o) => o.id === question.resolvedOptionId)?.label ?? "Option"
       : null;
   const resolvedLabel = resolvedOutcomeLabel ?? resolvedOptionLabel;
+  const descriptionParts = splitDescriptionForDetails(question.description);
 
   const votedLabel =
     answerMode === "options"
@@ -309,9 +342,12 @@ export default async function QuestionDetail(props: {
             </div>
           </div>
 
-          {question.description && (
-            <p className="mt-4 text-sm text-slate-200 sm:text-base">{question.description}</p>
-          )}
+          {descriptionParts.shortText ? (
+            <ExpandableDescription
+              shortText={descriptionParts.shortText}
+              longText={descriptionParts.longText}
+            />
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-200">
             <div className="flex flex-wrap items-center gap-3">

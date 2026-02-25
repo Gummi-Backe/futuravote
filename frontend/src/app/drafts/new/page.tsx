@@ -88,6 +88,7 @@ async function resizeImageClientSide(file: File, maxWidth: number, maxHeight: nu
 type UploadImageJson = { imageUrl?: string; error?: string };
 
 const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
+const DESCRIPTION_MAX_CHARS = 12_000;
 
 function uploadImageWithProgress(
   formData: FormData,
@@ -558,6 +559,10 @@ export default function NewDraftPage() {
     }
     if (trimmedTitle.length < 10) {
       setError("Der Titel sollte mindestens 10 Zeichen lang sein, damit die Frage verständlich ist.");
+      return;
+    }
+    if (trimmedDescription.length > DESCRIPTION_MAX_CHARS) {
+      setError(`Die Beschreibung ist zu lang (max. ${DESCRIPTION_MAX_CHARS} Zeichen).`);
       return;
     }
 
@@ -1260,12 +1265,17 @@ export default function NewDraftPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={5}
+                  maxLength={DESCRIPTION_MAX_CHARS}
                   className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
                   placeholder="Erkläre kurz, worum es bei der Prognose geht. Dieser Text erscheint später nur in der Detailansicht."
                 />
                 <p className="text-xs text-slate-400">
                   Dieser Text dient dazu, das Thema genauer zu erklären. Er wird nicht in der Kachel im Feed angezeigt,
                   sondern in der Detailansicht der Frage.
+                </p>
+                <p className="text-xs text-slate-500">
+                  Zeichen: {description.length}/{DESCRIPTION_MAX_CHARS}. Für einen langen ausklappbaren Text kannst du
+                  den Marker <span className="font-mono text-slate-300">[[LANGTEXT]]</span> nutzen.
                 </p>
               </div>
 
