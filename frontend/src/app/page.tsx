@@ -542,6 +542,7 @@ function DraftCard({
   votedChoice?: DraftReviewChoice | null;
 }) {
   const shortDescription = getShortDescription(draft.description);
+  const detailHref = `/review/drafts/${encodeURIComponent(draft.id)}`;
   const total = Math.max(1, draft.votesFor + draft.votesAgainst);
   const yesPct = Math.round((draft.votesFor / total) * 100);
   const noPct = 100 - yesPct;
@@ -596,24 +597,34 @@ function DraftCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <h4
-            className={`card-title-wrap line-clamp-5 font-semibold leading-snug text-white ${getDraftTitleSizeClass(
-              draft.title
-            )}`}
-          >
-            {draft.title}
-          </h4>
+          <Link href={detailHref} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 rounded-lg">
+            <h4
+              className={`card-title-wrap line-clamp-5 font-semibold leading-snug text-white hover:text-emerald-100 transition ${getDraftTitleSizeClass(
+                draft.title
+              )}`}
+            >
+              {draft.title}
+            </h4>
+          </Link>
         </div>
       </div>
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-300">{draft.category}</p>
-        <ReportButton
-          kind="draft"
-          itemId={draft.id}
-          itemTitle={draft.title}
-          className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-rose-200/40 transition hover:-translate-y-0.5"
-          label="Melden"
-        />
+        <div className="flex items-center gap-2">
+          <Link
+            href={detailHref}
+            className="rounded-full border border-amber-300/45 bg-amber-500/15 px-3 py-1 text-[11px] font-semibold text-amber-100 transition hover:-translate-y-0.5 hover:border-amber-200/75 hover:bg-amber-500/25"
+          >
+            Details ansehen
+          </Link>
+          <ReportButton
+            kind="draft"
+            itemId={draft.id}
+            itemTitle={draft.title}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 hover:border-rose-200/40 transition hover:-translate-y-0.5"
+            label="Melden"
+          />
+        </div>
       </div>
       {draft.answerMode === "options" && (draft.options?.length ?? 0) > 0 ? (
         <div className="space-y-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
@@ -628,12 +639,14 @@ function DraftCard({
         </div>
       ) : null}
       {shortDescription ? (
-        <FormattedText
-          text={shortDescription}
-          maxParagraphs={1}
-          className="space-y-1 text-xs text-slate-200"
-          paragraphClassName="text-xs text-slate-200 line-clamp-3"
-        />
+        <Link href={detailHref} className="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60">
+          <FormattedText
+            text={shortDescription}
+            maxParagraphs={1}
+            className="space-y-1 text-xs text-slate-200"
+            paragraphClassName="text-xs text-slate-200 line-clamp-3 hover:text-emerald-100 transition"
+          />
+        </Link>
       ) : null}
       <div className="flex items-center gap-2 text-xs text-slate-200">
         <span className="font-semibold text-emerald-200">{draft.votesFor} Gut ({yesPct}%)</span>

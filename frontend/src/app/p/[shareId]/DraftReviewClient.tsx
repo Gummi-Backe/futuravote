@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Draft } from "@/app/data/mock";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
+import { splitDescriptionText } from "@/app/lib/descriptionText";
+import { ExpandableDescription } from "@/app/questions/[id]/ExpandableDescription";
 
 type DraftReviewChoice = "good" | "bad";
 
@@ -60,6 +62,7 @@ export function DraftReviewClient({
   const totalReviews = draft.votesFor + draft.votesAgainst;
   const yesPct = Math.round((draft.votesFor / Math.max(1, totalReviews)) * 100);
   const noPct = 100 - yesPct;
+  const descriptionParts = splitDescriptionText(draft.description);
 
   const lead = Math.abs(draft.votesFor - draft.votesAgainst);
   const reviewsRemaining = Math.max(0, 5 - totalReviews);
@@ -182,7 +185,9 @@ export function DraftReviewClient({
           </div>
         </div>
       ) : null}
-      {draft.description && <p className="text-xs text-slate-200">{draft.description}</p>}
+      {descriptionParts.shortText ? (
+        <ExpandableDescription shortText={descriptionParts.shortText} longText={descriptionParts.longText} />
+      ) : null}
 
       <div className="flex items-center gap-2 text-xs text-slate-200">
         <span className="font-semibold text-emerald-200">{draft.votesFor} Gut ({yesPct}%)</span>
