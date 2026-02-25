@@ -6,6 +6,8 @@ import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { DraftReviewClient } from "@/app/p/[shareId]/DraftReviewClient";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { ReportButton } from "@/app/components/ReportButton";
+import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
+import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +90,15 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
   }
 
   const draft = mapDraftRow(row as DraftRow);
+  const discussWithGptUrl = buildFutureVoteGptDiscussUrl({
+    title: draft.title,
+    category: draft.category,
+    region: draft.region ?? null,
+    description: draft.description ?? null,
+    answerMode: draft.answerMode ?? null,
+    isResolvable: draft.isResolvable ?? null,
+    sourceUrl: null,
+  });
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-6 text-slate-100">
@@ -102,6 +113,7 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
             So sieht dein Draft im Review-Bereich aus. Hier kannst du den Status und die aktuellen Stimmen sehen.
           </p>
           <div className="flex flex-wrap items-center gap-2">
+            <FutureVoteGptLink href={discussWithGptUrl} />
             <ReportButton kind="draft" itemId={draft.id} itemTitle={draft.title} />
           </div>
           <DraftReviewClient initialDraft={draft} alreadyReviewedInitial={alreadyReviewed} />

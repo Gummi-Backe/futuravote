@@ -11,6 +11,8 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { ReportButton } from "@/app/components/ReportButton";
 import { getPollByShareIdFromSupabase } from "@/app/data/dbSupabase";
 import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
+import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
+import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
 
 export const dynamic = "force-dynamic";
 
@@ -155,6 +157,26 @@ export default async function SharedPollPage(props: {
 
   const baseUrl = await getBaseUrl();
   const shareUrl = `${baseUrl}/p/${encodeURIComponent(shareId)}`;
+  const discussWithGptUrl =
+    poll.kind === "question"
+      ? buildFutureVoteGptDiscussUrl({
+          title: poll.question.title,
+          category: poll.question.category,
+          region: poll.question.region ?? null,
+          description: poll.question.description ?? null,
+          answerMode: poll.question.answerMode ?? null,
+          isResolvable: poll.question.isResolvable ?? null,
+          sourceUrl: shareUrl,
+        })
+      : buildFutureVoteGptDiscussUrl({
+          title: poll.draft.title,
+          category: poll.draft.category,
+          region: poll.draft.region ?? null,
+          description: poll.draft.description ?? null,
+          answerMode: poll.draft.answerMode ?? null,
+          isResolvable: poll.draft.isResolvable ?? null,
+          sourceUrl: shareUrl,
+        });
 
   const ownerId = poll.kind === "question" ? poll.question.creatorId ?? null : poll.draft.creatorId ?? null;
   const isOwner = Boolean(currentUser?.id && ownerId && currentUser.id === ownerId);
@@ -231,6 +253,9 @@ export default async function SharedPollPage(props: {
               />
 
               <div className="pt-3">
+                <div className="mb-2">
+                  <FutureVoteGptLink href={discussWithGptUrl} className="w-full rounded-xl border border-cyan-200/40 bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-50 shadow-lg shadow-cyan-900/20 transition hover:-translate-y-0.5 hover:border-cyan-200/70 hover:bg-cyan-500/25 sm:w-auto" />
+                </div>
                 <ReportButton
                   kind="question"
                   itemId={poll.question.id}
@@ -321,11 +346,12 @@ export default async function SharedPollPage(props: {
                 Diese Umfrage ist nicht im Feed gelistet. Jeder mit diesem Link kann sie bewerten.
               </p>
             ) : null}
-            {!isOwner ? (
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <FutureVoteGptLink href={discussWithGptUrl} />
+              {!isOwner ? (
                 <ReportButton kind="draft" itemId={poll.draft.id} itemTitle={poll.draft.title} shareId={shareId} />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
             <DraftReviewClient initialDraft={poll.draft} alreadyReviewedInitial={poll.alreadyReviewed} readOnly={isOwner} />
           </section>
         ) : (
@@ -418,6 +444,9 @@ export default async function SharedPollPage(props: {
               ) : null}
 
               <div className="pt-2">
+                <div className="mb-2">
+                  <FutureVoteGptLink href={discussWithGptUrl} className="w-full rounded-xl border border-cyan-200/40 bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-50 shadow-lg shadow-cyan-900/20 transition hover:-translate-y-0.5 hover:border-cyan-200/70 hover:bg-cyan-500/25 sm:w-auto" />
+                </div>
                 {!isOwner ? (
                   <ReportButton
                     kind="question"

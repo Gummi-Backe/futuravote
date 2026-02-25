@@ -18,6 +18,8 @@ import { CommunityResolutionProposals } from "./CommunityResolutionProposals";
 import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
 import { splitDescriptionText } from "@/app/lib/descriptionText";
 import { ExpandableDescription } from "./ExpandableDescription";
+import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
+import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
 
 export const dynamic = "force-dynamic";
 
@@ -250,6 +252,15 @@ export default async function QuestionDetail(props: {
     (process.env.NODE_ENV === "production" ? "https://www.future-vote.de" : "http://localhost:3000");
   const shareUrl = `${baseUrl}/questions/${encodeURIComponent(id)}`;
   const widgetUrl = `${baseUrl}/widget/question/${encodeURIComponent(id)}`;
+  const discussWithGptUrl = buildFutureVoteGptDiscussUrl({
+    title: question.title,
+    category: question.category,
+    region: question.region ?? null,
+    description: descriptionParts.shortText || question.description || null,
+    answerMode,
+    isResolvable,
+    sourceUrl: shareUrl,
+  });
 
   return (
     <main className="page-enter min-h-screen bg-transparent text-slate-50">
@@ -349,6 +360,7 @@ export default async function QuestionDetail(props: {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <FutureVoteGptLink href={discussWithGptUrl} />
               <ShareLinkButton url={shareUrl} label="Teilen" action="share" />
               <EmbedWidgetButton widgetUrl={widgetUrl} title={question.title} />
               <ReportButton kind="question" itemId={id} itemTitle={question.title} shareId={question.shareId ?? null} />
