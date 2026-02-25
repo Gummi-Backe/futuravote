@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
@@ -13,6 +14,15 @@ type AdminDraftBody = {
   draftId?: string;
   action?: "accept" | "reject" | "delete";
 };
+
+function revalidatePublicDiscoveryPaths(questionId?: string) {
+  revalidatePath("/sitemap.xml");
+  revalidatePath("/");
+  revalidatePath("/archiv");
+  if (questionId) {
+    revalidatePath(`/questions/${encodeURIComponent(questionId)}`);
+  }
+}
 
 export async function GET() {
   return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
@@ -54,6 +64,11 @@ export async function POST(request: Request) {
   }
   if (!draft) {
     return NextResponse.json({ error: "Draft nicht gefunden." }, { status: 404 });
+  }
+
+  if (action === "accept" && draft.status === "accepted") {
+    const questionId = draft.id.startsWith("q_") ? draft.id : `q_${draft.id}`;
+    revalidatePublicDiscoveryPaths(questionId);
   }
 
   return NextResponse.json({ draft });

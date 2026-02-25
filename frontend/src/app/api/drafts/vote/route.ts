@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
@@ -11,6 +12,15 @@ type VoteBody = {
   draftId?: string;
   choice?: DraftReviewChoice;
 };
+
+function revalidatePublicDiscoveryPaths(questionId?: string) {
+  revalidatePath("/sitemap.xml");
+  revalidatePath("/");
+  revalidatePath("/archiv");
+  if (questionId) {
+    revalidatePath(`/questions/${encodeURIComponent(questionId)}`);
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -47,6 +57,11 @@ export async function POST(request: Request) {
         path: "/",
         meta: { draftId, choice },
       });
+
+      if (draft.status === "accepted") {
+        const questionId = draft.id.startsWith("q_") ? draft.id : `q_${draft.id}`;
+        revalidatePublicDiscoveryPaths(questionId);
+      }
     }
 
     const response = NextResponse.json({ draft, alreadyVoted }, { status: 200 });
