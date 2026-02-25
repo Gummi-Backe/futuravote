@@ -91,6 +91,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/gpt/questions/similar:
+    get:
+      operationId: listSimilarQuestions
+      summary: Aehnliche oeffentliche Fragen finden (Duplikat-/Qualitaetscheck)
+      description: |
+        Liefert aehnliche oeffentliche Fragen, damit der GPT vor createDraft
+        fundiert auf Dubletten pruefen kann. Standardlimit ist hoeher als bei normalen Listen.
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+          description: "Titel-/Kernfrage fuer den Similar-Check (mind. 8 Zeichen)."
+        - in: query
+          name: d
+          schema: { type: string, nullable: true }
+          description: "Optionaler Beschreibungstext fuer besseren Kontext."
+        - in: query
+          name: limit
+          schema: { type: integer, default: 25, minimum: 1, maximum: 50 }
+          description: "Anzahl Similar-Treffer."
+      responses:
+        "200":
+          description: Similar-Treffer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  matches:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        closesAt: { type: string }
+                        ended: { type: boolean }
+                        status: { type: string, nullable: true }
+                        score: { type: integer }
+                        severity: { type: string, enum: [high, medium, low] }
+                        matchedKeywords:
+                          type: array
+                          items: { type: string }
+                  scannedCandidates: { type: integer }
+                  returned: { type: integer }
+        "429":
+          description: Rate limit erreicht
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/drafts:
     post:
       operationId: createDraft
