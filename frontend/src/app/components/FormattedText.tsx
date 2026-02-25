@@ -1,6 +1,8 @@
 import { Fragment, type ReactNode } from "react";
 
 type SizeToken = "xxl" | "xl" | "lg" | "sm";
+const LINK_CLASS =
+  "underline decoration-emerald-300/70 underline-offset-2 text-emerald-300 hover:text-emerald-200 break-all";
 
 function sizeClass(size: SizeToken): string {
   if (size === "xxl") return "text-2xl sm:text-3xl font-semibold leading-tight text-white";
@@ -11,7 +13,9 @@ function sizeClass(size: SizeToken): string {
 
 function renderInline(line: string): ReactNode[] {
   const chunks = line
-    .split(/(\[size=(?:xxl|xl|lg|sm)\][\s\S]+?\[\/size\]|\*\*[^*]+?\*\*|__[^_]+?__)/g)
+    .split(
+      /(\[size=(?:xxl|xl|lg|sm)\][\s\S]+?\[\/size\]|\*\*[^*]+?\*\*|__[^_]+?__|\[[^\]]+?\]\((?:https?:\/\/[^\s)]+)\)|https?:\/\/[^\s<>"')\]]+)/g
+    )
     .filter(Boolean);
   return chunks.map((chunk, idx) => {
     if (chunk.startsWith("[size=") && chunk.endsWith("[/size]")) {
@@ -38,6 +42,35 @@ function renderInline(line: string): ReactNode[] {
         <span key={`u-${idx}`} className="underline decoration-slate-300/80 underline-offset-2">
           {renderInline(chunk.slice(2, -2))}
         </span>
+      );
+    }
+    const markdownLinkMatch = chunk.match(/^\[([^\]]+?)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (markdownLinkMatch) {
+      const label = markdownLinkMatch[1] ?? markdownLinkMatch[2] ?? "";
+      const href = markdownLinkMatch[2] ?? "";
+      return (
+        <a
+          key={`md-link-${idx}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          className={LINK_CLASS}
+        >
+          {label}
+        </a>
+      );
+    }
+    if (chunk.startsWith("http://") || chunk.startsWith("https://")) {
+      return (
+        <a
+          key={`url-${idx}`}
+          href={chunk}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          className={LINK_CLASS}
+        >
+          {chunk}
+        </a>
       );
     }
     return <Fragment key={`t-${idx}`}>{chunk}</Fragment>;
