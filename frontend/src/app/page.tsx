@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type Draft, type Question } from "./data/mock";
+import { FormattedText } from "./components/FormattedText";
+import { getShortDescription } from "./lib/descriptionText";
 import { invalidateProfileCaches } from "./lib/profileCache";
 import { triggerAhaMicrocopy } from "./lib/ahaMicrocopy";
 import { consumeFeedVoteDeltas, recordFeedVoteDelta } from "./lib/feedVoteSync";
@@ -539,6 +541,7 @@ function DraftCard({
   hasVoted?: boolean;
   votedChoice?: DraftReviewChoice | null;
 }) {
+  const shortDescription = getShortDescription(draft.description);
   const total = Math.max(1, draft.votesFor + draft.votesAgainst);
   const yesPct = Math.round((draft.votesFor / total) * 100);
   const noPct = 100 - yesPct;
@@ -624,11 +627,14 @@ function DraftCard({
           </div>
         </div>
       ) : null}
-      {draft.description && (
-        <p className="text-xs text-slate-200">
-          {draft.description}
-        </p>
-      )}
+      {shortDescription ? (
+        <FormattedText
+          text={shortDescription}
+          maxParagraphs={1}
+          className="space-y-1 text-xs text-slate-200"
+          paragraphClassName="text-xs text-slate-200 line-clamp-3"
+        />
+      ) : null}
       <div className="flex items-center gap-2 text-xs text-slate-200">
         <span className="font-semibold text-emerald-200">{draft.votesFor} Gut ({yesPct}%)</span>
         <span className="text-slate-400">·</span>

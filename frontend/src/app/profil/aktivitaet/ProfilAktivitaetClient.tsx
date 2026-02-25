@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { FormattedText } from "@/app/components/FormattedText";
 import type { Draft, Question } from "@/app/data/mock";
+import { getShortDescription } from "@/app/lib/descriptionText";
 import { PROFILE_ACTIVITY_CACHE_PREFIX } from "@/app/lib/profileCache";
 
 type ViewConfig =
@@ -119,7 +121,14 @@ function DraftActivityCard({ draft }: { draft: Draft }) {
         </div>
       </div>
 
-      {draft.description ? <p className="text-sm text-slate-200 line-clamp-3">{draft.description}</p> : null}
+      {draft.description ? (
+        <FormattedText
+          text={getShortDescription(draft.description)}
+          maxParagraphs={1}
+          className="space-y-1"
+          paragraphClassName="text-sm text-slate-200 line-clamp-3"
+        />
+      ) : null}
 
       <div className="flex items-center justify-between gap-3 text-xs text-slate-300">
         <span className="text-[11px] text-slate-400">
@@ -195,7 +204,14 @@ function QuestionActivityCard({ question }: { question: QuestionWithUserVote }) 
 
       <div className="flex flex-col gap-3">
         <h3 className="card-title-wrap text-lg font-semibold leading-snug text-white">{question.title}</h3>
-        {question.description ? <p className="text-sm text-slate-200 line-clamp-3">{question.description}</p> : null}
+        {question.description ? (
+          <FormattedText
+            text={getShortDescription(question.description)}
+            maxParagraphs={1}
+            className="space-y-1"
+            paragraphClassName="text-sm text-slate-200 line-clamp-3"
+          />
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-3 text-xs text-slate-300">

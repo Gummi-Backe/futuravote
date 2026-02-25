@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type AnswerMode, type PollVisibility } from "@/app/data/mock";
+import { FormattedText } from "@/app/components/FormattedText";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
+import { convertHtmlToMarkup } from "@/app/lib/htmlToMarkup";
+import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { AdminAiAssistant, type QuestionSuggestion } from "./AdminAiAssistant";
 import { AdminAiImageGenerator } from "./AdminAiImageGenerator";
@@ -89,7 +92,6 @@ type UploadImageJson = { imageUrl?: string; error?: string };
 
 const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
 const DESCRIPTION_MAX_CHARS = 12_000;
-const LONGTEXT_MARKER = "[[LANGTEXT]]";
 
 function uploadImageWithProgress(
   formData: FormData,
@@ -526,6 +528,33 @@ export default function NewDraftPage() {
       event.preventDefault();
     }
   };
+
+  const handleRichTextPaste = useCallback(
+    (
+      event: React.ClipboardEvent<HTMLTextAreaElement>,
+      setValue: React.Dispatch<React.SetStateAction<string>>
+    ) => {
+      const html = event.clipboardData.getData("text/html");
+      if (!html) return;
+
+      const converted = convertHtmlToMarkup(html);
+      if (!converted) return;
+
+      event.preventDefault();
+      const target = event.currentTarget;
+      const start = target.selectionStart ?? 0;
+      const end = target.selectionEnd ?? start;
+
+      setValue((prev) => `${prev.slice(0, start)}${converted}${prev.slice(end)}`);
+
+      requestAnimationFrame(() => {
+        const nextCaret = start + converted.length;
+        target.selectionStart = nextCaret;
+        target.selectionEnd = nextCaret;
+      });
+    },
+    []
+  );
 
   const handleResendVerification = async () => {
     setResendStatus("sending");
@@ -1282,6 +1311,7 @@ export default function NewDraftPage() {
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  onPaste={(e) => handleRichTextPaste(e, setDescription)}
                   rows={5}
                   maxLength={DESCRIPTION_MAX_CHARS}
                   className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
@@ -1291,9 +1321,27 @@ export default function NewDraftPage() {
                   Dieser Text dient dazu, das Thema genauer zu erklären. Er wird nicht in der Kachel im Feed angezeigt,
                   sondern in der Detailansicht der Frage.
                 </p>
+                <p className="text-xs text-slate-400">
+                  Copy-Paste aus Word wird automatisch erkannt (Absätze, fett, unterstrichen, Schriftgrößen). Manuell
+                  gehen auch Marker wie <span className="font-mono text-slate-300">**fett**</span>,{" "}
+                  <span className="font-mono text-slate-300">__unterstrichen__</span> und{" "}
+                  <span className="font-mono text-slate-300">[size=xl]Text[/size]</span>.
+                </p>
                 <p className="text-xs text-slate-500">
                   Zeichen: {description.length}/{DESCRIPTION_MAX_CHARS}.
                 </p>
+                {description.trim() ? (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Vorschau
+                    </div>
+                    <FormattedText
+                      text={description}
+                      className="space-y-2 text-sm text-slate-200"
+                      paragraphClassName="text-sm text-slate-200"
+                    />
+                  </div>
+                ) : null}
                 <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-200">
                   <input
                     type="checkbox"
@@ -1314,6 +1362,7 @@ export default function NewDraftPage() {
                     id="longDescription"
                     value={longDescription}
                     onChange={(e) => setLongDescription(e.target.value)}
+                    onPaste={(e) => handleRichTextPaste(e, setLongDescription)}
                     rows={8}
                     maxLength={DESCRIPTION_MAX_CHARS}
                     className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
@@ -1323,9 +1372,28 @@ export default function NewDraftPage() {
                     Wird automatisch als ausklappbarer Bereich in der Detailansicht angezeigt. Beim Speichern wird der
                     Marker <span className="font-mono text-slate-300"> {LONGTEXT_MARKER} </span> intern gesetzt.
                   </p>
+                  <p className="text-xs text-slate-400">
+                    Unterstützte Größen-Marker:{" "}
+                    <span className="font-mono text-slate-300">[size=sm]</span>,{" "}
+                    <span className="font-mono text-slate-300">[size=lg]</span>,{" "}
+                    <span className="font-mono text-slate-300">[size=xl]</span>,{" "}
+                    <span className="font-mono text-slate-300">[size=xxl]</span>.
+                  </p>
                   <p className="text-xs text-slate-500">
                     Langtext Zeichen: {longDescription.length}/{DESCRIPTION_MAX_CHARS}.
                   </p>
+                  {longDescription.trim() ? (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Langtext-Vorschau
+                      </div>
+                      <FormattedText
+                        text={longDescription}
+                        className="space-y-3 text-sm text-slate-200"
+                        paragraphClassName="text-sm text-slate-200"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 

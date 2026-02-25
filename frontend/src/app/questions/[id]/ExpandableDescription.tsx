@@ -1,13 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-
-function splitIntoParagraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-}
+import { FormattedText } from "@/app/components/FormattedText";
 
 export function ExpandableDescription(props: {
   shortText: string;
@@ -17,16 +11,15 @@ export function ExpandableDescription(props: {
   const [open, setOpen] = useState(false);
   const longId = useId();
   const hasLongText = Boolean(longText && longText.trim().length > 0);
-  const paragraphs = hasLongText ? splitIntoParagraphs(longText as string) : [];
 
   return (
     <div className="mt-4">
-      <p
+      <div
         role={hasLongText ? "button" : undefined}
         tabIndex={hasLongText ? 0 : undefined}
         aria-expanded={hasLongText ? open : undefined}
         aria-controls={hasLongText ? longId : undefined}
-        className={`text-sm text-slate-200 sm:text-base ${hasLongText ? "cursor-pointer hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60 rounded-md" : ""}`}
+        className={`rounded-md ${hasLongText ? "cursor-pointer hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/60" : ""}`}
         onClick={hasLongText ? () => setOpen((prev) => !prev) : undefined}
         onKeyDown={
           hasLongText
@@ -39,8 +32,12 @@ export function ExpandableDescription(props: {
             : undefined
         }
       >
-        {shortText}
-      </p>
+        <FormattedText
+          text={shortText}
+          className="space-y-2 text-sm text-slate-200 sm:text-base"
+          paragraphClassName="text-sm text-slate-200 sm:text-base"
+        />
+      </div>
 
       {hasLongText ? (
         <div className="mt-3">
@@ -57,15 +54,13 @@ export function ExpandableDescription(props: {
           {open ? (
             <div
               id={longId}
-              className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200 sm:text-base"
+              className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-4"
             >
-              <div className="space-y-3">
-                {paragraphs.length > 0 ? (
-                  paragraphs.map((part, idx) => <p key={`${idx}-${part.slice(0, 24)}`}>{part}</p>)
-                ) : (
-                  <p>{longText}</p>
-                )}
-              </div>
+              <FormattedText
+                text={longText ?? ""}
+                className="space-y-3 text-sm text-slate-200 sm:text-base"
+                paragraphClassName="text-sm text-slate-200 sm:text-base"
+              />
             </div>
           ) : null}
         </div>
@@ -73,4 +68,3 @@ export function ExpandableDescription(props: {
     </div>
   );
 }
-
