@@ -5,6 +5,7 @@ import { getOauthAccessContextByTokenSupabase } from "@/app/data/dbSupabaseOauth
 import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/data/dbSupabase";
 import type { AnswerMode, PollVisibility } from "@/app/data/mock";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
 
 export const revalidate = 0;
 
@@ -25,6 +26,7 @@ function hasOAuthScope(scope: string, required: string): boolean {
 type DraftInput = {
   title?: string;
   description?: string;
+  longDescription?: string;
   category?: string;
   region?: string;
   imageUrl?: string;
@@ -49,6 +51,7 @@ type ErrorDetail = {
 const ALLOWED_DRAFT_KEYS = new Set<keyof DraftInput>([
   "title",
   "description",
+  "longDescription",
   "category",
   "region",
   "imageUrl",
@@ -225,7 +228,20 @@ export async function POST(request: Request) {
   const title = (body.title ?? "").trim();
   const categoryRaw = (body.category ?? "").trim();
   const category = isPrivatePoll ? categoryRaw || "Privat" : categoryRaw;
-  const description = (body.description ?? "").trim() || undefined;
+  const rawDescription = (body.description ?? "").trim();
+  let shortDescription = rawDescription;
+  let parsedLongDescription = "";
+  const markerMatch = rawDescription.match(/\n\s*\[\[\s*LANGTEXT\s*\]\]\s*\n/i);
+  if (markerMatch && typeof markerMatch.index === "number") {
+    shortDescription = rawDescription.slice(0, markerMatch.index).trim();
+    parsedLongDescription = rawDescription.slice(markerMatch.index + markerMatch[0].length).trim();
+  }
+  const bodyLongDescription = (body.longDescription ?? "").trim();
+  const effectiveLongDescription = (bodyLongDescription || parsedLongDescription).trim();
+  const mergedDescription =
+    shortDescription && effectiveLongDescription
+      ? `${shortDescription}\n\n${LONGTEXT_MARKER}\n\n${effectiveLongDescription}`.trim()
+      : shortDescription || undefined;
   const region = isPrivatePoll ? undefined : (body.region ?? "").trim() || undefined;
   const warnings: string[] = [];
 
@@ -250,7 +266,15 @@ export async function POST(request: Request) {
       { field: "category", issue: "max_length_60" },
     ]);
   }
-  if (description && description.length > DESCRIPTION_MAX_CHARS) {
+  if (effectiveLongDescription && !shortDescription) {
+    return errorResponse(
+      400,
+      "Wenn longDescription gesetzt ist, muss auch eine kurze description vorhanden sein.",
+      "description_required_with_long_description",
+      [{ field: "description", issue: "required_with_longDescription" }]
+    );
+  }
+  if (mergedDescription && mergedDescription.length > DESCRIPTION_MAX_CHARS) {
     return errorResponse(
       400,
       `Beschreibung ist zu lang (maximal ${DESCRIPTION_MAX_CHARS} Zeichen).`,
@@ -448,7 +472,7 @@ export async function POST(request: Request) {
     const question = await createLinkOnlyQuestionInSupabase({
       title,
       category,
-      description,
+      description: mergedDescription,
       region: undefined,
       imageUrl,
       imageCredit,
@@ -491,7 +515,7 @@ export async function POST(request: Request) {
   const draft = await createDraftInSupabase({
     title,
     category,
-    description,
+    description: mergedDescription,
     region,
     imageUrl,
     imageCredit,

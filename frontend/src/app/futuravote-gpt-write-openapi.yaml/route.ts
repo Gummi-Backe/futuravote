@@ -109,7 +109,14 @@ paths:
               type: object
               properties:
                 title: { type: string }
-                description: { type: string, nullable: true }
+                description:
+                  type: string
+                  nullable: true
+                  description: "Kurze Beschreibung. Empfohlen fuer GPT: 100-200 Woerter, klar in Absaetzen. Erlaubte Markups: **fett**, __unterstrichen__, [size=sm|lg|xl|xxl]...[/size]."
+                longDescription:
+                  type: string
+                  nullable: true
+                  description: "Optionaler Langtext fuer die Detailansicht (bei oeffentlichen Prognosen empfohlen: 600-1000 Woerter). Strukturierte Absaetze und Markups wie bei description sind erlaubt."
                 category: { type: string }
                 region: { type: string, nullable: true }
                 imageUrl:
