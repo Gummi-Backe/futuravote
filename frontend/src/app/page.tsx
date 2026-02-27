@@ -240,6 +240,16 @@ function EventCard({
   const voteLocked = voted;
   const isClosingSoon = question.status === "closingSoon";
   const hasChoice = votedChoice === "yes" || votedChoice === "no";
+  const hasUpdate = question.hasUpdate === true;
+  const updateTooltip = question.lastUpdateAt
+    ? `Letztes Update: ${new Date(question.lastUpdateAt).toLocaleString("de-DE", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`
+    : "Diese Frage hat ein Update";
   const optionsTotalVotes = isOptions
     ? (question.options ?? []).reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
     : 0;
@@ -287,6 +297,14 @@ function EventCard({
               {badge.label}
             </span>
           )}
+          {hasUpdate ? (
+            <span
+              title={updateTooltip}
+              className="rounded-full border border-cyan-300/40 bg-cyan-500/15 px-3 py-1 text-xs font-semibold text-cyan-100"
+            >
+              Update
+            </span>
+          ) : null}
           {votedTooltip ? (
             <span
               title={votedTooltip}

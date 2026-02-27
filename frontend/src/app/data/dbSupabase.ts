@@ -71,6 +71,12 @@ type ReportsCountRow = {
   reporter_session_id: string | null;
 };
 
+type QuestionUpdateMetaRow = {
+  question_id: string | null;
+  body: string | null;
+  created_at: string | null;
+};
+
 async function fetchOpenReportDistinctSessionsByItemId(options: {
   supabase: ReturnType<typeof getSupabaseAdminClient>;
   kind: "question" | "draft";
@@ -113,6 +119,46 @@ async function fetchOpenReportDistinctSessionsByItemId(options: {
     return counts;
   } catch {
     return new Map();
+  }
+}
+
+async function fetchLatestQuestionUpdatesMeta(options: {
+  supabase: ReturnType<typeof getSupabaseAdminClient>;
+  questionIds: string[];
+}): Promise<Map<string, { hasUpdate: true; lastUpdateAt?: string; lastUpdateBody?: string }>> {
+  const { supabase, questionIds } = options;
+  const ids = Array.from(new Set(questionIds.filter((id) => typeof id === "string" && id.length > 0))).slice(0, 500);
+  const out = new Map<string, { hasUpdate: true; lastUpdateAt?: string; lastUpdateBody?: string }>();
+  if (ids.length === 0) return out;
+
+  try {
+    const { data, error } = await supabase
+      .from("question_updates")
+      .select("question_id,body,created_at")
+      .in("question_id", ids)
+      .order("question_id", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      const code = (error as any)?.code as string | undefined;
+      if (code === "42P01") return out;
+      return out;
+    }
+
+    for (const row of ((data ?? []) as QuestionUpdateMetaRow[])) {
+      const questionId = String(row.question_id ?? "");
+      if (!questionId || out.has(questionId)) continue;
+      const body = String(row.body ?? "").trim();
+      const createdAt = String(row.created_at ?? "").trim();
+      out.set(questionId, {
+        hasUpdate: true,
+        lastUpdateAt: createdAt || undefined,
+        lastUpdateBody: body || undefined,
+      });
+    }
+    return out;
+  } catch {
+    return out;
   }
 }
 
@@ -548,7 +594,12 @@ function normalizeResolutionSources(
   return out.length ? out : undefined;
 }
 
-function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: PollOption[]): QuestionWithVotes {
+function mapQuestion(
+  row: QuestionRow,
+  sessionVote?: SessionVote,
+  options?: PollOption[],
+  updateMeta?: { hasUpdate: true; lastUpdateAt?: string; lastUpdateBody?: string }
+): QuestionWithVotes {
   const answerMode = normalizeAnswerMode(row.answer_mode ?? "binary");
   const isResolvable = typeof row.is_resolvable === "boolean" ? row.is_resolvable : true;
 
@@ -637,6 +688,9 @@ function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: Poll
     resolvedAt: row.resolved_at ?? undefined,
     resolvedSource: row.resolved_source ?? undefined,
     resolvedNote: row.resolved_note ?? undefined,
+    hasUpdate: Boolean(updateMeta?.hasUpdate),
+    lastUpdateAt: updateMeta?.lastUpdateAt,
+    lastUpdateBody: updateMeta?.lastUpdateBody,
   };
 }
 
@@ -662,6 +716,10 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
     .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
     .map((row) => row.id);
   const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
+  const updatesMap = await fetchLatestQuestionUpdatesMeta({
+    supabase,
+    questionIds: typedRows.map((row) => row.id),
+  });
 
   let sessionVotesMap = new Map<string, SessionVote>();
   if (sessionId) {
@@ -682,7 +740,7 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
     );
   }
 
-  return typedRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id)));
+  return typedRows.map((row) => mapQuestion(row, sessionVotesMap.get(row.id), optionsMap.get(row.id), updatesMap.get(row.id)));
 }
 
 export async function getQuestionsVotedByUserFromSupabase(options: {
@@ -1123,9 +1181,13 @@ export async function getQuestionsPageFromSupabase(options: {
       .map((row) => row.id);
     const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
     const userVotesMap = await fetchUserVotesForQuestions(picked.map((row) => row.id));
+    const updatesMap = await fetchLatestQuestionUpdatesMeta({
+      supabase,
+      questionIds: picked.map((row) => row.id),
+    });
     const rawItems = picked.map((row) => {
       const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
-      return mapQuestion(row, vote, optionsMap.get(row.id));
+      return mapQuestion(row, vote, optionsMap.get(row.id), updatesMap.get(row.id));
     });
 
     const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
@@ -1153,11 +1215,15 @@ export async function getQuestionsPageFromSupabase(options: {
     .filter((row) => normalizeAnswerMode(row.answer_mode ?? "binary") === "options")
     .map((row) => row.id);
   const optionsMap = await fetchQuestionOptionsMap({ supabase, questionIds: optionQuestionIds });
+  const updatesMap = await fetchLatestQuestionUpdatesMeta({
+    supabase,
+    questionIds: pageRows.map((row) => row.id),
+  });
 
   const userVotesMap = await fetchUserVotesForQuestions(pageRows.map((row) => row.id));
   const rawItems = pageRows.map((row) => {
     const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
-    return mapQuestion(row, vote, optionsMap.get(row.id));
+    return mapQuestion(row, vote, optionsMap.get(row.id), updatesMap.get(row.id));
   });
 
   const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
@@ -1271,7 +1337,8 @@ export async function getQuestionByIdFromSupabase(
   ]);
 
   // Eingeloggte Nutzer: Account-Vote hat Vorrang vor Session-Vote (geräteübergreifend konsistent).
-  const mapped = mapQuestion(questionRow, userVote ?? sessionVote, optionsMap.get(id));
+  const updatesMap = await fetchLatestQuestionUpdatesMeta({ supabase, questionIds: [id] });
+  const mapped = mapQuestion(questionRow, userVote ?? sessionVote, optionsMap.get(id), updatesMap.get(id));
   const reportCounts = await fetchOpenReportDistinctSessionsByItemId({ supabase, kind: "question", itemIds: [id] });
   const reports = reportCounts.get(id) ?? 0;
   const isQuarantined = reports >= quarantineThreshold;

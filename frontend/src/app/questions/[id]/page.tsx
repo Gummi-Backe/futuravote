@@ -140,6 +140,12 @@ function formatDateTimeLocal(value?: string | null) {
   });
 }
 
+function buildUpdatePreview(value: string, maxLen = 320) {
+  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
 function VoteBar({ yesPct, noPct }: { yesPct: number; noPct: number }) {
   return (
     <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/10">
@@ -250,6 +256,26 @@ export default async function QuestionDetail(props: {
   })();
   const descriptionParts = splitDescriptionText(question.description);
   const initialUpdates = await listQuestionUpdates(id, 80).catch(() => []);
+  const latestUpdate = initialUpdates.length > 0 ? initialUpdates[0] : null;
+  const latestUpdateTimeLabel = formatDateTimeLocal(latestUpdate?.createdAt ?? null);
+  const latestUpdatePreview = latestUpdate ? buildUpdatePreview(latestUpdate.body, 360) : null;
+  const latestUpdateSources = latestUpdate
+    ? (() => {
+        const merged = [...(latestUpdate.sourceUrls ?? []), latestUpdate.sourceUrl ?? ""]
+          .map((value) => value.trim())
+          .filter(Boolean);
+        const deduped: string[] = [];
+        const seen = new Set<string>();
+        for (const value of merged) {
+          const key = value.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          deduped.push(value);
+          if (deduped.length >= 4) break;
+        }
+        return deduped;
+      })()
+    : [];
   const isQuestionOwner = Boolean(currentUser?.id && question.creatorId && currentUser.id === question.creatorId);
 
   const votedLabel =
@@ -348,6 +374,45 @@ export default async function QuestionDetail(props: {
               shortText={descriptionParts.shortText}
               longText={descriptionParts.longText}
             />
+          ) : null}
+
+          {latestUpdate && latestUpdatePreview ? (
+            <section className="mt-3 rounded-2xl border border-cyan-200/30 bg-cyan-500/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-cyan-100">Letztes Update</h2>
+                {latestUpdateTimeLabel ? (
+                  <span className="text-[11px] font-semibold text-cyan-100/80">{latestUpdateTimeLabel}</span>
+                ) : null}
+              </div>
+              <p className="mt-2 text-sm text-slate-100">{latestUpdatePreview}</p>
+              {latestUpdateSources.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  {latestUpdateSources.map((source) =>
+                    /^https?:\/\//i.test(source) ? (
+                      <a
+                        key={source}
+                        href={source}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block text-xs font-semibold text-cyan-100 hover:text-cyan-50 break-all"
+                      >
+                        Quelle: {source}
+                      </a>
+                    ) : (
+                      <p key={source} className="text-xs font-semibold text-cyan-100/90 break-words">
+                        Quelle: {source}
+                      </p>
+                    )
+                  )}
+                </div>
+              ) : null}
+              <a
+                href="#updates-section"
+                className="mt-3 inline-flex items-center gap-2 rounded-full border border-cyan-300/35 bg-cyan-500/15 px-3 py-1 text-xs font-semibold text-cyan-50 hover:border-cyan-200/70"
+              >
+                Alle Updates anzeigen
+              </a>
+            </section>
           ) : null}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-200">
@@ -623,14 +688,16 @@ export default async function QuestionDetail(props: {
           </div>
         </section>
 
-        <QuestionUpdatesSection
-          questionId={id}
-          questionTitle={question.title}
-          initialUpdates={initialUpdates}
-          isLoggedIn={Boolean(currentUser)}
-          isOwner={isQuestionOwner}
-          isAdmin={Boolean(isAdmin)}
-        />
+        <div id="updates-section">
+          <QuestionUpdatesSection
+            questionId={id}
+            questionTitle={question.title}
+            initialUpdates={initialUpdates}
+            isLoggedIn={Boolean(currentUser)}
+            isOwner={isQuestionOwner}
+            isAdmin={Boolean(isAdmin)}
+          />
+        </div>
 
         <CommentsSection
           questionId={id}

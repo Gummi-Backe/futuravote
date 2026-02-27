@@ -58,6 +58,9 @@ export type Question = {
   resolvedAt?: string;
   resolvedSource?: string;
   resolvedNote?: string;
+  hasUpdate?: boolean;
+  lastUpdateAt?: string;
+  lastUpdateBody?: string;
 };
 
 export type Draft = {
