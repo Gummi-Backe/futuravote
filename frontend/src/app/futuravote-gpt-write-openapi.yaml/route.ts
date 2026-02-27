@@ -150,16 +150,7 @@ paths:
       summary: Draft oder private Umfrage erstellen
       security:
         - oauth2: [drafts:write]
-      description: |
-        Erstellt:
-        - bei visibility=public einen Draft (landet im Review),
-        - bei visibility=link_only direkt eine private Frage (per Link abstimmbar).
-        Sicherheitsregeln fuer GPT-OAuth:
-        - confirmSubmit soll true sein (explizite Nutzerfreigabe).
-        - imageUrl und imageCredit sind Pflicht.
-        - Bei visibility=public muss description 100-200 Woerter haben.
-        - Bei visibility=public und isResolvable=true muss longDescription 600-1000 Woerter haben,
-          ausser allowWithoutLongDescription=true ist gesetzt.
+      description: "Erstellt Draft (public/review) oder private Link-Umfrage (link_only). GPT-OAuth: imageUrl + imageCredit Pflicht, confirmSubmit nach Freigabe auf true. Oeffentliche Prognose: description 100-200 Woerter und longDescription 600-1000 Woerter (oder allowWithoutLongDescription=true)."
       requestBody:
         required: true
         content:
