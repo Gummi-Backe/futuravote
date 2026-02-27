@@ -45,8 +45,9 @@ export function QuestionUpdatesSection(props: {
   isLoggedIn: boolean;
   isOwner: boolean;
   isAdmin: boolean;
+  showPublishedUpdates?: boolean;
 }) {
-  const { questionId, questionTitle, initialUpdates, isLoggedIn, isOwner, isAdmin } = props;
+  const { questionId, questionTitle, initialUpdates, isLoggedIn, isOwner, isAdmin, showPublishedUpdates = true } = props;
   const [updates, setUpdates] = useState<QuestionUpdate[]>(initialUpdates ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -402,57 +403,59 @@ export function QuestionUpdatesSection(props: {
 
       {error ? <p className="mt-3 text-xs text-rose-200">{error}</p> : null}
 
-      <div className="mt-5 space-y-3">
-        {updates.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-slate-300">
-            Noch keine Updates veröffentlicht.
-          </div>
-        ) : (
-          updates.map((item) => (
-            <article key={item.id} className="rounded-3xl border border-white/10 bg-black/20 px-4 py-3 shadow-sm shadow-black/20">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-100">{item.authorName}</span>
-                <span className="text-[11px] text-slate-400">{formatTime(item.createdAt)}</span>
-              </div>
-              <FormattedText
-                text={item.body}
-                className="mt-2 space-y-2 text-sm text-slate-200"
-                paragraphClassName="text-sm text-slate-200"
-              />
-              {(() => {
-                const allSources = [...(item.sourceUrls ?? []), item.sourceUrl ?? ""]
-                  .map((value) => value.trim())
-                  .filter(Boolean);
-                const deduped: string[] = [];
-                const seen = new Set<string>();
-                for (const value of allSources) {
-                  const key = value.toLowerCase();
-                  if (seen.has(key)) continue;
-                  seen.add(key);
-                  deduped.push(value);
-                  if (deduped.length >= MAX_SOURCE_URLS) break;
-                }
-                if (deduped.length === 0) return null;
-                return (
-                  <div className="mt-2 space-y-1">
-                    {deduped.map((url) => (
-                      <a
-                        key={url}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block text-xs font-semibold text-emerald-200 hover:text-emerald-100 break-all"
-                      >
-                        Quelle: {url}
-                      </a>
-                    ))}
-                  </div>
-                );
-              })()}
-            </article>
-          ))
-        )}
-      </div>
+      {showPublishedUpdates ? (
+        <div className="mt-5 space-y-3">
+          {updates.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-slate-300">
+              Noch keine Updates veröffentlicht.
+            </div>
+          ) : (
+            updates.map((item) => (
+              <article key={item.id} className="rounded-3xl border border-white/10 bg-black/20 px-4 py-3 shadow-sm shadow-black/20">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-100">{item.authorName}</span>
+                  <span className="text-[11px] text-slate-400">{formatTime(item.createdAt)}</span>
+                </div>
+                <FormattedText
+                  text={item.body}
+                  className="mt-2 space-y-2 text-sm text-slate-200"
+                  paragraphClassName="text-sm text-slate-200"
+                />
+                {(() => {
+                  const allSources = [...(item.sourceUrls ?? []), item.sourceUrl ?? ""]
+                    .map((value) => value.trim())
+                    .filter(Boolean);
+                  const deduped: string[] = [];
+                  const seen = new Set<string>();
+                  for (const value of allSources) {
+                    const key = value.toLowerCase();
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+                    deduped.push(value);
+                    if (deduped.length >= MAX_SOURCE_URLS) break;
+                  }
+                  if (deduped.length === 0) return null;
+                  return (
+                    <div className="mt-2 space-y-1">
+                      {deduped.map((url) => (
+                        <a
+                          key={url}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-xs font-semibold text-emerald-200 hover:text-emerald-100 break-all"
+                        >
+                          Quelle: {url}
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </article>
+            ))
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
