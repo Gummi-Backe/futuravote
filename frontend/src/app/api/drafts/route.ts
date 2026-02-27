@@ -38,7 +38,7 @@ type DraftInput = {
   visibility?: PollVisibility;
   answerMode?: AnswerMode;
   isResolvable?: boolean;
-  options?: string[];
+  options?: string[] | string | null;
   resolutionCriteria?: string;
   resolutionSource?: string;
   resolutionSources?: string[];
@@ -118,6 +118,21 @@ function normalizeResolutionSources(input: unknown): string[] {
     if (out.length >= 8) break;
   }
   return out;
+}
+
+function normalizeOptionsInput(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map((v) => String(v ?? "").trim()).filter((v) => v.length > 0);
+  }
+  if (typeof input === "string") {
+    const raw = input.trim();
+    if (!raw) return [];
+    return raw
+      .split(/\r?\n|[,;|]+/g)
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+  }
+  return [];
 }
 
 function countWords(raw: string): number {
@@ -217,8 +232,8 @@ export async function POST(request: Request) {
           sessionId = "oauth_gpt";
           isOauthGpt = true;
         }
-      } catch (error: any) {
-        const msg = typeof error?.message === "string" ? error.message : "unknown";
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "unknown";
         if (msg.toLowerCase().includes("oauth_tokens")) {
           return errorResponse(
             503,
@@ -332,12 +347,13 @@ export async function POST(request: Request) {
     ]);
   }
 
-  let imageUrl = normalizeImageUrl(body.imageUrl);
-  let imageCredit = (body.imageCredit ?? "").trim() || undefined;
+  const imageUrl = normalizeImageUrl(body.imageUrl);
+  const imageCredit = (body.imageCredit ?? "").trim() || undefined;
   const shortDescriptionWordCount = countWords(shortDescription);
   const longDescriptionWordCount = countWords(effectiveLongDescription);
   const allowWithoutLongDescription = body.allowWithoutLongDescription === true;
   const confirmSubmit = body.confirmSubmit === true;
+  const confirmSubmitProvided = typeof body.confirmSubmit !== "undefined";
 
   if (typeof body.confirmSubmit !== "undefined" && typeof body.confirmSubmit !== "boolean") {
     return errorResponse(400, "confirmSubmit muss true oder false sein.", "invalid_confirm_submit", [
@@ -401,12 +417,17 @@ export async function POST(request: Request) {
       [{ field: "imageCredit", issue: "required_for_gpt_oauth" }]
     );
   }
-  if (isOauthGpt && !confirmSubmit) {
+  if (isOauthGpt && confirmSubmitProvided && !confirmSubmit) {
     return errorResponse(
       400,
       "Für GPT-OAuth ist confirmSubmit=true Pflicht. Zeige zuerst die Vorschau und frage nach Freigabe.",
       "explicit_confirmation_required",
       [{ field: "confirmSubmit", issue: "must_be_true_for_gpt_oauth" }]
+    );
+  }
+  if (isOauthGpt && !confirmSubmitProvided) {
+    warnings.push(
+      "confirmSubmit wurde nicht mitgesendet. Anfrage wurde aus Kompatibilitätsgründen trotzdem verarbeitet."
     );
   }
 
@@ -486,12 +507,9 @@ export async function POST(request: Request) {
   let resolutionDeadlineToSave = isResolvable ? resolutionDeadline : undefined;
 
   let options: string[] | undefined = undefined;
+  const normalizedOptions = normalizeOptionsInput(body.options);
   if (answerMode === "options") {
-    const raw = Array.isArray(body.options) ? body.options : [];
-    const cleaned = raw
-      .map((v) => String(v ?? "").trim())
-      .filter((v) => v.length > 0)
-      .slice(0, 6);
+    const cleaned = normalizedOptions.slice(0, 6);
 
     if (cleaned.length < 2) {
       return errorResponse(400, "Bitte gib mindestens 2 Antwortoptionen an.", "options_min_2", [
@@ -516,13 +534,8 @@ export async function POST(request: Request) {
     }
 
     options = cleaned;
-  } else if (Array.isArray(body.options) && body.options.length > 0) {
-    return errorResponse(
-      400,
-      "options darf nur gesetzt werden, wenn answerMode='options' ist.",
-      "options_not_allowed_for_binary",
-      [{ field: "options", issue: "not_allowed_with_binary" }]
-    );
+  } else if (normalizedOptions.length > 0) {
+    warnings.push("options wurde ignoriert, weil answerMode='binary' ist.");
   }
 
   // Review-Zeitraum ist fix: 72 Stunden (keine User-Auswahl).

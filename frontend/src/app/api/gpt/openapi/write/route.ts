@@ -155,7 +155,7 @@ paths:
         - bei visibility=public einen Draft (landet im Review),
         - bei visibility=link_only direkt eine private Frage (per Link abstimmbar).
         Sicherheitsregeln fuer GPT-OAuth:
-        - confirmSubmit muss true sein.
+        - confirmSubmit soll true sein (explizite Nutzerfreigabe).
         - imageUrl und imageCredit sind Pflicht.
         - Bei visibility=public muss description 100-200 Woerter haben.
         - Bei visibility=public und isResolvable=true muss longDescription 600-1000 Woerter haben,
@@ -165,7 +165,70 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateDraft"
+              type: object
+              properties:
+                title: { type: string }
+                description:
+                  type: string
+                  nullable: true
+                  description: "Kurze Beschreibung. Empfohlen fuer GPT: 100-200 Woerter, klar in Absaetzen. Erlaubte Markups: **fett**, __unterstrichen__, [size=sm|lg|xl|xxl]...[/size]."
+                longDescription:
+                  type: string
+                  nullable: true
+                  description: "Optionaler Langtext fuer die Detailansicht (bei oeffentlichen Prognosen empfohlen: 600-1000 Woerter). Strukturierte Absaetze und Markups wie bei description sind erlaubt."
+                allowWithoutLongDescription:
+                  type: boolean
+                  nullable: true
+                  description: "Nur fuer GPT-OAuth relevant: Bei oeffentlichen Prognosen kann damit longDescription explizit abgeschaltet werden."
+                confirmSubmit:
+                  type: boolean
+                  nullable: true
+                  description: "Optional. Bei GPT-OAuth nach expliziter Nutzerfreigabe auf true setzen."
+                category: { type: string }
+                region: { type: string, nullable: true }
+                imageUrl:
+                  type: string
+                  nullable: true
+                  description: "Pflicht fuer GPT-OAuth. Muss aus /api/gpt/generate-image stammen."
+                imageCredit:
+                  type: string
+                  nullable: true
+                  description: "Pflicht fuer GPT-OAuth. Wird i.d.R. aus /api/gpt/generate-image uebernommen."
+                timeLeftHours: { type: number, nullable: true, description: "Standard: 72" }
+                closesAt: { type: string, nullable: true, description: "Optionales Enddatum (ISO). Empfohlen fuer oeffentliche Prognosen." }
+                visibility:
+                  type: string
+                  enum: [public, link_only]
+                answerMode:
+                  type: string
+                  enum: [binary, options]
+                isResolvable: { type: boolean, nullable: true, description: "true=Prognose, false=Meinungs-Umfrage" }
+                options:
+                  nullable: true
+                  description: "Bei answerMode=binary Feld weglassen. Bei answerMode=options 2-6 Optionen senden."
+                  oneOf:
+                    - type: array
+                      items: { type: string }
+                    - type: string
+                resolutionCriteria:
+                  type: string
+                  nullable: true
+                  description: "Required wenn visibility=public und isResolvable=true."
+                resolutionSource:
+                  type: string
+                  nullable: true
+                  description: "Required wenn visibility=public und isResolvable=true."
+                resolutionSources:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  description: "Optional mehrere Quellen (2-8). Der erste Eintrag wird als resolutionSource genutzt."
+                resolutionDeadline:
+                  type: string
+                  nullable: true
+                  description: "Required wenn visibility=public und isResolvable=true (ISO Datum/Uhrzeit). Server setzt sonst automatisch closesAt+31 Tage."
+              required: [title, category, imageUrl, imageCredit]
       responses:
         "201":
           description: Draft oder Question erstellt
@@ -238,7 +301,7 @@ components:
         confirmSubmit:
           type: boolean
           nullable: true
-          description: "Pflicht fuer GPT-OAuth: muss true sein und signalisiert explizite Nutzerfreigabe nach Vorschau."
+          description: "Optional. Bei GPT-OAuth nach expliziter Nutzerfreigabe auf true setzen."
         category: { type: string }
         region: { type: string, nullable: true }
         imageUrl:
@@ -259,9 +322,12 @@ components:
           enum: [binary, options]
         isResolvable: { type: boolean, nullable: true, description: "true=Prognose, false=Meinungs-Umfrage" }
         options:
-          type: array
           nullable: true
-          items: { type: string }
+          description: "Bei answerMode=binary Feld weglassen. Bei answerMode=options 2-6 Optionen senden."
+          oneOf:
+            - type: array
+              items: { type: string }
+            - type: string
         resolutionCriteria:
           type: string
           nullable: true
@@ -280,7 +346,7 @@ components:
           type: string
           nullable: true
           description: "Required wenn visibility=public und isResolvable=true (ISO Datum/Uhrzeit). Server setzt sonst automatisch closesAt+31 Tage."
-      required: [title, category, confirmSubmit, imageUrl, imageCredit]
+      required: [title, category, imageUrl, imageCredit]
     ErrorResponse:
       type: object
       properties:

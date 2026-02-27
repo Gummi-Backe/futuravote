@@ -155,7 +155,7 @@ paths:
         - bei visibility=public einen Draft (landet im Review),
         - bei visibility=link_only direkt eine private Frage (per Link abstimmbar).
         Sicherheitsregeln fuer GPT-OAuth:
-        - confirmSubmit muss true sein.
+        - confirmSubmit soll true sein (explizite Nutzerfreigabe).
         - imageUrl und imageCredit sind Pflicht.
         - Bei visibility=public muss description 100-200 Woerter haben.
         - Bei visibility=public und isResolvable=true muss longDescription 600-1000 Woerter haben,
@@ -183,7 +183,7 @@ paths:
                 confirmSubmit:
                   type: boolean
                   nullable: true
-                  description: "Pflicht fuer GPT-OAuth: muss true sein und signalisiert explizite Nutzerfreigabe nach Vorschau."
+                  description: "Optional. Bei GPT-OAuth nach expliziter Nutzerfreigabe auf true setzen."
                 category: { type: string }
                 region: { type: string, nullable: true }
                 imageUrl:
@@ -204,9 +204,12 @@ paths:
                   enum: [binary, options]
                 isResolvable: { type: boolean, nullable: true, description: "true=Prognose, false=Meinungs-Umfrage" }
                 options:
-                  type: array
                   nullable: true
-                  items: { type: string }
+                  description: "Bei answerMode=binary Feld weglassen. Bei answerMode=options 2-6 Optionen senden."
+                  oneOf:
+                    - type: array
+                      items: { type: string }
+                    - type: string
                 resolutionCriteria: { type: string, nullable: true }
                 resolutionSource: { type: string, nullable: true }
                 resolutionSources:
@@ -215,7 +218,7 @@ paths:
                   items: { type: string }
                   description: "Optional mehrere Quellen (2-8). Der erste Eintrag wird als resolutionSource genutzt."
                 resolutionDeadline: { type: string, nullable: true, description: "ISO Datum/Uhrzeit" }
-              required: [title, category, confirmSubmit, imageUrl, imageCredit]
+              required: [title, category, imageUrl, imageCredit]
       responses:
         "201":
           description: Draft oder Question erstellt
