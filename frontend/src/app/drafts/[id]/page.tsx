@@ -108,7 +108,7 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
           label="← Zurück zum Profil"
         />
 
-        <section className="mt-6 space-y-3">
+        <section className="mt-6 w-full max-w-xl space-y-3">
           <p className="max-w-xl text-sm text-slate-300">
             So sieht dein Draft im Review-Bereich aus. Hier kannst du den Status und die aktuellen Stimmen sehen.
           </p>

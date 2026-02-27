@@ -34,6 +34,12 @@ type DraftRow = {
   resolution_deadline: string | null;
 };
 
+type DraftOptionRow = {
+  id: string;
+  label: string | null;
+  votes_count: number | null;
+};
+
 function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
   let timeLeft = row.time_left_hours ?? 72;
   if (row.created_at) {
@@ -113,7 +119,7 @@ export default async function ReviewDraftDetailPage(props: { params: Promise<{ i
     if (optError) {
       throw new Error(`Konnte Draft-Optionen nicht laden: ${optError.message}`);
     }
-    options = ((optRows as any[]) ?? []).map((opt) => ({
+    options = ((optRows as DraftOptionRow[] | null) ?? []).map((opt) => ({
       id: String(opt.id),
       label: String(opt.label ?? ""),
       votesCount: Math.max(0, Number(opt.votes_count ?? 0) || 0),
@@ -149,7 +155,7 @@ export default async function ReviewDraftDetailPage(props: { params: Promise<{ i
       <div className="mx-auto max-w-5xl">
         <SmartBackButton fallbackHref="/" label="← Zurück zum Review" />
 
-        <section className="mt-6 space-y-3">
+        <section className="mt-6 w-full max-w-xl space-y-3">
           <p className="max-w-xl text-sm text-slate-300">
             Prüfe den Draft im Detail und entscheide dann fair mit „Gute Frage“ oder „Ablehnen“.
           </p>

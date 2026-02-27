@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 export function ZoomableImage(props: {
   src: string;
@@ -27,6 +28,41 @@ export function ZoomableImage(props: {
     };
   }, [open]);
 
+  const portalRoot = typeof document !== "undefined" ? document.body : null;
+
+  const modal = useMemo(() => {
+    if (!open || !portalRoot) return null;
+
+    return (
+      <div
+        className="overlay-enter fixed inset-0 z-[999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+        onClick={() => setOpen(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Bildvorschau"
+      >
+        <div
+          className="relative flex max-h-[92vh] max-w-[96vw] items-center justify-center md:-translate-y-2"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute right-2 top-2 z-10 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-xs font-semibold text-white hover:border-white/45"
+            aria-label="Vorschau schließen"
+          >
+            Schließen
+          </button>
+          <img
+            src={src}
+            alt={alt}
+            className="max-h-[88vh] max-w-[95vw] rounded-2xl border border-white/15 bg-black/30 object-contain shadow-2xl shadow-black/70"
+          />
+        </div>
+      </div>
+    );
+  }, [alt, open, portalRoot, src]);
+
   return (
     <>
       <button
@@ -44,32 +80,7 @@ export function ZoomableImage(props: {
         />
       </button>
 
-      {open ? (
-        <div
-          className="overlay-enter fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="relative max-h-[92vh] max-w-[96vw]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="absolute right-2 top-2 z-10 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-xs font-semibold text-white hover:border-white/45"
-              aria-label="Vorschau schließen"
-            >
-              Schließen
-            </button>
-            <img
-              src={src}
-              alt={alt}
-              className="max-h-[90vh] max-w-[95vw] rounded-2xl border border-white/15 bg-black/30 object-contain shadow-2xl shadow-black/70"
-            />
-          </div>
-        </div>
-      ) : null}
+      {modal && portalRoot ? createPortal(modal, portalRoot) : null}
     </>
   );
 }
-

@@ -27,11 +27,25 @@ export function ExpandableDescription(props: {
 }) {
   const { shortText, longText } = props;
   const [open, setOpen] = useState(false);
-  const [updatesOpen, setUpdatesOpen] = useState(false);
+  const [updatesCreateOpen, setUpdatesCreateOpen] = useState(false);
   const longId = useId();
   const hasLongText = Boolean(longText && longText.trim().length > 0);
   const hasUpdatesConfig = Boolean(props.questionId && props.questionTitle);
-  const updatesButtonLabel = props.isOwner ? "Updates anzeigen / hinzufügen" : "Updates anzeigen";
+  const isOwner = Boolean(props.isOwner);
+  const [publishedUpdates, setPublishedUpdates] = useState<QuestionUpdateItem[]>(props.initialUpdates ?? []);
+  const hasPublishedUpdates = publishedUpdates.length > 0;
+
+  const formatTime = (value: string) => {
+    const ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return value;
+    return new Date(ms).toLocaleString("de-DE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="mt-4">
@@ -72,13 +86,13 @@ export function ExpandableDescription(props: {
             >
               {open ? "Weniger anzeigen" : "Ausführlichen Hintergrund anzeigen"}
             </button>
-            {hasUpdatesConfig ? (
+            {hasUpdatesConfig && isOwner ? (
               <button
                 type="button"
-                onClick={() => setUpdatesOpen((prev) => !prev)}
+                onClick={() => setUpdatesCreateOpen((prev) => !prev)}
                 className="inline-flex items-center gap-2 rounded-full border border-cyan-300/45 bg-cyan-500/15 px-4 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-200/70 hover:bg-cyan-500/25"
               >
-                {updatesOpen ? "Updates ausblenden" : updatesButtonLabel}
+                Updates erstellen
               </button>
             ) : null}
           </div>
@@ -95,44 +109,87 @@ export function ExpandableDescription(props: {
               />
             </div>
           ) : null}
-
-          {hasUpdatesConfig && updatesOpen ? (
-            <QuestionUpdatesSection
-              questionId={props.questionId!}
-              questionTitle={props.questionTitle!}
-              initialUpdates={props.initialUpdates ?? []}
-              isLoggedIn={Boolean(props.isLoggedIn)}
-              isOwner={Boolean(props.isOwner)}
-              isAdmin={Boolean(props.isAdmin)}
-              showPublishedUpdates
-              embedded
-            />
-          ) : null}
         </div>
       ) : null}
 
-      {!hasLongText && hasUpdatesConfig ? (
+      {!hasLongText && hasUpdatesConfig && isOwner ? (
         <div className="mt-3">
           <button
             type="button"
-            onClick={() => setUpdatesOpen((prev) => !prev)}
+            onClick={() => setUpdatesCreateOpen((prev) => !prev)}
             className="inline-flex items-center gap-2 rounded-full border border-cyan-300/45 bg-cyan-500/15 px-4 py-1.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-200/70 hover:bg-cyan-500/25"
           >
-            {updatesOpen ? "Updates ausblenden" : updatesButtonLabel}
+            Updates erstellen
           </button>
-          {updatesOpen ? (
-            <QuestionUpdatesSection
-              questionId={props.questionId!}
-              questionTitle={props.questionTitle!}
-              initialUpdates={props.initialUpdates ?? []}
-              isLoggedIn={Boolean(props.isLoggedIn)}
-              isOwner={Boolean(props.isOwner)}
-              isAdmin={Boolean(props.isAdmin)}
-              showPublishedUpdates
-              embedded
-            />
-          ) : null}
         </div>
+      ) : null}
+
+      {hasUpdatesConfig && hasPublishedUpdates ? (
+        <section className="mt-3 space-y-3 rounded-2xl border border-cyan-300/30 bg-cyan-500/10 p-3 sm:p-4">
+          <h3 className="text-sm font-semibold text-cyan-50">Updates zur Frage</h3>
+          {publishedUpdates.map((item) => (
+            <article key={item.id} className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 shadow-sm shadow-black/20">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-100">{item.authorName}</span>
+                <span className="text-[11px] text-slate-400">{formatTime(item.createdAt)}</span>
+              </div>
+              <FormattedText
+                text={item.body}
+                className="mt-2 space-y-2 text-sm text-slate-200"
+                paragraphClassName="text-sm text-slate-200"
+              />
+              {(() => {
+                const allSources = [...(item.sourceUrls ?? []), item.sourceUrl ?? ""]
+                  .map((value) => value.trim())
+                  .filter(Boolean);
+                const deduped: string[] = [];
+                const seen = new Set<string>();
+                for (const value of allSources) {
+                  const key = value.toLowerCase();
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  deduped.push(value);
+                  if (deduped.length >= 8) break;
+                }
+                if (deduped.length === 0) return null;
+                return (
+                  <div className="mt-2 space-y-1">
+                    {deduped.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block break-all text-xs font-semibold text-emerald-200 hover:text-emerald-100"
+                      >
+                        Quelle: {url}
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      {hasUpdatesConfig && isOwner && updatesCreateOpen ? (
+        <QuestionUpdatesSection
+          questionId={props.questionId!}
+          questionTitle={props.questionTitle!}
+          initialUpdates={publishedUpdates}
+          isLoggedIn={Boolean(props.isLoggedIn)}
+          isOwner={isOwner}
+          isAdmin={Boolean(props.isAdmin)}
+          showPublishedUpdates={false}
+          embedded
+          onUpdatePublished={(next) =>
+            setPublishedUpdates((prev) => {
+              if (prev.some((item) => item.id === next.id)) return prev;
+              return [next, ...prev];
+            })
+          }
+        />
       ) : null}
     </div>
   );

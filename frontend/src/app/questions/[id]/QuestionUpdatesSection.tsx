@@ -47,6 +47,7 @@ export function QuestionUpdatesSection(props: {
   isAdmin: boolean;
   showPublishedUpdates?: boolean;
   embedded?: boolean;
+  onUpdatePublished?: (update: QuestionUpdate) => void;
 }) {
   const {
     questionId,
@@ -57,6 +58,7 @@ export function QuestionUpdatesSection(props: {
     isAdmin,
     showPublishedUpdates = true,
     embedded = false,
+    onUpdatePublished,
   } = props;
   const [updates, setUpdates] = useState<QuestionUpdate[]>(initialUpdates ?? []);
   const [loading, setLoading] = useState(false);
@@ -121,6 +123,7 @@ export function QuestionUpdatesSection(props: {
       const next = json?.update;
       if (next) {
         setUpdates((prev) => [next, ...(prev ?? [])]);
+        onUpdatePublished?.(next);
       } else {
         await refresh();
       }
@@ -131,7 +134,7 @@ export function QuestionUpdatesSection(props: {
     } finally {
       setSubmitting(false);
     }
-  }, [body, canSubmit, questionId, refresh, sourceUrls, submitting]);
+  }, [body, canSubmit, onUpdatePublished, questionId, refresh, sourceUrls, submitting]);
 
   const generateAiSuggestion = useCallback(async () => {
     if (!isAdmin || aiLoading) return;
