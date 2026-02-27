@@ -20,6 +20,8 @@ import { splitDescriptionText } from "@/app/lib/descriptionText";
 import { ExpandableDescription } from "./ExpandableDescription";
 import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
 import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
+import { QuestionUpdatesSection } from "./QuestionUpdatesSection";
+import { listQuestionUpdates } from "@/app/data/dbSupabaseQuestionUpdates";
 
 export const dynamic = "force-dynamic";
 
@@ -232,6 +234,8 @@ export default async function QuestionDetail(props: {
       : null;
   const resolvedLabel = resolvedOutcomeLabel ?? resolvedOptionLabel;
   const descriptionParts = splitDescriptionText(question.description);
+  const initialUpdates = await listQuestionUpdates(id, 80).catch(() => []);
+  const isQuestionOwner = Boolean(currentUser?.id && question.creatorId && currentUser.id === question.creatorId);
 
   const votedLabel =
     answerMode === "options"
@@ -598,6 +602,15 @@ export default async function QuestionDetail(props: {
             </div>
           </div>
         </section>
+
+        <QuestionUpdatesSection
+          questionId={id}
+          questionTitle={question.title}
+          initialUpdates={initialUpdates}
+          isLoggedIn={Boolean(currentUser)}
+          isOwner={isQuestionOwner}
+          isAdmin={Boolean(isAdmin)}
+        />
 
         <CommentsSection
           questionId={id}
