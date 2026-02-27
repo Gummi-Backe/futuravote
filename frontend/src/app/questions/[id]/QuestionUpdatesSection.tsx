@@ -46,8 +46,18 @@ export function QuestionUpdatesSection(props: {
   isOwner: boolean;
   isAdmin: boolean;
   showPublishedUpdates?: boolean;
+  embedded?: boolean;
 }) {
-  const { questionId, questionTitle, initialUpdates, isLoggedIn, isOwner, isAdmin, showPublishedUpdates = true } = props;
+  const {
+    questionId,
+    questionTitle,
+    initialUpdates,
+    isLoggedIn,
+    isOwner,
+    isAdmin,
+    showPublishedUpdates = true,
+    embedded = false,
+  } = props;
   const [updates, setUpdates] = useState<QuestionUpdate[]>(initialUpdates ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +205,9 @@ export function QuestionUpdatesSection(props: {
   }, []);
 
   return (
-    <section className="mt-6 rounded-3xl border border-white/10 bg-white/10 p-4 shadow-2xl shadow-black/25 backdrop-blur sm:mt-8 sm:p-6">
+    <section
+      className={`${embedded ? "mt-3 sm:mt-4" : "mt-6 sm:mt-8"} rounded-3xl border border-white/10 bg-white/10 p-4 shadow-2xl shadow-black/25 backdrop-blur sm:p-6`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white">Updates zur Frage</h2>

@@ -18,6 +18,7 @@ import {
 import { ReportButton } from "./components/ReportButton";
 import { FirstStepsOverlay } from "./components/FirstStepsOverlay";
 import { AdminResolutionBanner } from "./components/AdminResolutionBanner";
+import { ZoomableImage } from "./components/ZoomableImage";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -356,25 +357,15 @@ function EventCard({
 
       <div className="space-y-3">
         <div className="flex gap-4">
-          <Link
-            href={`/questions/${encodeURIComponent(question.id)}`}
-            onClick={(e) => {
-              if (!onOpenDetails) return;
-              e.preventDefault();
-              onOpenDetails(`/questions/${encodeURIComponent(question.id)}`);
-            }}
-            aria-label={`Details öffnen: ${question.title}`}
-            className="block flex-shrink-0 no-underline"
-          >
+          <div className="block flex-shrink-0">
             {question.imageUrl ? (
-              <div className="inline-flex max-h-24 max-w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
-                <img
-                  src={question.imageUrl}
-                  alt={question.title}
-                  className="h-auto w-auto max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                />
-              </div>
+              <ZoomableImage
+                src={question.imageUrl}
+                alt={question.title}
+                loading="lazy"
+                thumbWrapperClassName="inline-flex max-h-24 max-w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30"
+                thumbImageClassName="h-auto w-auto max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
+              />
             ) : (
               <div className="flex h-24 w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
                 <div
@@ -389,7 +380,7 @@ function EventCard({
             {question.imageCredit && (
               <p className="mt-1 text-[10px] leading-tight text-slate-400 line-clamp-2">Bild: {question.imageCredit}</p>
             )}
-          </Link>
+          </div>
           <div className="min-w-0 flex-1">
             <h3
               className={`card-title-wrap line-clamp-5 font-bold leading-tight text-white ${getQuestionTitleSizeClass(
@@ -592,14 +583,13 @@ function DraftCard({
       <div className="flex gap-3">
         <div className="flex-shrink-0">
           {draft.imageUrl ? (
-            <div className="inline-flex max-h-20 max-w-[6rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
-              <img
+            <ZoomableImage
                 src={draft.imageUrl}
                 alt={draft.title}
-                className="h-auto w-auto max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
                 loading="lazy"
+                thumbWrapperClassName="inline-flex max-h-20 max-w-[6rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30"
+                thumbImageClassName="h-auto w-auto max-h-20 max-w-[6rem] object-contain transition-transform duration-500 hover:scale-105"
               />
-            </div>
           ) : (
             <div className="flex h-20 w-[6rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
               <div

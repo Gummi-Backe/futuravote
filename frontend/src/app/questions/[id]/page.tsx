@@ -20,9 +20,8 @@ import { splitDescriptionText } from "@/app/lib/descriptionText";
 import { ExpandableDescription } from "./ExpandableDescription";
 import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
 import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
-import { QuestionUpdatesSection } from "./QuestionUpdatesSection";
 import { listQuestionUpdates } from "@/app/data/dbSupabaseQuestionUpdates";
-import { FormattedText } from "@/app/components/FormattedText";
+import { ZoomableImage } from "@/app/components/ZoomableImage";
 
 export const dynamic = "force-dynamic";
 
@@ -325,12 +324,13 @@ export default async function QuestionDetail(props: {
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:gap-4">
             {question.imageUrl && (
-              <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]">
-                <img
+              <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl sm:max-h-24 sm:max-w-[7rem]">
+                <ZoomableImage
                   src={question.imageUrl}
                   alt={question.title}
-                  className="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain sm:max-h-24 sm:max-w-[7rem]"
                   loading="lazy"
+                  thumbWrapperClassName="inline-flex max-h-20 max-w-[5.5rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]"
+                  thumbImageClassName="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain sm:max-h-24 sm:max-w-[7rem]"
                 />
               </div>
             )}
@@ -348,68 +348,13 @@ export default async function QuestionDetail(props: {
             <ExpandableDescription
               shortText={descriptionParts.shortText}
               longText={descriptionParts.longText}
+              questionId={id}
+              questionTitle={question.title}
+              initialUpdates={initialUpdates}
+              isLoggedIn={Boolean(currentUser)}
+              isOwner={isQuestionOwner}
+              isAdmin={Boolean(isAdmin)}
             />
-          ) : null}
-
-          {initialUpdates.length > 0 ? (
-            <section className="mt-3 rounded-2xl border border-cyan-200/30 bg-cyan-500/10 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-cyan-100">Updates</h2>
-                <span className="text-[11px] font-semibold text-cyan-100/80">{initialUpdates.length} Einträge</span>
-              </div>
-              <div className="mt-3 space-y-3">
-                {initialUpdates.map((item) => {
-                  const sourceList = [...(item.sourceUrls ?? []), item.sourceUrl ?? ""]
-                    .map((value) => String(value ?? "").trim())
-                    .filter(Boolean);
-                  const dedupedSources: string[] = [];
-                  const seen = new Set<string>();
-                  for (const value of sourceList) {
-                    const key = value.toLowerCase();
-                    if (seen.has(key)) continue;
-                    seen.add(key);
-                    dedupedSources.push(value);
-                    if (dedupedSources.length >= 8) break;
-                  }
-                  return (
-                    <article key={item.id} className="rounded-2xl border border-cyan-200/25 bg-cyan-500/5 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-cyan-100">{item.authorName}</span>
-                        <span className="text-[11px] font-semibold text-cyan-100/80">
-                          {formatDateTimeLocal(item.createdAt) ?? item.createdAt}
-                        </span>
-                      </div>
-                      <FormattedText
-                        text={item.body}
-                        className="mt-2 space-y-2 text-sm text-slate-100"
-                        paragraphClassName="text-sm text-slate-100"
-                      />
-                      {dedupedSources.length > 0 ? (
-                        <div className="mt-2 space-y-1">
-                          {dedupedSources.map((source) =>
-                            /^https?:\/\//i.test(source) ? (
-                              <a
-                                key={source}
-                                href={source}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block text-xs font-semibold text-cyan-100 hover:text-cyan-50 break-all"
-                              >
-                                Quelle: {source}
-                              </a>
-                            ) : (
-                              <p key={source} className="text-xs font-semibold text-cyan-100/90 break-words">
-                                Quelle: {source}
-                              </p>
-                            )
-                          )}
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
           ) : null}
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-200">
@@ -687,18 +632,6 @@ export default async function QuestionDetail(props: {
             </div>
           </div>
         </section>
-
-        <div id="updates-section">
-          <QuestionUpdatesSection
-            questionId={id}
-            questionTitle={question.title}
-            initialUpdates={initialUpdates}
-            isLoggedIn={Boolean(currentUser)}
-            isOwner={isQuestionOwner}
-            isAdmin={Boolean(isAdmin)}
-            showPublishedUpdates={false}
-          />
-        </div>
 
         <CommentsSection
           questionId={id}

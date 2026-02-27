@@ -45,11 +45,21 @@ export async function POST(request: Request) {
     const id = randomUUID();
     const targetFilename = `${id}.jpg`;
 
-    // Bild vor dem Upload auf eine kleine, einheitliche Größe verkleinern
+    const metadata = await sharp(buffer).metadata();
+    const sourceWidth = Number(metadata.width ?? 0);
+    const sourceHeight = Number(metadata.height ?? 0);
+    const isLandscape = sourceWidth > sourceHeight;
+    const isPortrait = sourceHeight > sourceWidth;
+
+    const targetWidth = isLandscape ? 512 : isPortrait ? 300 : 512;
+    const targetHeight = isLandscape ? 300 : isPortrait ? 512 : 512;
+
+    // Einheitliches Ausgabeformat je Ausrichtung:
+    // Querformat: 512x300 | Hochformat: 300x512 | Quadrat: 512x512
     const resized = await sharp(buffer)
-      // Maximal ca. 250x150 Pixel, Seitenverhältnis bleibt erhalten
-      .resize(250, 150, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 80 })
+      .rotate()
+      .resize(targetWidth, targetHeight, { fit: "cover", position: "centre" })
+      .jpeg({ quality: 82 })
       .toBuffer();
 
     const supabase = getSupabaseServerClient();
@@ -73,7 +83,7 @@ export async function POST(request: Request) {
     } = supabase.storage.from(IMAGE_BUCKET).getPublicUrl(pathInBucket);
 
     const imageUrl = publicUrl;
-    return NextResponse.json({ imageUrl });
+    return NextResponse.json({ imageUrl, width: targetWidth, height: targetHeight });
   } catch (error) {
     console.error("Image upload/resize failed", error);
     return NextResponse.json(
