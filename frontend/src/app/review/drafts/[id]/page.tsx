@@ -30,6 +30,7 @@ type DraftRow = {
   is_resolvable: boolean | null;
   resolution_criteria: string | null;
   resolution_source: string | null;
+  resolution_sources: string[] | null;
   resolution_deadline: string | null;
 };
 
@@ -75,6 +76,11 @@ function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
     options: normalizedOptions,
     resolutionCriteria: row.resolution_criteria ?? undefined,
     resolutionSource: row.resolution_source ?? undefined,
+    resolutionSources: Array.isArray(row.resolution_sources)
+      ? row.resolution_sources.map((v) => String(v ?? "").trim()).filter(Boolean).slice(0, 8)
+      : row.resolution_source
+        ? [row.resolution_source]
+        : undefined,
     resolutionDeadline: row.resolution_deadline ?? undefined,
   };
 }
@@ -88,7 +94,7 @@ export default async function ReviewDraftDetailPage(props: { params: Promise<{ i
   const { data: row, error } = await supabase
     .from("drafts")
     .select(
-      "id,creator_id,title,description,region,image_url,image_credit,category,votes_for,votes_against,time_left_hours,status,created_at,visibility,share_id,answer_mode,is_resolvable,resolution_criteria,resolution_source,resolution_deadline"
+      "id,creator_id,title,description,region,image_url,image_credit,category,votes_for,votes_against,time_left_hours,status,created_at,visibility,share_id,answer_mode,is_resolvable,resolution_criteria,resolution_source,resolution_sources,resolution_deadline"
     )
     .eq("id", id)
     .eq("visibility", "public")

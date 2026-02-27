@@ -91,6 +91,7 @@ type UploadImageJson = { imageUrl?: string; error?: string };
 
 const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
 const DESCRIPTION_MAX_CHARS = 12_000;
+const MAX_RESOLUTION_SOURCES = 8;
 
 function uploadImageWithProgress(
   formData: FormData,
@@ -166,7 +167,7 @@ export default function NewDraftPage() {
   const [showAnswerModeHelp, setShowAnswerModeHelp] = useState(false);
 
   const [resolutionCriteria, setResolutionCriteria] = useState("");
-  const [resolutionSource, setResolutionSource] = useState("");
+  const [resolutionSources, setResolutionSources] = useState<string[]>([""]);
   const [resolutionDeadlineDate, setResolutionDeadlineDate] = useState<string>("");
   const [resolutionDeadlineTime, setResolutionDeadlineTime] = useState<string>("");
 
@@ -205,7 +206,7 @@ export default function NewDraftPage() {
   useEffect(() => {
     if (isResolvable) return;
     setResolutionCriteria("");
-    setResolutionSource("");
+    setResolutionSources([""]);
     setResolutionDeadlineDate("");
     setResolutionDeadlineTime("");
   }, [isResolvable]);
@@ -486,7 +487,19 @@ export default function NewDraftPage() {
 
     if (nextPollKind === "prognose") {
       setResolutionCriteria(s.resolutionCriteria ?? "");
-      setResolutionSource(s.resolutionSource ?? (s.sources?.[0] ?? ""));
+      const mergedSources = [...(s.resolutionSources ?? []), ...(s.sources ?? []), s.resolutionSource ?? ""]
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const dedupedSources: string[] = [];
+      const seenSources = new Set<string>();
+      for (const value of mergedSources) {
+        const key = value.toLowerCase();
+        if (seenSources.has(key)) continue;
+        seenSources.add(key);
+        dedupedSources.push(value);
+        if (dedupedSources.length >= MAX_RESOLUTION_SOURCES) break;
+      }
+      setResolutionSources(dedupedSources.length ? dedupedSources : [""]);
 
       const resMs = Date.parse(s.resolutionDeadlineAt);
       if (Number.isFinite(resMs)) {
@@ -501,7 +514,7 @@ export default function NewDraftPage() {
       }
     } else {
       setResolutionCriteria("");
-      setResolutionSource("");
+      setResolutionSources([""]);
       setResolutionDeadlineDate("");
       setResolutionDeadlineTime("");
     }
@@ -692,7 +705,11 @@ export default function NewDraftPage() {
     }
 
     const trimmedResolutionCriteria = resolutionCriteria.trim();
-    const trimmedResolutionSource = resolutionSource.trim();
+    const normalizedResolutionSources = resolutionSources
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, MAX_RESOLUTION_SOURCES);
+    const trimmedResolutionSource = normalizedResolutionSources[0] ?? "";
     const composedResolutionDeadline =
       resolutionDeadlineDate && resolutionDeadlineTime
         ? `${resolutionDeadlineDate}T${resolutionDeadlineTime}`
@@ -704,6 +721,7 @@ export default function NewDraftPage() {
     const shouldSendResolution = visibility === "public" && isResolvable;
     const resolutionCriteriaToSend = shouldSendResolution ? trimmedResolutionCriteria || undefined : undefined;
     const resolutionSourceToSend = shouldSendResolution ? trimmedResolutionSource || undefined : undefined;
+    const resolutionSourcesToSend = shouldSendResolution ? normalizedResolutionSources : undefined;
     const resolutionDeadlineToSend = shouldSendResolution ? resolutionDeadline : undefined;
 
     if (visibility === "public" && isResolvable) {
@@ -777,6 +795,7 @@ export default function NewDraftPage() {
           closesAt: finalClosesAt,
           resolutionCriteria: resolutionCriteriaToSend,
           resolutionSource: resolutionSourceToSend,
+          resolutionSources: resolutionSourcesToSend,
           resolutionDeadline: resolutionDeadlineToSend,
         }),
       });
@@ -1428,16 +1447,54 @@ export default function NewDraftPage() {
                     }
                   />
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="block">
-                      <span className="block text-xs text-slate-200">Quelle (Link oder Institution)</span>
-                      <input
-                        type="text"
-                        value={resolutionSource}
-                        onChange={(e) => setResolutionSource(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
-                        placeholder="z.B. Bundeswahlleiter, Destatis oder URL"
-                      />
-                    </label>
+                    <div className="block">
+                      <span className="block text-xs text-slate-200">Quellen (Link oder Institution)</span>
+                      <div className="mt-1 space-y-2">
+                        {resolutionSources.map((value, idx) => (
+                          <div key={`resolution-source-${idx}`} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={value}
+                              onChange={(e) =>
+                                setResolutionSources((prev) =>
+                                  prev.map((entry, entryIdx) => (entryIdx === idx ? e.target.value : entry))
+                                )
+                              }
+                              className="w-full rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
+                              placeholder="z.B. Bundeswahlleiter, Destatis oder URL"
+                            />
+                            {resolutionSources.length > 1 ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setResolutionSources((prev) => {
+                                    const next = prev.filter((_, entryIdx) => entryIdx !== idx);
+                                    return next.length > 0 ? next : [""];
+                                  })
+                                }
+                                className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-100 hover:border-rose-200/40"
+                                aria-label="Quelle entfernen"
+                                title="Quelle entfernen"
+                              >
+                                ✕
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setResolutionSources((prev) =>
+                            prev.length >= MAX_RESOLUTION_SOURCES ? prev : [...prev, ""]
+                          )
+                        }
+                        disabled={resolutionSources.length >= MAX_RESOLUTION_SOURCES}
+                        className="mt-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 transition hover:border-emerald-200/50 disabled:opacity-50"
+                      >
+                        Weitere Quelle
+                      </button>
+                    </div>
 
                     <div className="space-y-1">
                       <span className="block text-xs text-slate-200">Auflösungs-Deadline</span>

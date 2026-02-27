@@ -47,6 +47,7 @@ type QuestionRow = {
   share_id: string | null;
   resolution_criteria: string | null;
   resolution_source: string | null;
+  resolution_sources: string[] | null;
   resolution_deadline: string | null;
   resolved_outcome: "yes" | "no" | null;
   resolved_option_id?: string | null;
@@ -290,6 +291,7 @@ type DraftRow = {
   share_id: string | null;
   resolution_criteria: string | null;
   resolution_source: string | null;
+  resolution_sources: string[] | null;
   resolution_deadline: string | null;
   answer_mode?: AnswerMode | null;
   is_resolvable?: boolean | null;
@@ -527,6 +529,25 @@ async function promoteDraftOptionsToQuestion(options: {
   }
 }
 
+function normalizeResolutionSources(
+  list: string[] | null | undefined,
+  fallback: string | null | undefined
+): string[] | undefined {
+  const merged = [...(Array.isArray(list) ? list : []), fallback ?? ""];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of merged) {
+    const value = String(item ?? "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+    if (out.length >= 8) break;
+  }
+  return out.length ? out : undefined;
+}
+
 function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: PollOption[]): QuestionWithVotes {
   const answerMode = normalizeAnswerMode(row.answer_mode ?? "binary");
   const isResolvable = typeof row.is_resolvable === "boolean" ? row.is_resolvable : true;
@@ -576,6 +597,7 @@ function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: Poll
       status = row.status as Question["status"];
     }
   }
+  const resolutionSources = normalizeResolutionSources(row.resolution_sources, row.resolution_source);
 
   return {
     id: row.id,
@@ -606,8 +628,9 @@ function mapQuestion(row: QuestionRow, sessionVote?: SessionVote, options?: Poll
     isResolvable,
     options: computeOptionPcts(options),
     leadingOptionIds,
+    resolutionSources,
     resolutionCriteria: row.resolution_criteria ?? undefined,
-    resolutionSource: row.resolution_source ?? undefined,
+    resolutionSource: resolutionSources?.[0] ?? row.resolution_source ?? undefined,
     resolutionDeadline: row.resolution_deadline ?? undefined,
     resolvedOutcome: row.resolved_outcome ?? undefined,
     resolvedOptionId: row.resolved_option_id ?? undefined,
@@ -1362,6 +1385,10 @@ export async function getPollByShareIdFromSupabase(options: {
           is_resolvable: isResolvable,
           resolution_criteria: draftTyped.resolution_criteria ?? null,
           resolution_source: draftTyped.resolution_source ?? null,
+          resolution_sources: normalizeResolutionSources(
+            draftTyped.resolution_sources,
+            draftTyped.resolution_source
+          ) ?? [],
           resolution_deadline: draftTyped.resolution_deadline ?? null,
         },
         { onConflict: "id" }
@@ -1622,6 +1649,7 @@ function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
   }
 
   const roundedTimeLeft = Math.max(0, Math.round(timeLeft));
+  const resolutionSources = normalizeResolutionSources(row.resolution_sources, row.resolution_source);
 
   return {
     id: row.id,
@@ -1641,8 +1669,9 @@ function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
     answerMode: normalizeAnswerMode(row.answer_mode ?? "binary"),
     isResolvable: typeof row.is_resolvable === "boolean" ? row.is_resolvable : true,
     options: computeOptionPcts(options),
+    resolutionSources,
     resolutionCriteria: row.resolution_criteria ?? undefined,
-    resolutionSource: row.resolution_source ?? undefined,
+    resolutionSource: resolutionSources?.[0] ?? row.resolution_source ?? undefined,
     resolutionDeadline: row.resolution_deadline ?? undefined,
   };
 }
@@ -1962,6 +1991,7 @@ export async function createDraftInSupabase(input: {
   options?: string[];
   resolutionCriteria?: string;
   resolutionSource?: string;
+  resolutionSources?: string[];
   resolutionDeadline?: string;
 }): Promise<Draft> {
   const supabase = getSupabaseAdminClient();
@@ -1970,6 +2000,8 @@ export async function createDraftInSupabase(input: {
   const shareId = visibility === "link_only" ? generateShareId() : null;
   const answerMode = normalizeAnswerMode(input.answerMode ?? "binary");
   const isResolvable = typeof input.isResolvable === "boolean" ? input.isResolvable : true;
+  const resolutionSources = normalizeResolutionSources(input.resolutionSources, input.resolutionSource);
+  const resolutionSource = resolutionSources?.[0] ?? input.resolutionSource;
   // Review-Zeitraum ist fix: 72 Stunden (keine User-Auswahl).
   const timeLeft = 72;
 
@@ -1994,7 +2026,8 @@ export async function createDraftInSupabase(input: {
       answer_mode: answerMode,
       is_resolvable: isResolvable,
       resolution_criteria: input.resolutionCriteria ?? null,
-      resolution_source: input.resolutionSource ?? null,
+      resolution_source: resolutionSource ?? null,
+      resolution_sources: resolutionSources ?? [],
       resolution_deadline: input.resolutionDeadline ?? null,
     })
     .select("*")
@@ -2078,6 +2111,7 @@ export async function createLinkOnlyQuestionInSupabase(input: {
   options?: string[];
   resolutionCriteria?: string;
   resolutionSource?: string;
+  resolutionSources?: string[];
   resolutionDeadline?: string;
 }): Promise<QuestionWithVotes> {
   const supabase = getSupabaseAdminClient();
@@ -2087,6 +2121,8 @@ export async function createLinkOnlyQuestionInSupabase(input: {
   const shareId = generateShareId();
   const answerMode = normalizeAnswerMode(input.answerMode ?? "binary");
   const isResolvable = typeof input.isResolvable === "boolean" ? input.isResolvable : true;
+  const resolutionSources = normalizeResolutionSources(input.resolutionSources, input.resolutionSource);
+  const resolutionSource = resolutionSources?.[0] ?? input.resolutionSource;
 
   let closesDate: Date;
   if (input.targetClosesAt) {
@@ -2128,7 +2164,8 @@ export async function createLinkOnlyQuestionInSupabase(input: {
       answer_mode: answerMode,
       is_resolvable: isResolvable,
       resolution_criteria: input.resolutionCriteria ?? null,
-      resolution_source: input.resolutionSource ?? null,
+      resolution_source: resolutionSource ?? null,
+      resolution_sources: resolutionSources ?? [],
       resolution_deadline: input.resolutionDeadline ?? null,
     })
     .select("*")
@@ -2253,6 +2290,7 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
           is_resolvable: isResolvable,
           resolution_criteria: row.resolution_criteria ?? null,
           resolution_source: row.resolution_source ?? null,
+          resolution_sources: normalizeResolutionSources(row.resolution_sources, row.resolution_source) ?? [],
           resolution_deadline: row.resolution_deadline ?? null,
         },
         { onConflict: "id" }
@@ -2420,6 +2458,10 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
           is_resolvable: isResolvable,
           resolution_criteria: draftRow.resolution_criteria ?? null,
           resolution_source: draftRow.resolution_source ?? null,
+          resolution_sources: normalizeResolutionSources(
+            draftRow.resolution_sources,
+            draftRow.resolution_source
+          ) ?? [],
           resolution_deadline: draftRow.resolution_deadline ?? null,
         },
         { onConflict: "id" }

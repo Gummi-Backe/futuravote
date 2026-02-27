@@ -23,6 +23,22 @@ function normalizeSourceUrl(input: unknown): string | null {
   }
 }
 
+function normalizeSourceUrls(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of input) {
+    const url = normalizeSourceUrl(item);
+    if (!url) continue;
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(url);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 function isMissingRelation(error: unknown): boolean {
   const typed = error as { code?: string; message?: string } | null;
   const code = String(typed?.code ?? "");
@@ -46,7 +62,7 @@ export async function GET(_: Request, props: { params: Promise<{ id: string }> }
   } catch (error: unknown) {
     if (isMissingRelation(error)) {
       return NextResponse.json(
-        { error: "Supabase table 'question_updates' fehlt. Führe supabase/question_updates.sql aus." },
+        { error: "Supabase Schema fehlt/ist veraltet. Führe supabase/question_updates.sql und supabase/multi_sources.sql aus." },
         { status: 500 }
       );
     }
@@ -78,9 +94,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     );
   }
 
-  const payload = (await request.json().catch(() => null)) as { body?: unknown; sourceUrl?: unknown } | null;
+  const payload = (await request.json().catch(() => null)) as
+    | { body?: unknown; sourceUrl?: unknown; sourceUrls?: unknown }
+    | null;
   const text = typeof payload?.body === "string" ? payload.body.trim() : "";
-  const sourceUrl = normalizeSourceUrl(payload?.sourceUrl);
+  const sourceUrls = normalizeSourceUrls(payload?.sourceUrls);
+  const sourceUrl = sourceUrls[0] ?? normalizeSourceUrl(payload?.sourceUrl);
 
   if (text.length < MIN_UPDATE_CHARS) {
     return NextResponse.json(
@@ -101,12 +120,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       userId: user.id,
       body: text,
       sourceUrl,
+      sourceUrls: sourceUrls.length > 0 ? sourceUrls : sourceUrl ? [sourceUrl] : [],
     });
     return NextResponse.json({ ok: true, update }, { status: 200 });
   } catch (error: unknown) {
     if (isMissingRelation(error)) {
       return NextResponse.json(
-        { error: "Supabase table 'question_updates' fehlt. Führe supabase/question_updates.sql aus." },
+        { error: "Supabase Schema fehlt/ist veraltet. Führe supabase/question_updates.sql und supabase/multi_sources.sql aus." },
         { status: 500 }
       );
     }

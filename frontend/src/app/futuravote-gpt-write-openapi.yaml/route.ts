@@ -209,6 +209,11 @@ paths:
                   items: { type: string }
                 resolutionCriteria: { type: string, nullable: true }
                 resolutionSource: { type: string, nullable: true }
+                resolutionSources:
+                  type: array
+                  nullable: true
+                  items: { type: string }
+                  description: "Optional mehrere Quellen (2-8). Der erste Eintrag wird als resolutionSource genutzt."
                 resolutionDeadline: { type: string, nullable: true, description: "ISO Datum/Uhrzeit" }
               required: [title, category, confirmSubmit, imageUrl, imageCredit]
       responses:

@@ -270,6 +270,12 @@ components:
           type: string
           nullable: true
           description: "Required wenn visibility=public und isResolvable=true."
+        resolutionSources:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: "Optional mehrere Quellen (2-8). Der erste Eintrag wird als resolutionSource genutzt."
         resolutionDeadline:
           type: string
           nullable: true

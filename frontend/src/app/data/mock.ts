@@ -52,6 +52,7 @@ export type Question = {
   // Aufloesung (Seriositaet-MVP)
   resolutionCriteria?: string;
   resolutionSource?: string;
+  resolutionSources?: string[];
   resolutionDeadline?: string;
   resolvedOutcome?: "yes" | "no";
   resolvedAt?: string;
@@ -93,6 +94,7 @@ export type Draft = {
   // Aufloesung (wird beim Promote zur Frage uebernommen)
   resolutionCriteria?: string;
   resolutionSource?: string;
+  resolutionSources?: string[];
   resolutionDeadline?: string;
 };
 

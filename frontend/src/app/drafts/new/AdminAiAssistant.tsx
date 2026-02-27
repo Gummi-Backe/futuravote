@@ -19,6 +19,7 @@ export type QuestionSuggestion = {
   pollEndAt: string;
   resolutionCriteria: string;
   resolutionSource: string;
+  resolutionSources: string[];
   resolutionDeadlineAt: string;
   sources: string[];
 };
@@ -392,18 +393,30 @@ export function AdminAiAssistant({
                           <div className="mt-2 text-xs text-slate-400">
                             Deadline: {formatDateTime(s.resolutionDeadlineAt)}
                           </div>
-                          <div className="mt-2 text-xs text-slate-300">
-                            Quelle: <span className="break-all">{s.resolutionSource}</span>
-                          </div>
-                          {s.sources?.length ? (
-                            <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                              {s.sources.map((url) => (
-                                <li key={url} className="break-all">
-                                  {url}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
+                          {(() => {
+                            const merged = [...(s.resolutionSources ?? []), ...(s.sources ?? []), s.resolutionSource ?? ""]
+                              .map((value) => value.trim())
+                              .filter(Boolean);
+                            const deduped: string[] = [];
+                            const seen = new Set<string>();
+                            for (const value of merged) {
+                              const key = value.toLowerCase();
+                              if (seen.has(key)) continue;
+                              seen.add(key);
+                              deduped.push(value);
+                              if (deduped.length >= 8) break;
+                            }
+                            if (deduped.length === 0) return null;
+                            return (
+                              <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                                {deduped.map((url) => (
+                                  <li key={url} className="break-all">
+                                    {url}
+                                  </li>
+                                ))}
+                              </ul>
+                            );
+                          })()}
                         </div>
                       ) : null}
                     </div>

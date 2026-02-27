@@ -11,17 +11,20 @@ type QuestionUpdate = {
   authorName: string;
   body: string;
   sourceUrl: string | null;
+  sourceUrls: string[];
   createdAt: string;
 };
 
 type AiSuggestion = {
   body: string;
   sourceUrl: string | null;
+  sourceUrls: string[];
   sources: string[];
 };
 
 const MIN_UPDATE_CHARS = 10;
 const MAX_UPDATE_CHARS = 8000;
+const MAX_SOURCE_URLS = 8;
 
 function formatTime(value: string) {
   const ms = Date.parse(value);
@@ -49,7 +52,7 @@ export function QuestionUpdatesSection(props: {
   const [error, setError] = useState<string | null>(null);
 
   const [body, setBody] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceUrls, setSourceUrls] = useState<string[]>([""]);
   const [submitting, setSubmitting] = useState(false);
 
   const [aiOpen, setAiOpen] = useState(false);
@@ -86,13 +89,18 @@ export function QuestionUpdatesSection(props: {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     setError(null);
+    const normalizedSourceUrls = sourceUrls
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, MAX_SOURCE_URLS);
     try {
       const res = await fetch(`/api/questions/${encodeURIComponent(questionId)}/updates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           body: body.trim(),
-          sourceUrl: sourceUrl.trim() || null,
+          sourceUrl: normalizedSourceUrls[0] ?? null,
+          sourceUrls: normalizedSourceUrls,
         }),
       });
       const json = (await res.json().catch(() => null)) as
@@ -106,13 +114,13 @@ export function QuestionUpdatesSection(props: {
         await refresh();
       }
       setBody("");
-      setSourceUrl("");
+      setSourceUrls([""]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Update konnte nicht gespeichert werden.");
     } finally {
       setSubmitting(false);
     }
-  }, [body, canSubmit, questionId, refresh, sourceUrl, submitting]);
+  }, [body, canSubmit, questionId, refresh, sourceUrls, submitting]);
 
   const generateAiSuggestion = useCallback(async () => {
     if (!isAdmin || aiLoading) return;
@@ -143,9 +151,19 @@ export function QuestionUpdatesSection(props: {
   const applySuggestion = useCallback(() => {
     if (!aiSuggestion || !isOwner) return;
     setBody(aiSuggestion.body ?? "");
-    if (aiSuggestion.sourceUrl) {
-      setSourceUrl(aiSuggestion.sourceUrl);
+    const merged = [...(aiSuggestion.sourceUrls ?? []), ...(aiSuggestion.sources ?? []), aiSuggestion.sourceUrl ?? ""]
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    for (const value of merged) {
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(value);
+      if (deduped.length >= MAX_SOURCE_URLS) break;
     }
+    setSourceUrls(deduped.length ? deduped : [""]);
   }, [aiSuggestion, isOwner]);
 
   const copySuggestion = useCallback(async () => {
@@ -240,16 +258,36 @@ export function QuestionUpdatesSection(props: {
                     className="mt-2 space-y-2 text-sm text-slate-200"
                     paragraphClassName="text-sm text-slate-200"
                   />
-                  {aiSuggestion.sourceUrl ? (
-                    <a
-                      href={aiSuggestion.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 block text-xs font-semibold text-emerald-200 hover:text-emerald-100 break-all"
-                    >
-                      Quelle: {aiSuggestion.sourceUrl}
-                    </a>
-                  ) : null}
+                  {(() => {
+                    const allSources = [...(aiSuggestion.sourceUrls ?? []), ...(aiSuggestion.sources ?? []), aiSuggestion.sourceUrl ?? ""]
+                      .map((value) => value.trim())
+                      .filter(Boolean);
+                    const deduped: string[] = [];
+                    const seen = new Set<string>();
+                    for (const value of allSources) {
+                      const key = value.toLowerCase();
+                      if (seen.has(key)) continue;
+                      seen.add(key);
+                      deduped.push(value);
+                      if (deduped.length >= MAX_SOURCE_URLS) break;
+                    }
+                    if (deduped.length === 0) return null;
+                    return (
+                      <div className="mt-2 space-y-1">
+                        {deduped.map((url) => (
+                          <a
+                            key={url}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-xs font-semibold text-emerald-200 hover:text-emerald-100 break-all"
+                          >
+                            Quelle: {url}
+                          </a>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {isOwner ? (
                       <button
@@ -294,16 +332,54 @@ export function QuestionUpdatesSection(props: {
           </div>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-            <label className="block text-xs font-semibold text-slate-200">
-              Quelle (optional)
-              <input
-                value={sourceUrl}
-                onChange={(e) => setSourceUrl(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-emerald-300/50"
-                placeholder="https://..."
-                inputMode="url"
-              />
-            </label>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-200">Quellen (optional)</div>
+              <div className="space-y-2">
+                {sourceUrls.map((value, idx) => (
+                  <div key={`source-${idx}`} className="flex items-center gap-2">
+                    <input
+                      value={value}
+                      onChange={(e) =>
+                        setSourceUrls((prev) =>
+                          prev.map((entry, entryIdx) => (entryIdx === idx ? e.target.value : entry))
+                        )
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-emerald-300/50"
+                      placeholder="https://..."
+                      inputMode="url"
+                    />
+                    {sourceUrls.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSourceUrls((prev) => {
+                            const next = prev.filter((_, entryIdx) => entryIdx !== idx);
+                            return next.length > 0 ? next : [""];
+                          })
+                        }
+                        className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-100 hover:border-rose-200/40"
+                        aria-label="Quelle entfernen"
+                        title="Quelle entfernen"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setSourceUrls((prev) =>
+                    prev.length >= MAX_SOURCE_URLS ? prev : [...prev, ""]
+                  )
+                }
+                disabled={sourceUrls.length >= MAX_SOURCE_URLS}
+                className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-100 hover:border-emerald-200/40 disabled:opacity-50"
+              >
+                Weitere Quelle
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => void submit()}
@@ -343,16 +419,36 @@ export function QuestionUpdatesSection(props: {
                 className="mt-2 space-y-2 text-sm text-slate-200"
                 paragraphClassName="text-sm text-slate-200"
               />
-              {item.sourceUrl ? (
-                <a
-                  href={item.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 block text-xs font-semibold text-emerald-200 hover:text-emerald-100 break-all"
-                >
-                  Quelle: {item.sourceUrl}
-                </a>
-              ) : null}
+              {(() => {
+                const allSources = [...(item.sourceUrls ?? []), item.sourceUrl ?? ""]
+                  .map((value) => value.trim())
+                  .filter(Boolean);
+                const deduped: string[] = [];
+                const seen = new Set<string>();
+                for (const value of allSources) {
+                  const key = value.toLowerCase();
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  deduped.push(value);
+                  if (deduped.length >= MAX_SOURCE_URLS) break;
+                }
+                if (deduped.length === 0) return null;
+                return (
+                  <div className="mt-2 space-y-1">
+                    {deduped.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block text-xs font-semibold text-emerald-200 hover:text-emerald-100 break-all"
+                      >
+                        Quelle: {url}
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
             </article>
           ))
         )}

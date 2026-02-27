@@ -9,6 +9,7 @@ export type QuestionUpdate = {
   authorName: string;
   body: string;
   sourceUrl: string | null;
+  sourceUrls: string[];
   createdAt: string;
 };
 
@@ -18,6 +19,7 @@ type QuestionUpdateRow = {
   user_id: string;
   body: string;
   source_url: string | null;
+  source_urls: string[] | null;
   created_at: string;
 };
 
@@ -45,14 +47,33 @@ async function loadDisplayNames(userIds: string[]): Promise<Map<string, string>>
   return names;
 }
 
+function normalizeSourceUrls(row: QuestionUpdateRow): string[] {
+  const raw = Array.isArray(row.source_urls) ? row.source_urls : [];
+  const merged = [...raw, row.source_url ?? ""];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of merged) {
+    const value = String(item ?? "").trim();
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 function mapUpdate(row: QuestionUpdateRow, nameMap: Map<string, string>): QuestionUpdate {
+  const sourceUrls = normalizeSourceUrls(row);
   return {
     id: row.id,
     questionId: row.question_id,
     userId: row.user_id,
     authorName: nameMap.get(row.user_id) || "User",
     body: row.body,
-    sourceUrl: row.source_url ?? null,
+    sourceUrl: sourceUrls[0] ?? null,
+    sourceUrls,
     createdAt: row.created_at,
   };
 }
@@ -63,7 +84,7 @@ export async function listQuestionUpdates(questionId: string, limit = 50): Promi
 
   const { data, error } = await supabase
     .from("question_updates")
-    .select("id,question_id,user_id,body,source_url,created_at")
+    .select("id,question_id,user_id,body,source_url,source_urls,created_at")
     .eq("question_id", questionId)
     .order("created_at", { ascending: false })
     .limit(cappedLimit);
@@ -80,8 +101,17 @@ export async function addQuestionUpdate(input: {
   userId: string;
   body: string;
   sourceUrl: string | null;
+  sourceUrls?: string[];
 }): Promise<QuestionUpdate> {
   const supabase = getSupabaseAdminClient();
+  const normalizedSourceUrls = Array.isArray(input.sourceUrls)
+    ? input.sourceUrls
+        .map((v) => String(v ?? "").trim())
+        .filter(Boolean)
+        .slice(0, 8)
+    : input.sourceUrl
+      ? [input.sourceUrl]
+      : [];
 
   const { data, error } = await supabase
     .from("question_updates")
@@ -89,9 +119,10 @@ export async function addQuestionUpdate(input: {
       question_id: input.questionId,
       user_id: input.userId,
       body: input.body,
-      source_url: input.sourceUrl,
+      source_url: normalizedSourceUrls[0] ?? input.sourceUrl,
+      source_urls: normalizedSourceUrls,
     })
-    .select("id,question_id,user_id,body,source_url,created_at")
+    .select("id,question_id,user_id,body,source_url,source_urls,created_at")
     .maybeSingle();
 
   if (error) throw error;

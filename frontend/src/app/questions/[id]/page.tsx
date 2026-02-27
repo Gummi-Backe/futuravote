@@ -233,6 +233,21 @@ export default async function QuestionDetail(props: {
       ? options.find((o) => o.id === question.resolvedOptionId)?.label ?? "Option"
       : null;
   const resolvedLabel = resolvedOutcomeLabel ?? resolvedOptionLabel;
+  const resolutionSources = (() => {
+    const merged = [...(question.resolutionSources ?? []), question.resolutionSource ?? ""]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    for (const value of merged) {
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(value);
+      if (deduped.length >= 8) break;
+    }
+    return deduped;
+  })();
   const descriptionParts = splitDescriptionText(question.description);
   const initialUpdates = await listQuestionUpdates(id, 80).catch(() => []);
   const isQuestionOwner = Boolean(currentUser?.id && question.creatorId && currentUser.id === question.creatorId);
@@ -439,21 +454,26 @@ export default async function QuestionDetail(props: {
             )}
 
             <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {question.resolutionSource ? (
+              {resolutionSources.length > 0 ? (
                 <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quelle</p>
-                  <div className="mt-1 min-w-0">
-                    {/^https?:\/\//i.test(question.resolutionSource) ? (
-                      <a
-                        href={question.resolutionSource}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block max-w-full break-all [overflow-wrap:anywhere] font-semibold text-emerald-100 hover:text-emerald-200"
-                      >
-                        {question.resolutionSource}
-                      </a>
-                    ) : (
-                      <span className="font-semibold text-slate-100">{question.resolutionSource}</span>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quellen</p>
+                  <div className="mt-1 min-w-0 space-y-1">
+                    {resolutionSources.map((source) =>
+                      /^https?:\/\//i.test(source) ? (
+                        <a
+                          key={source}
+                          href={source}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block max-w-full break-all [overflow-wrap:anywhere] font-semibold text-emerald-100 hover:text-emerald-200"
+                        >
+                          {source}
+                        </a>
+                      ) : (
+                        <span key={source} className="block font-semibold text-slate-100">
+                          {source}
+                        </span>
+                      )
                     )}
                   </div>
                 </div>

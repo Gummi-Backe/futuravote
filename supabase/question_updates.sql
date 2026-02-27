@@ -16,6 +16,7 @@ create table if not exists public.question_updates (
   user_id text not null references public.users(id) on delete cascade,
   body text not null check (char_length(body) between 10 and 8000),
   source_url text,
+  source_urls text[] not null default '{}'::text[],
   created_at timestamptz not null default now()
 );
 
@@ -28,4 +29,3 @@ create index if not exists question_updates_user_created_idx
 alter table public.question_updates enable row level security;
 
 commit;
-

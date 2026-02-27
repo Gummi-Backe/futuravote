@@ -41,6 +41,7 @@ type DraftInput = {
   options?: string[];
   resolutionCriteria?: string;
   resolutionSource?: string;
+  resolutionSources?: string[];
   resolutionDeadline?: string;
 };
 
@@ -68,6 +69,7 @@ const ALLOWED_DRAFT_KEYS = new Set<keyof DraftInput>([
   "options",
   "resolutionCriteria",
   "resolutionSource",
+  "resolutionSources",
   "resolutionDeadline",
 ]);
 
@@ -98,6 +100,24 @@ function normalizeImageUrl(raw?: string | null): string | undefined {
   const trimmed = String(raw ?? "").trim();
   if (!trimmed || trimmed.length <= 4 || trimmed.length >= 500) return undefined;
   return trimmed;
+}
+
+function normalizeResolutionSources(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of input) {
+    if (typeof item !== "string") continue;
+    const value = item.trim();
+    if (!value) continue;
+    if (value.length > 500) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+    if (out.length >= 8) break;
+  }
+  return out;
 }
 
 function countWords(raw: string): number {
@@ -427,6 +447,11 @@ export async function POST(request: Request) {
       { field: "isResolvable", issue: "must_be_boolean", value: body.isResolvable },
     ]);
   }
+  if (typeof body.resolutionSources !== "undefined" && !Array.isArray(body.resolutionSources)) {
+    return errorResponse(400, "resolutionSources muss ein Array sein.", "invalid_resolution_sources", [
+      { field: "resolutionSources", issue: "must_be_array", value: body.resolutionSources },
+    ]);
+  }
   const isResolvableRaw = typeof body.isResolvable === "boolean" ? body.isResolvable : true;
   const isResolvable = isPrivatePoll ? false : isResolvableRaw;
   if (isPrivatePoll && isResolvableRaw) {
@@ -439,7 +464,25 @@ export async function POST(request: Request) {
   }
 
   const resolutionCriteriaToSave = isResolvable ? resolutionCriteria : undefined;
-  const resolutionSourceToSave = isResolvable ? resolutionSource : undefined;
+  const resolutionSourcesRaw = normalizeResolutionSources(body.resolutionSources);
+  const resolutionSourcesMerged = (() => {
+    const merged = [...resolutionSourcesRaw, resolutionSource ?? ""];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const item of merged) {
+      const value = String(item ?? "").trim();
+      if (!value) continue;
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(value);
+      if (out.length >= 8) break;
+    }
+    return out;
+  })();
+  const effectiveResolutionSource = resolutionSourcesMerged[0];
+  const resolutionSourceToSave = isResolvable ? effectiveResolutionSource : undefined;
+  const resolutionSourcesToSave = isResolvable ? resolutionSourcesMerged : undefined;
   let resolutionDeadlineToSave = isResolvable ? resolutionDeadline : undefined;
 
   let options: string[] | undefined = undefined;
@@ -504,12 +547,12 @@ export async function POST(request: Request) {
         [{ field: "resolutionCriteria", issue: "required_for_public_resolvable" }]
       );
     }
-    if (!resolutionSource) {
+    if (!effectiveResolutionSource) {
       return errorResponse(
         400,
         "Bitte gib eine Quelle an (z. B. offizielle Seite/Institution oder Link).",
         "resolution_source_required",
-        [{ field: "resolutionSource", issue: "required_for_public_resolvable" }]
+        [{ field: "resolutionSource/resolutionSources", issue: "required_for_public_resolvable" }]
       );
     }
     if (!resolutionDeadlineToSave) {
@@ -520,14 +563,14 @@ export async function POST(request: Request) {
         [{ field: "resolutionDeadline", issue: "required_for_public_resolvable" }]
       );
     }
-  } else if (resolutionCriteria || resolutionSource || resolutionDeadline) {
+  } else if (resolutionCriteria || effectiveResolutionSource || resolutionDeadline || resolutionSourcesRaw.length > 0) {
     return errorResponse(
       400,
-      "resolutionCriteria, resolutionSource und resolutionDeadline sind nur bei öffentlichen Prognosen erlaubt.",
+      "resolutionCriteria, resolutionSource, resolutionSources und resolutionDeadline sind nur bei öffentlichen Prognosen erlaubt.",
       "resolution_fields_not_allowed",
       [
         {
-          field: "resolutionCriteria/resolutionSource/resolutionDeadline",
+          field: "resolutionCriteria/resolutionSource/resolutionSources/resolutionDeadline",
           issue: "only_allowed_for_public_resolvable",
         },
       ]
@@ -608,6 +651,7 @@ export async function POST(request: Request) {
       options,
       resolutionCriteria: undefined,
       resolutionSource: undefined,
+      resolutionSources: undefined,
       resolutionDeadline: undefined,
     });
 
@@ -652,6 +696,7 @@ export async function POST(request: Request) {
     options,
     resolutionCriteria: resolutionCriteriaToSave,
     resolutionSource: resolutionSourceToSave,
+    resolutionSources: resolutionSourcesToSave,
     resolutionDeadline: resolutionDeadlineToSave,
   });
 

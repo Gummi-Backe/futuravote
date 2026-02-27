@@ -31,6 +31,7 @@ export type QuestionSuggestion = {
   pollEndAt: string;
   resolutionCriteria: string;
   resolutionSource: string;
+  resolutionSources: string[];
   resolutionDeadlineAt: string;
   sources: string[];
 };
@@ -233,11 +234,28 @@ function normalizeSuggestion(
   const resolutionSource = typeof raw?.resolutionSource === "string" ? raw.resolutionSource.trim() : "";
   const resolutionDeadlineAt = typeof raw?.resolutionDeadlineAt === "string" ? raw.resolutionDeadlineAt.trim() : "";
 
+  const resolutionSourcesRaw: unknown[] = Array.isArray(raw?.resolutionSources) ? (raw.resolutionSources as unknown[]) : [];
+  const resolutionSources = resolutionSourcesRaw
+    .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 8);
+
   const sourcesRaw: unknown[] = Array.isArray(raw?.sources) ? (raw.sources as unknown[]) : [];
   const sources = sourcesRaw
     .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
-    .filter(Boolean)
-    .slice(0, 6);
+    .filter(Boolean);
+  const mergedSources = [...resolutionSources, ...sources, resolutionSource]
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const dedupedSources: string[] = [];
+  const seenSources = new Set<string>();
+  for (const source of mergedSources) {
+    const key = source.toLowerCase();
+    if (seenSources.has(key)) continue;
+    seenSources.add(key);
+    dedupedSources.push(source);
+    if (dedupedSources.length >= 8) break;
+  }
 
   const imagePrompt = typeof raw?.imagePrompt === "string" ? raw.imagePrompt.trim() : "";
   const normalizedImagePrompt = imagePrompt.length >= 20 ? imagePrompt.slice(0, 900) : "";
@@ -256,7 +274,7 @@ function normalizeSuggestion(
   if (answerMode === "options" && typeof optionsCount === "number" && uniqueOptions.length < optionsCount) return null;
   if (isResolvable) {
     if (!resolutionCriteria || resolutionCriteria.length < 10) return null;
-    if (!resolutionSource) return null;
+    if (dedupedSources.length === 0) return null;
     if (!resolutionDeadlineAt || Number.isNaN(Date.parse(resolutionDeadlineAt))) return null;
   }
 
@@ -273,9 +291,10 @@ function normalizeSuggestion(
     reviewHours,
     pollEndAt,
     resolutionCriteria: (isResolvable ? resolutionCriteria : "").slice(0, 2000),
-    resolutionSource: (isResolvable ? resolutionSource : "").slice(0, 500),
+    resolutionSource: (isResolvable ? dedupedSources[0] ?? "" : "").slice(0, 500),
+    resolutionSources: isResolvable ? dedupedSources : [],
     resolutionDeadlineAt: isResolvable ? resolutionDeadlineAt : "",
-    sources,
+    sources: isResolvable ? dedupedSources : [],
   };
 }
 
@@ -320,8 +339,8 @@ function buildPrompt(opts: {
 
   const formatLine = (() => {
     const base = opts.withLongDescription
-      ? `{"suggestions":[{"title":"...","description":"...","longDescription":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`
-      : `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose)","resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`;
+      ? `{"suggestions":[{"title":"...","description":"...","longDescription":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose, erste Quelle)","resolutionSources":["https://..."],"resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`
+      : `{"suggestions":[{"title":"...","description":"...","category":"...","region":"Global|Deutschland|Europa|DACH|Stuttgart|...","isResolvable":true,"answerMode":"binary|options","options":["..."],"imagePrompt":"...","reviewHours":72,"pollEndAt":"ISO-8601","resolutionCriteria":"(nur Prognose)","resolutionSource":"(nur Prognose, erste Quelle)","resolutionSources":["https://..."],"resolutionDeadlineAt":"(nur Prognose)","sources":["https://..."]}]}`;
 
     if (opts.requestedAnswerMode === "binary") {
       return base.replace(`"answerMode":"binary|options","options":["..."]`, `"answerMode":"binary","options":[]`);
@@ -391,7 +410,9 @@ function buildPrompt(opts: {
     "- imagePrompt: Vermeide gut lesbaren Text. Falls Text unvermeidbar ist: nur sehr kurz und auf Deutsch.",
     "- Schreibe Deutsch mit Umlauten: ä, ö, ü, ß. Verwende NICHT ae/oe/ue/ss als Ersatz.",
     "- Bei Prognose: resolutionCriteria konkret, woran das Ergebnis festgemacht wird (bei Optionen: welche Option gilt als Gewinner).",
-    "- sources: 2-4 URLs als Nachweis (offizielle Stellen/Institutionen/serioese Medien). Bei Meinungs-Umfrage optional.",
+    "- resolutionSources: 2-4 URLs als Nachweis (offizielle Stellen/Institutionen/serioese Medien). Bei Prognosen Pflicht.",
+    "- resolutionSource: muss der erste Eintrag aus resolutionSources sein.",
+    "- sources: identisch zu resolutionSources ausgeben (Legacy-Kompatibilität).",
     "- pollEndAt: bis wann abgestimmt werden kann (nahe am Ereignis/Stichtag).",
     "- Bei Prognose: resolutionDeadlineAt spaetestens wann das echte Ergebnis pruefbar sein muss (>= pollEndAt, oft +1-3 Tage).",
     "- reviewHours: variiere sinnvoll (24,48,72,168,336).",

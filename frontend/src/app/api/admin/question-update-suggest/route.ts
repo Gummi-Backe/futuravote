@@ -14,6 +14,7 @@ type Body = {
 type Suggestion = {
   body: string;
   sourceUrl: string | null;
+  sourceUrls: string[];
   sources: string[];
 };
 
@@ -57,6 +58,7 @@ function normalizeSuggestion(raw: unknown): Suggestion | null {
   const data = (typeof raw === "object" && raw !== null ? raw : {}) as {
     body?: unknown;
     sourceUrl?: unknown;
+    sourceUrls?: unknown;
     sources?: unknown;
   };
 
@@ -64,10 +66,27 @@ function normalizeSuggestion(raw: unknown): Suggestion | null {
   if (body.length < 40 || body.length > 8000) return null;
 
   const sourceUrl = normalizeSource(data.sourceUrl);
+  const sourceUrlsRaw: unknown[] = Array.isArray(data.sourceUrls) ? data.sourceUrls : [];
+  const sourceUrls = sourceUrlsRaw.map((v) => normalizeSource(v)).filter(Boolean) as string[];
   const sourcesRaw: unknown[] = Array.isArray(data.sources) ? data.sources : [];
-  const sources = sourcesRaw.map((v) => normalizeSource(v)).filter(Boolean).slice(0, 6) as string[];
+  const sources = sourcesRaw.map((v) => normalizeSource(v)).filter(Boolean) as string[];
+  const merged = [...sourceUrls, ...sources, sourceUrl].filter(Boolean) as string[];
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const item of merged) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+    if (deduped.length >= 8) break;
+  }
 
-  return { body: body.slice(0, 8000), sourceUrl, sources };
+  return {
+    body: body.slice(0, 8000),
+    sourceUrl: deduped[0] ?? null,
+    sourceUrls: deduped,
+    sources: deduped,
+  };
 }
 
 function buildPrompt(input: {
@@ -95,11 +114,11 @@ function buildPrompt(input: {
     "- 2 bis 5 Absätze.",
     "- Erlaubte Formatierung: **fett**, __unterstrichen__, [size=lg]...[/size] sparsam und nur wenn sinnvoll.",
     "- Keine erfundenen Fakten.",
-    "- Wenn moeglich: 1 seriöse Quelle als sourceUrl angeben; sonst sourceUrl=null.",
+    "- Wenn moeglich: 1-4 serioese Quellen als sourceUrls[] angeben (URLs). sourceUrl soll die erste Quelle sein; wenn keine Quelle vorhanden ist: sourceUrl=null und sourceUrls=[].",
     "- Wenn Quellen unklar sind, benenne das transparent im Text.",
     "",
     "Antworte NUR als JSON (ohne Markdown):",
-    "{\"body\":\"...\",\"sourceUrl\":\"https://...|null\",\"sources\":[\"https://...\"]}",
+    "{\"body\":\"...\",\"sourceUrl\":\"https://...|null\",\"sourceUrls\":[\"https://...\"],\"sources\":[\"https://...\"]}",
     "",
     "Frage-Kontext:",
     `Titel: ${input.title}`,
