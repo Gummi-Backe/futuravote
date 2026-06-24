@@ -9,27 +9,84 @@ type Body = {
   size?: "1024x1024" | "1024x1536" | "1536x1024";
 };
 
-type ImageModel = "dall-e-3" | "gpt-image-1.5";
+type ImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini" | "dall-e-3";
 
-function getImageModel(): ImageModel {
-  const raw = process.env.OPENAI_IMAGE_MODEL?.trim();
-  if (raw === "dall-e-3" || raw === "gpt-image-1.5") return raw;
-  // Default: DALL·E 3 works for most accounts without org verification (unlike gpt-image-1).
-  return "dall-e-3";
+type OpenAiImagePayload = {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  message?: unknown;
+  data?: Array<{
+    b64_json?: unknown;
+    url?: unknown;
+  }>;
+};
+
+const DEFAULT_IMAGE_MODEL: ImageModel = "gpt-image-2";
+const IMAGE_MODEL_ORDER: readonly ImageModel[] = [
+  DEFAULT_IMAGE_MODEL,
+  "gpt-image-1.5",
+  "gpt-image-1",
+  "gpt-image-1-mini",
+  "dall-e-3",
+];
+
+function isImageModel(raw: string | undefined): raw is ImageModel {
+  return (
+    raw === "gpt-image-2" ||
+    raw === "gpt-image-1.5" ||
+    raw === "gpt-image-1" ||
+    raw === "gpt-image-1-mini" ||
+    raw === "dall-e-3"
+  );
+}
+
+function getImageModelCandidates(): ImageModel[] {
+  const configured = process.env.OPENAI_IMAGE_MODEL?.trim();
+  const candidates: ImageModel[] = [DEFAULT_IMAGE_MODEL];
+
+  if (isImageModel(configured) && configured !== DEFAULT_IMAGE_MODEL) {
+    candidates.push(configured);
+  }
+
+  for (const model of IMAGE_MODEL_ORDER) {
+    if (!candidates.includes(model)) candidates.push(model);
+  }
+
+  return candidates;
 }
 
 function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
   const chosen = size === "1024x1536" || size === "1536x1024" ? size : "1024x1024";
 
-  // DALL·E sizes differ; map our UI options to the closest supported size.
   if (model === "dall-e-3") {
     if (chosen === "1536x1024") return "1792x1024";
     if (chosen === "1024x1536") return "1024x1792";
     return "1024x1024";
   }
 
-  // gpt-image-1.5 supports our selected sizes directly.
   return chosen;
+}
+
+function getOpenAiErrorMessage(payload: OpenAiImagePayload | null, status: number): string {
+  if (typeof payload?.error?.message === "string") return payload.error.message;
+  if (typeof payload?.message === "string") return payload.message;
+  return `OpenAI Fehler (${status})`;
+}
+
+function shouldTryNextImageModel(payload: OpenAiImagePayload | null, status: number): boolean {
+  const code = String(payload?.error?.code ?? payload?.error?.type ?? "").toLowerCase();
+  const message = getOpenAiErrorMessage(payload, status).toLowerCase();
+  return (
+    status === 404 ||
+    code.includes("model") ||
+    message.includes("does not exist") ||
+    message.includes("do not have access") ||
+    message.includes("not have access") ||
+    message.includes("must be verified")
+  );
 }
 
 export async function POST(request: Request) {
@@ -38,14 +95,14 @@ export async function POST(request: Request) {
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
+    return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
   }
 
   let body: Body;
   try {
     body = (await request.json()) as Body;
   } catch {
-    return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
+    return NextResponse.json({ error: "Ungueltiger Request-Body." }, { status: 400 });
   }
 
   const prompt = (body.prompt ?? "").trim();
@@ -61,32 +118,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "OPENAI_API_KEY ist nicht gesetzt." }, { status: 500 });
   }
 
-  const model = getImageModel();
-  const size = mapSizeForModel(model, body.size);
+  let model: ImageModel | null = null;
+  let json: OpenAiImagePayload | null = null;
+  let lastOpenAiStatus = 0;
 
-  const res = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      prompt,
-      size,
-      ...(model === "dall-e-3" ? { quality: "standard" } : null),
-    }),
-  });
+  for (const candidate of getImageModelCandidates()) {
+    const size = mapSizeForModel(candidate, body.size);
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: candidate,
+        prompt,
+        size,
+        ...(candidate === "dall-e-3" ? { quality: "standard" } : null),
+      }),
+    });
 
-  const json = (await res.json().catch(() => null)) as any;
-  if (!res.ok) {
-    const msg =
-      typeof json?.error?.message === "string"
-        ? json.error.message
-        : typeof json?.message === "string"
-          ? json.message
-          : `OpenAI Fehler (${res.status})`;
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const payload = (await res.json().catch(() => null)) as OpenAiImagePayload | null;
+    if (res.ok) {
+      model = candidate;
+      json = payload;
+      break;
+    }
+
+    json = payload;
+    lastOpenAiStatus = res.status;
+    if (!shouldTryNextImageModel(payload, res.status)) {
+      break;
+    }
+  }
+
+  if (!model) {
+    return NextResponse.json({ error: getOpenAiErrorMessage(json, lastOpenAiStatus) }, { status: 502 });
   }
 
   const first = json?.data?.[0];

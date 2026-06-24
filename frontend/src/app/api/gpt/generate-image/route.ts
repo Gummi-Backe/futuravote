@@ -14,7 +14,29 @@ type Body = {
   size?: "1024x1024";
 };
 
-type ImageModel = "dall-e-3" | "gpt-image-1.5";
+type ImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini" | "dall-e-3";
+
+type OpenAiImagePayload = {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  message?: unknown;
+  data?: Array<{
+    b64_json?: unknown;
+    url?: unknown;
+  }>;
+};
+
+const DEFAULT_IMAGE_MODEL: ImageModel = "gpt-image-2";
+const IMAGE_MODEL_ORDER: readonly ImageModel[] = [
+  DEFAULT_IMAGE_MODEL,
+  "gpt-image-1.5",
+  "gpt-image-1",
+  "gpt-image-1-mini",
+  "dall-e-3",
+];
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 const MAX_PROMPT_LENGTH = 1500;
@@ -31,10 +53,48 @@ function hasOAuthScope(scope: string, required: string): boolean {
   return parts.includes(required);
 }
 
-function getImageModel(): ImageModel {
-  const raw = process.env.OPENAI_IMAGE_MODEL?.trim();
-  if (raw === "dall-e-3" || raw === "gpt-image-1.5") return raw;
-  return "dall-e-3";
+function isImageModel(raw: string | undefined): raw is ImageModel {
+  return (
+    raw === "gpt-image-2" ||
+    raw === "gpt-image-1.5" ||
+    raw === "gpt-image-1" ||
+    raw === "gpt-image-1-mini" ||
+    raw === "dall-e-3"
+  );
+}
+
+function getImageModelCandidates(): ImageModel[] {
+  const configured = process.env.OPENAI_IMAGE_MODEL?.trim();
+  const candidates: ImageModel[] = [DEFAULT_IMAGE_MODEL];
+
+  if (isImageModel(configured) && configured !== DEFAULT_IMAGE_MODEL) {
+    candidates.push(configured);
+  }
+
+  for (const model of IMAGE_MODEL_ORDER) {
+    if (!candidates.includes(model)) candidates.push(model);
+  }
+
+  return candidates;
+}
+
+function getOpenAiErrorMessage(payload: OpenAiImagePayload | null, status: number): string {
+  if (typeof payload?.error?.message === "string") return payload.error.message;
+  if (typeof payload?.message === "string") return payload.message;
+  return `OpenAI Fehler (${status})`;
+}
+
+function shouldTryNextImageModel(payload: OpenAiImagePayload | null, status: number): boolean {
+  const code = String(payload?.error?.code ?? payload?.error?.type ?? "").toLowerCase();
+  const message = getOpenAiErrorMessage(payload, status).toLowerCase();
+  return (
+    status === 404 ||
+    code.includes("model") ||
+    message.includes("does not exist") ||
+    message.includes("do not have access") ||
+    message.includes("not have access") ||
+    message.includes("must be verified")
+  );
 }
 
 function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
@@ -139,32 +199,43 @@ export async function POST(request: Request) {
     );
   }
 
-  const model = getImageModel();
-  const size = mapSizeForModel(model, body.size);
   const safePrompt = buildSafePrompt(prompt);
+  let model: ImageModel | null = null;
+  let openAiJson: OpenAiImagePayload | null = null;
+  let lastOpenAiStatus = 0;
 
-  const openAiResponse = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      prompt: safePrompt,
-      size,
-      ...(model === "dall-e-3" ? { quality: "standard" } : null),
-    }),
-  });
+  for (const candidate of getImageModelCandidates()) {
+    const size = mapSizeForModel(candidate, body.size);
+    const openAiResponse = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: candidate,
+        prompt: safePrompt,
+        size,
+        ...(candidate === "dall-e-3" ? { quality: "standard" } : null),
+      }),
+    });
 
-  const openAiJson = (await openAiResponse.json().catch(() => null)) as any;
-  if (!openAiResponse.ok) {
-    const message =
-      typeof openAiJson?.error?.message === "string"
-        ? openAiJson.error.message
-        : typeof openAiJson?.message === "string"
-          ? openAiJson.message
-          : `OpenAI Fehler (${openAiResponse.status})`;
+    const json = (await openAiResponse.json().catch(() => null)) as OpenAiImagePayload | null;
+    if (openAiResponse.ok) {
+      model = candidate;
+      openAiJson = json;
+      break;
+    }
+
+    openAiJson = json;
+    lastOpenAiStatus = openAiResponse.status;
+    if (!shouldTryNextImageModel(json, openAiResponse.status)) {
+      break;
+    }
+  }
+
+  if (!model) {
+    const message = getOpenAiErrorMessage(openAiJson, lastOpenAiStatus);
     return NextResponse.json(
       { error: message, errorCode: "openai_generation_failed" },
       { status: 502, headers: { "Cache-Control": "no-store" } }
