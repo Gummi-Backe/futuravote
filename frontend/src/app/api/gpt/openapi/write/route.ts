@@ -198,7 +198,6 @@ paths:
                     type: array
                     items: { type: string }
                 required: [kind, submissionType, id, url, message]
-                additionalProperties: false
         "400":
           description: Validierungsfehler
           content:
@@ -228,7 +227,6 @@ components:
   schemas:
     CreateDraft:
       type: object
-      additionalProperties: false
       properties:
         title:
           type: string
@@ -280,7 +278,6 @@ components:
           type: array
           minItems: 2
           maxItems: 6
-          uniqueItems: true
           description: "Nur bei answerMode=options senden: 2-6 eindeutige Optionen. Bei binary vollstaendig weglassen."
           items:
             type: string
@@ -295,7 +292,6 @@ components:
           type: array
           minItems: 1
           maxItems: 8
-          uniqueItems: true
           items:
             type: string
           description: "Nur bei public+isResolvable=true: 1-8 verlaessliche Quellen. Sonst weglassen, niemals null senden."

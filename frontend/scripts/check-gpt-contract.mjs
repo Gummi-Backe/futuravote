@@ -43,7 +43,6 @@ requireText("explicit approval", draftsRoute, "if (isOauthGpt && !confirmSubmit)
 requireText("private end date", draftsRoute, '"closes_at_required_for_link_only"');
 
 requireText("write schema", writeSchema, "version: 0.2.0");
-requireText("write schema", writeSchema, "additionalProperties: false");
 requireText("write schema", writeSchema, "required: [title, description, confirmSubmit, category, imageUrl, imageCredit, visibility, answerMode, isResolvable]");
 requireText("write schema", writeSchema, "required: [kind, submissionType, id, url, message]");
 requireText("write schema", writeSchema, "nie aus id oder Action-Domain ableiten");
