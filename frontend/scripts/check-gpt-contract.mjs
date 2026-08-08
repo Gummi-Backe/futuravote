@@ -53,6 +53,8 @@ forbidText("write schema", writeSchema, "nullable: true");
 requireText("write schema alias", writeAlias, "getWriteOpenApi");
 requireText("read schema", readSchema, "required: [id, url, title]");
 requireText("read schema", readSchema, "nie aus id oder Action-Domain ableiten");
+forbidText("read schema", readSchema, "operationId: listSimilarQuestions");
+requireText("write schema", writeSchema, "operationId: listSimilarQuestions");
 
 requireText("GPT instructions", instructions, "## Absolute Link-Regel");
 requireText("GPT instructions", instructions, "## Typ 1: Oeffentliche Prognose");
