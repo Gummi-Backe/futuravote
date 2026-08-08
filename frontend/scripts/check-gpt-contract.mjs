@@ -25,6 +25,26 @@ function forbidText(name, content, forbidden) {
   }
 }
 
+function requireActionDescriptionWithinLimit(content, operationId, limit) {
+  const pattern = new RegExp(
+    `operationId: ${operationId}[\\s\\S]*?description: \\|\\r?\\n([\\s\\S]*?)\\r?\\n      requestBody:`,
+  );
+  const match = content.match(pattern);
+  if (!match) {
+    throw new Error(`write schema: Beschreibung fuer ${operationId} nicht gefunden`);
+  }
+
+  const description = match[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .join(" ");
+  if (description.length > limit) {
+    throw new Error(
+      `write schema: Beschreibung fuer ${operationId} hat ${description.length} statt maximal ${limit} Zeichen`,
+    );
+  }
+}
+
 const questionsRoute = readFromFrontend("src/app/api/gpt/questions/route.ts");
 const similarRoute = readFromFrontend("src/app/api/gpt/questions/similar/route.ts");
 const draftsRoute = readFromFrontend("src/app/api/drafts/route.ts");
@@ -46,6 +66,7 @@ requireText("write schema", writeSchema, "version: 0.2.0");
 requireText("write schema", writeSchema, "required: [title, description, confirmSubmit, category, imageUrl, imageCredit, visibility, answerMode, isResolvable]");
 requireText("write schema", writeSchema, "required: [kind, submissionType, id, url, message]");
 requireText("write schema", writeSchema, "nie aus id oder Action-Domain ableiten");
+requireActionDescriptionWithinLimit(writeSchema, "createDraft", 300);
 forbidText("write schema", writeSchema, "timeLeftHours");
 forbidText("write schema", writeSchema, "nullable: true");
 

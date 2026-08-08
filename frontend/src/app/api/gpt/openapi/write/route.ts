@@ -152,11 +152,9 @@ paths:
       security:
         - oauth2: [drafts:write]
       description: |
-        Erstellt entweder einen oeffentlichen Draft fuer das Review oder eine private Link-Umfrage.
-        Vor dem Aufruf immer eine vollstaendige Vorschau zeigen und eine eindeutige Nutzerfreigabe einholen.
-        Link-Regel: Nur url, reviewUrl oder shareUrl aus der Antwort anzeigen. Nie URLs aus id oder der Action-Domain konstruieren.
-        Oeffentlich: description 100-200 Woerter, Bild Pflicht. Prognose zusaetzlich mit Aufloesungsfeldern und longDescription 600-1000 Woerter.
-        Link-only: nur Meinungs-Umfrage, closesAt Pflicht, keine Aufloesungsfelder.
+        Erstellt einen oeffentlichen Review-Draft oder eine private Link-Umfrage.
+        Vorher die vollstaendige Vorschau zeigen und eine eindeutige Freigabe einholen.
+        Nur url, reviewUrl oder shareUrl aus der Antwort anzeigen; nie Links aus id oder der Action-Domain bauen.
       requestBody:
         required: true
         content:
