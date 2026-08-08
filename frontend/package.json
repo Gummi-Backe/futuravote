@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:webpack": "set NEXT_FORCE_WEBPACK=1&& set NEXT_DISABLE_SOURCEMAPS=1&& next dev",
     "build": "next build",
+    "check:gpt-contract": "node scripts/check-gpt-contract.mjs",
     "start": "next start",
     "lint": "eslint",
     "vercel-build": "next build",

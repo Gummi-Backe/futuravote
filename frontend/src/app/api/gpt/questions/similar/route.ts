@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { buildQuestionUrl } from "@/app/lib/publicUrls";
 import { guardGptRateLimit, withCacheHeaders } from "../../_lib";
 
 export const revalidate = 0;
@@ -202,7 +203,7 @@ export async function GET(request: Request) {
     return withCacheHeaders(NextResponse.json({ ok: false, error: error.message }), 3);
   }
 
-  const rows = ((data as any[]) ?? []) as MatchRow[];
+  const rows = (data ?? []) as MatchRow[];
   const matches = rows
     .map((row) => {
       const rowTitleTokens = tokens(row.title);
@@ -233,6 +234,7 @@ export async function GET(request: Request) {
     .slice(0, limit)
     .map(({ row, score, severity, overlap }) => ({
       id: row.id,
+      url: buildQuestionUrl(row.id),
       title: row.title,
       closesAt: row.closes_at,
       ended: String(row.closes_at) < todayIso,

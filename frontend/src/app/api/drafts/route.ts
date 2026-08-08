@@ -6,12 +6,9 @@ import { createDraftInSupabase, createLinkOnlyQuestionInSupabase } from "@/app/d
 import type { AnswerMode, PollVisibility } from "@/app/data/mock";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
+import { buildDraftReviewUrl, buildPrivatePollUrl } from "@/app/lib/publicUrls";
 
 export const revalidate = 0;
-
-function getBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_BASE_URL?.trim() || "https://www.future-vote.de";
-}
 
 function hasOAuthScope(scope: string, required: string): boolean {
   const raw = String(scope ?? "").trim();
@@ -353,7 +350,6 @@ export async function POST(request: Request) {
   const longDescriptionWordCount = countWords(effectiveLongDescription);
   const allowWithoutLongDescription = body.allowWithoutLongDescription === true;
   const confirmSubmit = body.confirmSubmit === true;
-  const confirmSubmitProvided = typeof body.confirmSubmit !== "undefined";
 
   if (typeof body.confirmSubmit !== "undefined" && typeof body.confirmSubmit !== "boolean") {
     return errorResponse(400, "confirmSubmit muss true oder false sein.", "invalid_confirm_submit", [
@@ -417,7 +413,7 @@ export async function POST(request: Request) {
       [{ field: "imageCredit", issue: "required_for_gpt_oauth" }]
     );
   }
-  if (isOauthGpt && confirmSubmitProvided && !confirmSubmit) {
+  if (isOauthGpt && !confirmSubmit) {
     return errorResponse(
       400,
       "Für GPT-OAuth ist confirmSubmit=true Pflicht. Zeige zuerst die Vorschau und frage nach Freigabe.",
@@ -425,17 +421,24 @@ export async function POST(request: Request) {
       [{ field: "confirmSubmit", issue: "must_be_true_for_gpt_oauth" }]
     );
   }
-  if (isOauthGpt && !confirmSubmitProvided) {
-    warnings.push(
-      "confirmSubmit wurde nicht mitgesendet. Anfrage wurde aus Kompatibilitätsgründen trotzdem verarbeitet."
-    );
-  }
-
   const closesAtRaw = (body.closesAt ?? "").trim();
   const targetClosesAt = closesAtRaw && !Number.isNaN(Date.parse(closesAtRaw)) ? closesAtRaw : undefined;
   if (closesAtRaw && !targetClosesAt) {
     return errorResponse(400, "closesAt muss ein gültiges ISO-Datum sein.", "invalid_closes_at", [
       { field: "closesAt", issue: "invalid_iso_datetime", value: closesAtRaw },
+    ]);
+  }
+  if (isPrivatePoll && !targetClosesAt) {
+    return errorResponse(
+      400,
+      "Für private Link-Umfragen ist closesAt als zukünftiges ISO-Datum Pflicht.",
+      "closes_at_required_for_link_only",
+      [{ field: "closesAt", issue: "required_for_link_only" }]
+    );
+  }
+  if (targetClosesAt && Date.parse(targetClosesAt) <= Date.now()) {
+    return errorResponse(400, "closesAt muss in der Zukunft liegen.", "closes_at_must_be_future", [
+      { field: "closesAt", issue: "must_be_future", value: closesAtRaw },
     ]);
   }
 
@@ -676,19 +679,24 @@ export async function POST(request: Request) {
       meta: { visibility: "link_only" },
     });
 
-    const baseUrl = getBaseUrl();
     const shareId = question.shareId ?? null;
-    const shareUrl = shareId ? `${baseUrl}/p/${encodeURIComponent(shareId)}` : null;
+    if (!shareId) {
+      return errorResponse(500, "Private Umfrage wurde ohne Share-ID erstellt.", "share_id_missing");
+    }
+    const shareUrl = buildPrivatePollUrl(shareId);
+    const result = {
+      kind: "question",
+      submissionType: "private_link",
+      id: question.id,
+      shareId,
+      url: shareUrl,
+      shareUrl,
+      message: "Private Link-Umfrage wurde erstellt. Verwende ausschließlich die zurückgegebene shareUrl.",
+      ...(warnings.length ? { warnings } : {}),
+    };
 
     return NextResponse.json(
-      {
-        kind: "question",
-        id: question.id,
-        shareId,
-        shareUrl,
-        question,
-        ...(warnings.length ? { warnings } : {}),
-      },
+      isOauthGpt ? result : { ...result, question },
       { status: 201 }
     );
   }
@@ -721,13 +729,17 @@ export async function POST(request: Request) {
     meta: { visibility },
   });
 
-  return NextResponse.json(
-    {
-      kind: "draft",
-      id: draft.id,
-      draft,
-      ...(warnings.length ? { warnings } : {}),
-    },
-    { status: 201 }
-  );
+  const reviewUrl = buildDraftReviewUrl(draft.id);
+  const result = {
+    kind: "draft",
+    submissionType: "public_review",
+    id: draft.id,
+    url: reviewUrl,
+    reviewUrl,
+    message:
+      "Öffentlicher Draft wurde zur Community-Prüfung eingereicht. Verwende ausschließlich die zurückgegebene reviewUrl.",
+    ...(warnings.length ? { warnings } : {}),
+  };
+
+  return NextResponse.json(isOauthGpt ? result : { ...result, draft }, { status: 201 });
 }

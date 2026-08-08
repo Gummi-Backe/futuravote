@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: FutureVote GPT API (Read-only)
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Read-only Endpunkte für einen Custom GPT (Actions). Liefert aktuelle öffentliche Fragen, Kategorien
     sowie die neuesten Votes/Reviews anonymisiert (ohne User-/Session-Daten).
@@ -72,6 +72,7 @@ paths:
                       type: object
                       properties:
                         id: { type: string }
+                        url: { type: string, description: "Vollstaendige oeffentliche URL. Exakt verwenden; nie aus id oder Action-Domain ableiten." }
                         title: { type: string }
                         summary: { type: string, nullable: true }
                         description: { type: string, nullable: true }
@@ -84,6 +85,7 @@ paths:
                         createdAt: { type: string, nullable: true }
                         answerMode: { type: string, nullable: true }
                         isResolvable: { type: boolean, nullable: true }
+                      required: [id, url, title]
                   nextCursor:
                     type: string
                     nullable: true
@@ -120,6 +122,7 @@ paths:
                       type: object
                       properties:
                         id: { type: string }
+                        url: { type: string, description: "Vollstaendige oeffentliche URL. Exakt verwenden; nie aus id oder Action-Domain ableiten." }
                         title: { type: string }
                         closesAt: { type: string }
                         ended: { type: boolean }
@@ -129,6 +132,7 @@ paths:
                         matchedKeywords:
                           type: array
                           items: { type: string }
+                      required: [id, url, title, closesAt, ended, score, severity]
                   scannedCandidates: { type: integer }
                   returned: { type: integer }
         "429":

@@ -1,10 +1,27 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { buildQuestionUrl } from "@/app/lib/publicUrls";
 import { guardGptRateLimit, withCacheHeaders } from "../_lib";
 
 export const revalidate = 0;
 
 type ListStatus = "active" | "ended" | "all";
+
+type QuestionRow = {
+  id: unknown;
+  title: unknown;
+  summary: unknown;
+  description: unknown;
+  category: unknown;
+  category_icon: unknown;
+  category_color: unknown;
+  region: unknown;
+  image_url: unknown;
+  closes_at: unknown;
+  created_at: unknown;
+  answer_mode: unknown;
+  is_resolvable: unknown;
+};
 
 export async function GET(request: Request) {
   const limited = guardGptRateLimit(request);
@@ -46,8 +63,9 @@ export async function GET(request: Request) {
     const { data: rows } = await query;
 
     const items =
-      (rows as any[])?.map((row) => ({
+      ((rows ?? []) as QuestionRow[]).map((row) => ({
         id: String(row.id),
+        url: buildQuestionUrl(String(row.id)),
         title: String(row.title ?? ""),
         summary: typeof row.summary === "string" ? row.summary : null,
         description: typeof row.description === "string" ? row.description : null,
@@ -60,7 +78,7 @@ export async function GET(request: Request) {
         createdAt: typeof row.created_at === "string" ? row.created_at : null,
         answerMode: typeof row.answer_mode === "string" ? row.answer_mode : null,
         isResolvable: typeof row.is_resolvable === "boolean" ? row.is_resolvable : null,
-      })) ?? [];
+      }));
 
     const nextCursor =
       items.length > 0 && items[items.length - 1]?.createdAt ? String(items[items.length - 1].createdAt) : null;
