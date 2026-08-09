@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createReferralToken } from "@/app/lib/referrals";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { isShareChannel, shareMedium, type ShareChannel } from "@/app/lib/shareChannels";
 
 export const revalidate = 0;
 
@@ -58,6 +59,7 @@ export async function POST(request: Request) {
   const body = (bodyRaw && typeof bodyRaw === "object" ? (bodyRaw as Record<string, unknown>) : {}) as Record<string, unknown>;
 
   const targetPath = normalizeTargetPath(body.targetPath);
+  const channel: ShareChannel = isShareChannel(body.channel) ? body.channel : "share_menu";
   if (!targetPath) return NextResponse.json({ error: "Ungültige Ziel-URL." }, { status: 400 });
 
   let token: string;
@@ -73,9 +75,9 @@ export async function POST(request: Request) {
   const utmContent = targetPath.startsWith("/p/") ? "private_question" : "public_question";
   const targetWithParams = addQueryParams(targetPath, [
     ["fv_ref", token],
-    ["utm_source", "futurevote"],
-    ["utm_medium", "share"],
-    ["utm_campaign", "referral"],
+    ["utm_source", channel],
+    ["utm_medium", shareMedium(channel)],
+    ["utm_campaign", "poll_share"],
     ["utm_content", utmContent],
   ]);
   const fullUrl = `${baseUrl}${targetWithParams}`;

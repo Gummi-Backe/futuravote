@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { trackShare } from "@/app/lib/analytics";
-import { isRecord } from "@/app/lib/unknownValue";
+import { resolveShareUrl } from "@/app/lib/referralClient";
 
 export function ShareLinkButton({
   url,
@@ -24,27 +24,6 @@ export function ShareLinkButton({
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const resolveReferralUrl = useCallback(async (): Promise<string> => {
-    try {
-      const parsed = new URL(url, window.location.origin);
-      const targetPath = `${parsed.pathname}${parsed.search}`;
-      if (!targetPath.startsWith("/questions/") && !targetPath.startsWith("/p/")) return url;
-
-      const res = await fetch("/api/referrals/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetPath }),
-      });
-      if (!res.ok) return url;
-      const parsedResponse: unknown = await res.json().catch(() => null);
-      const json = isRecord(parsedResponse) ? parsedResponse : {};
-      const referralUrl = typeof json.url === "string" ? json.url : null;
-      return referralUrl || url;
-    } catch {
-      return url;
-    }
-  }, [url]);
-
   useEffect(() => {
     if (!copied) return;
     const t = window.setTimeout(() => setCopied(false), 1200);
@@ -55,7 +34,7 @@ export function ShareLinkButton({
     if (busy) return;
     setBusy(true);
     try {
-      const shareUrl = await resolveReferralUrl();
+      const shareUrl = await resolveShareUrl(url, action === "copy" ? "copy" : "native");
       if (action === "share") {
         try {
           if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
@@ -79,7 +58,7 @@ export function ShareLinkButton({
     } finally {
       setBusy(false);
     }
-  }, [action, busy, resolveReferralUrl, shareText, shareTitle, url]);
+  }, [action, busy, shareText, shareTitle, url]);
 
   const base =
     variant === "primary"

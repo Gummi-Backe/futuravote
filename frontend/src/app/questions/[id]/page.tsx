@@ -7,7 +7,7 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import AdminControls from "./AdminControls";
 import { DetailVoteButtons } from "./DetailVoteButtons";
 import { TrendSparkline } from "./TrendSparkline";
-import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+import { QuestionShareMenu } from "@/app/components/QuestionShareMenu";
 import { ReportButton } from "@/app/components/ReportButton";
 import { EmbedWidgetButton } from "@/app/components/EmbedWidgetButton";
 import { ResolvedSuccessCard } from "@/app/components/ResolvedSuccessCard";
@@ -60,7 +60,7 @@ export async function generateMetadata(props: {
     `Prognosefrage in ${question.category}${question.region ? ` · ${question.region}` : ""}.`;
   const description = clampText(baseDesc, 180);
 
-  const imageUrl = question.imageUrl?.trim() || "/opengraph-image";
+  const imageUrl = `${canonical}/opengraph-image`;
 
   return {
     metadataBase,
@@ -393,11 +393,10 @@ export default async function QuestionDetail(props: {
                 href={discussWithGptUrl}
                 className="h-11 rounded-xl px-4 text-sm"
               />
-              <ShareLinkButton
+              <QuestionShareMenu
                 url={shareUrl}
-                label="Teilen"
-                action="share"
-                className="!h-11 !rounded-xl !px-4 text-sm"
+                title={question.title}
+                className="h-11"
               />
               <EmbedWidgetButton
                 widgetUrl={widgetUrl}
