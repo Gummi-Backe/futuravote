@@ -330,16 +330,16 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
           <div className="mt-4 space-y-3 text-sm text-slate-100">
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-300">Anzeige-Name</span>
-              <span className="font-semibold text-white">{user?.displayName ?? "â€¦"}</span>
+              <span className="font-semibold text-white">{user?.displayName ?? "..."}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-300">E-Mail</span>
-              <span className="truncate font-medium text-slate-50">{user?.email ?? "â€¦"}</span>
+              <span className="truncate font-medium text-slate-50">{user?.email ?? "..."}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-300">Rolle</span>
               <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-100">
-                {user?.role === "admin" ? "Admin" : user ? "User" : "â€¦"}
+                {user?.role === "admin" ? "Admin" : user ? "User" : "..."}
               </span>
             </div>
             <div className="flex items-center justify-between gap-3">

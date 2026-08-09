@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PROFILE_NOTIFICATION_PREFS_CACHE_KEY } from "@/app/lib/profileCache";
 import { isRecord } from "@/app/lib/unknownValue";
 
@@ -53,16 +53,14 @@ function writeCache(prefs: NotificationPrefs) {
 }
 
 export function EmailNotificationSettings() {
-  const initial = useMemo(() => readCache(), []);
-  const [prefs, setPrefs] = useState<NotificationPrefs>(initial?.prefs ?? DEFAULT_PREFS);
-  const [loading, setLoading] = useState(!initial);
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inflightSaveRef = useRef(0);
 
   const refresh = useCallback(async () => {
     setError(null);
-    setLoading((prev) => prev || !initial);
     try {
       const res = await fetch("/api/profil/notifications", { cache: "no-store" });
       const rawJson: unknown = await res.json().catch(() => null);
@@ -78,7 +76,14 @@ export function EmailNotificationSettings() {
     } finally {
       setLoading(false);
     }
-  }, [initial]);
+  }, []);
+
+  useLayoutEffect(() => {
+    const cached = readCache();
+    if (!cached) return;
+    setPrefs(cached.prefs);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     void refresh();
