@@ -3,12 +3,12 @@ import sharp from "sharp";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { IMAGE_UPLOAD_TOO_LARGE_MESSAGE, MAX_IMAGE_UPLOAD_BYTES } from "@/app/lib/imageUploadLimits";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif", "image/gif"]);
 
 export const revalidate = 0;
@@ -47,9 +47,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Die Datei ist leer." }, { status: 400 });
   }
 
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
     return NextResponse.json(
-      { error: "Die Datei ist zu groß. Bitte wähle ein kleineres Bild (max. 8 MB)." },
+      { error: IMAGE_UPLOAD_TOO_LARGE_MESSAGE },
       { status: 413 }
     );
   }

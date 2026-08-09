@@ -7,6 +7,7 @@ import { categories, type AnswerMode, type PollVisibility } from "@/app/data/moc
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { convertHtmlToMarkup } from "@/app/lib/htmlToMarkup";
 import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
+import { IMAGE_UPLOAD_TOO_LARGE_MESSAGE, MAX_IMAGE_UPLOAD_BYTES } from "@/app/lib/imageUploadLimits";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { AdminAiAssistant, type QuestionSuggestion } from "./AdminAiAssistant";
 import { AdminAiImageGenerator } from "./AdminAiImageGenerator";
@@ -55,7 +56,6 @@ function getDayAfterDateString(value: string): string | null {
 
 type UploadImageJson = { imageUrl?: string; error?: string };
 
-const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
 const DESCRIPTION_MAX_CHARS = 12_000;
 const MAX_RESOLUTION_SOURCES = 8;
 
@@ -1529,10 +1529,10 @@ export default function NewDraftPage() {
                         return;
                       }
 
-                      if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
+                      if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
                         setImageFile(null);
                         setImagePreviewUrl(null);
-                        setImageError("Die Datei ist zu groß (max. 20 MB). Bitte wähle ein kleineres Bild.");
+                        setImageError(IMAGE_UPLOAD_TOO_LARGE_MESSAGE);
                         e.currentTarget.value = "";
                         return;
                       }
