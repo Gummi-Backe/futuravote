@@ -85,5 +85,7 @@ requireText("GPT instructions", instructions, "## Typ 2: Oeffentliche Meinungs-U
 requireText("GPT instructions", instructions, "## Typ 3: Private Link-Umfrage");
 requireText("GPT instructions", instructions, "Niemals `null`");
 requireText("GPT instructions", instructions, "confirmSubmit: true");
+requireText("GPT instructions", instructions, "Verwende niemals die eingebaute ChatGPT-Bildgenerierung");
+requireText("GPT instructions", instructions, "invalid_image_host_for_gpt");
 
 console.log("FutureVote GPT contract: OK");

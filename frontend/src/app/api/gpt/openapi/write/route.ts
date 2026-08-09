@@ -10,7 +10,7 @@ paths:
     post:
       operationId: generateDraftImage
       summary: Bild fuer eine Umfrage erzeugen
-      description: Erzeugt und speichert ein quadratisches KI-Bild. imageUrl und imageCredit danach exakt fuer createDraft verwenden.
+      description: Einziger erlaubter Bildweg fuer GPT-Einreichungen. Erzeugt, verarbeitet und speichert ein quadratisches KI-Bild dauerhaft bei FutureVote. imageUrl und imageCredit danach exakt und unveraendert fuer createDraft verwenden; niemals eine URL aus der eingebauten ChatGPT-Bildgenerierung verwenden.
       security:
         - oauth2: [drafts:write]
       requestBody:
@@ -149,7 +149,7 @@ components:
           description: Optional nur oeffentlich; bei link_only weglassen; maximal 80 Zeichen.
         imageUrl:
           type: string
-          description: Pflicht; exakt aus generateDraftImage uebernehmen.
+          description: Pflicht; exakt und unveraendert aus der neuesten generateDraftImage-Antwort uebernehmen. Andere Bild-Hosts sind unzulaessig.
         imageCredit:
           type: string
           description: Pflicht; exakt aus generateDraftImage uebernehmen; maximal 140 Zeichen.
