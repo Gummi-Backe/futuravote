@@ -102,6 +102,110 @@ Diese Liste wird in der angegebenen Reihenfolge abgearbeitet. Ein Punkt wird ers
 - [ ] Core-Web-Vitals-Bericht und Sicherheitsmeldungen kontrollieren.
 - [ ] Monatlich den Fortschritt gegen die dokumentierten Ausgangswerte vergleichen.
 
+## Verbindliche Erklaerregel fuer alle folgenden Reichweiten-Funktionen
+
+Die Abschnitte 10 bis 17 duerfen nicht direkt umgesetzt werden. Vor jedem Abschnitt muss Codex Roland zuerst in einfacher Sprache erklaeren:
+
+- was die Funktion sichtbar veraendert und welchen Nutzen sie haben soll,
+- welche Daten gespeichert oder an einen externen Dienst gesendet werden,
+- ob laufende oder einmalige Kosten entstehen koennen,
+- welche Konten, Schluessel, Berechtigungen oder Zustimmungen benoetigt werden,
+- was Roland selbst anklicken, entscheiden, bereitstellen oder freigeben muss,
+- welche Datenschutz-, Missbrauchs- oder Wartungsrisiken bestehen,
+- wie getestet wird und wie die Funktion bei Problemen wieder abgeschaltet werden kann.
+
+Erst nach dieser Erklaerung und Rolands ausdruecklicher Zustimmung beginnt die Umsetzung.
+
+## 10. Social-Media-Vorschaubilder
+
+- [ ] **Erklaerung und Freigabe:** Darstellung, Bildinhalt, Plattformen und Rolands Entscheidungen vorab besprechen.
+- [ ] Fuer jede oeffentliche Umfrage ein eigenes Vorschaubild im Format 1200 x 630 Pixel erzeugen.
+- [ ] Titel, FutureVote-Marke und ein passendes Umfragebild gut lesbar kombinieren.
+- [ ] Open-Graph- und Social-Metadaten auf die neue Vorschau umstellen.
+- [ ] Vorschauen fuer WhatsApp, Facebook, LinkedIn, Telegram und weitere Dienste testen.
+- [ ] Rolands Aufgabe: Gestaltung und sichtbare Markenbezeichnung vor der Veroeffentlichung bestaetigen.
+
+## 11. Direktes Teilen und QR-Codes
+
+- [ ] **Erklaerung und Freigabe:** Zielplattformen, Datenschutz und sichtbare Bedienung vorab besprechen.
+- [ ] Ein Teilen-Menue fuer WhatsApp, Telegram, LinkedIn, Bluesky und E-Mail entwerfen.
+- [ ] Bestehende Empfehlungslinks weiterhin verwenden und Plattform als anonyme Statistik erfassen.
+- [ ] Pro Umfrage einen QR-Code fuer den kanonischen oder den Empfehlungslink erzeugen.
+- [ ] QR-Code als Bild herunterladen und fuer Druck oder Bildschirm verwenden koennen.
+- [ ] Rolands Aufgabe: gewuenschte Plattformen und bevorzugte Linkart auswaehlen.
+
+## 12. RSS- und Atom-Feed
+
+- [ ] **Erklaerung und Freigabe:** Unterschied zwischen Feed, Newsletter und Suchmaschine vorab erklaeren.
+- [ ] Oeffentlichen Feed fuer neue Umfragen bereitstellen.
+- [ ] Optional einen zweiten Feed fuer beendete oder aufgeloeste Umfragen bereitstellen.
+- [ ] Nur oeffentliche Inhalte, kanonische URLs und stabile Bildadressen ausgeben.
+- [ ] Feed im HTML und im Footer auffindbar verlinken.
+- [ ] Feed mit mehreren Readern und einem Validator testen.
+- [ ] Rolands Aufgabe: entscheiden, ob nur neue Umfragen oder auch Ergebnisse im Feed erscheinen.
+
+## 13. IndexNow fuer Bing und teilnehmende Suchmaschinen
+
+- [ ] **Erklaerung und Freigabe:** beteiligte Suchmaschinen, gesendete URLs und Grenzen von IndexNow vorab erklaeren.
+- [ ] Einen eigenen IndexNow-Schluessel sicher erzeugen und die vorgeschriebene Pruefdatei oeffentlich bereitstellen.
+- [ ] Neue, geaenderte und geloeschte oeffentliche Umfrage-URLs automatisch melden.
+- [ ] Private Umfragen, Drafts, Profilseiten und technische URLs niemals senden.
+- [ ] Fehler protokollieren, Wiederholungen begrenzen und Missbrauchsschutz einbauen.
+- [ ] Bing Webmaster Tools zur Kontrolle vorbereiten.
+- [ ] Rolands Aufgabe: automatische Meldungen genehmigen und gegebenenfalls Bing Webmaster Tools verbinden.
+
+## 14. Verbessertes Einbettungs-Widget und Ergebnisgrafiken
+
+- [ ] **Erklaerung und Freigabe:** Einbettung, Fremdseitenzugriff, Tracking und Gestaltung vorab besprechen.
+- [ ] Helle, dunkle und kompakte Widget-Varianten bereitstellen.
+- [ ] Abstimmungsansicht und reine Live-Ergebnisansicht anbieten.
+- [ ] Responsive Hoehen und stabile Darstellung auf fremden Webseiten testen.
+- [ ] Eine teilbare Ergebnisgrafik fuer beendete Umfragen erzeugen.
+- [ ] Einbettungen und daraus kommende Besuche datensparsam messen.
+- [ ] Rolands Aufgabe: erlaubte Varianten, Markenauftritt und gewuenschte Statistik festlegen.
+
+## 15. Woechentlicher E-Mail-Rundbrief
+
+- [ ] **Erklaerung und Freigabe:** Empfaenger, Inhalte, Einwilligung, Versandkosten und Rolands Aufgaben vorab genau erklaeren.
+- [ ] Empfaengerregel festlegen: nur Nutzer mit bestaetigter E-Mail-Adresse und ausdruecklich aktiviertem Rundbrief.
+- [ ] Einen eigenen Schalter `Woechentlicher FutureVote-Rundbrief` im Profil einbauen.
+- [ ] Den Rundbrief standardmaessig ausschalten; bestehende Benachrichtigungseinstellungen gelten nicht als Zustimmung.
+- [ ] Optional entscheiden, ob auch Personen ohne FutureVote-Konto ein Anmeldeformular erhalten sollen.
+- [ ] Fuer Anmeldungen ein Double-Opt-in mit Bestaetigungslink umsetzen.
+- [ ] Zeitpunkt, Version und Status der Zustimmung nachvollziehbar speichern.
+- [ ] In jeder Rundbrief-Mail einen funktionierenden Abmeldelink bereitstellen.
+- [ ] Abmeldung im Profil sofort wirksam machen.
+- [ ] Nur bestaetigte und aktuell angemeldete Empfaenger serverseitig aus Supabase laden.
+- [ ] Keine E-Mail-Adressliste an Codex uebergeben, exportieren, kaufen oder aus fremden Quellen importieren.
+- [ ] Vorhandenen SMTP-Versand auf Kapazitaet, Zustellbarkeit und moegliche Kosten pruefen.
+- [ ] Absendername, Antwortadresse und rechtliche Pflichtangaben festlegen.
+- [ ] Inhalt und Rhythmus festlegen, zum Beispiel neue, beliebte und bald endende Umfragen einmal pro Woche.
+- [ ] Datenschutzinformationen fuer den Rundbrief ergaenzen und vor Livegang pruefen lassen.
+- [ ] Testversand nur an eine von Roland bestimmte eigene Testadresse durchfuehren.
+- [ ] Rolands Aufgabe: Empfaengermodell, Absender, Rhythmus, Inhalt und Testversand ausdruecklich bestaetigen; keine fremden Adressen bereitstellen.
+
+## 16. Web-Push-Benachrichtigungen
+
+- [ ] **Erklaerung und Freigabe:** Browserfreigabe, gespeicherte Push-Abonnements und Benachrichtigungsfaelle vorab erklaeren.
+- [ ] Service Worker und sichere Push-Schluessel einrichten.
+- [ ] Freiwillige Anmeldung ohne aufdringliche automatische Berechtigungsabfrage gestalten.
+- [ ] Auswahl fuer neue Themen, neue Umfragen oder Ergebnisse anbieten.
+- [ ] Abmeldung und Loeschung des Push-Abonnements jederzeit ermoeglichen.
+- [ ] Versandrate begrenzen und keine Benachrichtigungen ohne passenden Anlass senden.
+- [ ] Browser- und Mobilgeraete-Kompatibilitaet testen.
+- [ ] Rolands Aufgabe: erlaubte Benachrichtigungsarten und maximale Haeufigkeit festlegen.
+
+## 17. Automatische Social-Beitraege, Medienbereich und Umfrage der Woche
+
+- [ ] **Erklaerung und Freigabe:** jeden Teil als eigenes Vorhaben mit Kontozugriff, Kosten und Veroeffentlichungsregeln erklaeren.
+- [ ] Fuer automatische Social-Beitraege nur von Roland ausgewaehlte Plattformen vorbereiten.
+- [ ] Social-Konten ausschliesslich ueber offizielle Freigaben verbinden; Passwoerter oder API-Schluessel nicht in den Quellcode schreiben.
+- [ ] Vor automatischer Veroeffentlichung festlegen, ob jeder Beitrag eine manuelle Freigabe benoetigt.
+- [ ] Medienbereich mit Plattformbeschreibung, Logo, Kontaktweg, Statistiken und einbettbaren Grafiken planen.
+- [ ] Eine nachvollziehbare Regel fuer die `Umfrage der Woche` definieren.
+- [ ] Umfrage der Woche auf FutureVote, im Feed, im Rundbrief oder als Social-Beitrag wiederverwenden.
+- [ ] Rolands Aufgabe: Konten freigeben, Plattformen auswaehlen, Freigabeprozess bestimmen und Medieninhalte bestaetigen.
+
 ## Abschlusskriterien
 
 - [ ] Alle oeffentlichen Umfragen sind ueber Sitemap und crawlbare interne Links erreichbar.
@@ -111,3 +215,5 @@ Diese Liste wird in der angegebenen Reihenfolge abgearbeitet. Ein Punkt wird ers
 - [ ] Die wichtigsten Seiten bestehen die vereinbarten mobilen Core-Web-Vitals-Ziele.
 - [ ] Search Console zeigt keine systematischen technischen Indexierungsfehler.
 - [ ] Ein dauerhaft machbarer Prozess fuer Inhalte, Verteilung und Kontrolle ist etabliert.
+- [ ] Keine Reichweiten-Funktion wurde ohne vorherige Erklaerung und Rolands ausdrueckliche Zustimmung aktiviert.
+- [ ] Newsletter, Push und Social-Automatisierung besitzen dokumentierte Einwilligungs-, Abmelde- und Abschaltwege.
