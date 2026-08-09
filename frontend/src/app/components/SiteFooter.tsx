@@ -11,6 +11,9 @@ export function SiteFooter() {
           <Link href="/regeln" className="hover:text-emerald-100">
             Regeln
           </Link>
+          <Link href="/questions" className="hover:text-emerald-100">
+            Alle Umfragen
+          </Link>
           <Link href="/archiv" className="hover:text-emerald-100">
             Archiv
           </Link>

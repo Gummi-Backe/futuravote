@@ -1098,10 +1098,10 @@ export async function getQuestionsPageFromSupabase(options: {
         `closes_at.gt.${decoded.closesAt},and(closes_at.eq.${decoded.closesAt},id.gt.${decoded.id})`
       );
     }
-  } else if (tab === "new") {
+  } else if (tab === "new" || tab === "directory") {
     query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
 
-    if (decoded?.kind === "questions_new") {
+    if (tab === "new" && decoded?.kind === "questions_new") {
       const createdAt = normalizeTimestamp(decoded.createdAt);
       query = query.or(
         `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${decoded.id})`

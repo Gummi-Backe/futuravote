@@ -30,6 +30,7 @@ function latestDate(...values: unknown[]): Date | undefined {
 function getStaticRoutes(siteUrl: string, latestPollChange?: Date): MetadataRoute.Sitemap {
   return [
     { url: `${siteUrl}/`, ...(latestPollChange ? { lastModified: latestPollChange } : {}) },
+    { url: `${siteUrl}/questions`, ...(latestPollChange ? { lastModified: latestPollChange } : {}) },
     { url: `${siteUrl}/archiv`, ...(latestPollChange ? { lastModified: latestPollChange } : {}) },
     { url: `${siteUrl}/regeln` },
     { url: `${siteUrl}/terms` },

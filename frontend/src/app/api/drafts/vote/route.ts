@@ -19,6 +19,7 @@ type VoteBody = {
 function revalidatePublicDiscoveryPaths(questionId?: string) {
   revalidatePath("/sitemap.xml");
   revalidatePath("/");
+  revalidatePath("/questions");
   revalidatePath("/archiv");
   if (questionId) {
     revalidatePath(`/questions/${encodeURIComponent(questionId)}`);
