@@ -121,21 +121,21 @@ Erst nach dieser Erklaerung und Rolands ausdruecklicher Zustimmung beginnt die U
 
 ## 10. Social-Media-Vorschaubilder
 
-- [ ] **Erklaerung und Freigabe:** Darstellung, Bildinhalt, Plattformen und Rolands Entscheidungen vorab besprechen.
-- [ ] Fuer jede oeffentliche Umfrage ein eigenes Vorschaubild im Format 1200 x 630 Pixel erzeugen.
-- [ ] Titel, FutureVote-Marke und ein passendes Umfragebild gut lesbar kombinieren.
-- [ ] Open-Graph- und Social-Metadaten auf die neue Vorschau umstellen.
-- [ ] Vorschauen fuer WhatsApp, Facebook, LinkedIn, Telegram und weitere Dienste testen.
-- [ ] Rolands Aufgabe: Gestaltung und sichtbare Markenbezeichnung vor der Veroeffentlichung bestaetigen.
+- [x] **Erklaerung und Freigabe:** Darstellung, Bildinhalt, Plattformen und Rolands Entscheidungen vorab besprechen.
+- [x] Fuer jede oeffentliche Umfrage ein eigenes Vorschaubild im Format 1200 x 630 Pixel erzeugen.
+- [x] Titel, FutureVote-Marke und ein passendes Umfragebild gut lesbar kombinieren.
+- [x] Open-Graph- und Social-Metadaten auf die neue Vorschau umstellen.
+- [ ] Vorschauen fuer WhatsApp, Facebook, LinkedIn, Telegram und weitere Dienste testen. Technische Metadaten und Bilddatei sind geprueft; die externen Vorschau-Caches noch nicht.
+- [ ] Rolands Aufgabe: Gestaltung und sichtbare Markenbezeichnung in der veroeffentlichten Vorschau abschliessend bestaetigen.
 
 ## 11. Direktes Teilen und QR-Codes
 
-- [ ] **Erklaerung und Freigabe:** Zielplattformen, Datenschutz und sichtbare Bedienung vorab besprechen.
-- [ ] Ein Teilen-Menue fuer WhatsApp, Telegram, LinkedIn, Bluesky und E-Mail entwerfen.
-- [ ] Bestehende Empfehlungslinks weiterhin verwenden und Plattform als anonyme Statistik erfassen.
-- [ ] Pro Umfrage einen QR-Code fuer den kanonischen oder den Empfehlungslink erzeugen.
-- [ ] QR-Code als Bild herunterladen und fuer Druck oder Bildschirm verwenden koennen.
-- [ ] Rolands Aufgabe: gewuenschte Plattformen und bevorzugte Linkart auswaehlen.
+- [x] **Erklaerung und Freigabe:** Zielplattformen, Datenschutz und sichtbare Bedienung vorab besprechen.
+- [x] Ein Teilen-Menue fuer WhatsApp, Telegram, LinkedIn, Bluesky und E-Mail entwerfen.
+- [x] Bestehende Empfehlungslinks weiterhin verwenden und Plattform als anonyme Statistik erfassen.
+- [x] Pro Umfrage einen QR-Code fuer den kanonischen oder den Empfehlungslink erzeugen.
+- [x] QR-Code als Bild herunterladen und fuer Druck oder Bildschirm verwenden koennen.
+- [x] Rolands Aufgabe: gewuenschte Plattformen und bevorzugte Linkart auswaehlen.
 
 ## 12. RSS- und Atom-Feed
 
