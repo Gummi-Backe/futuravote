@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getErrorCode } from "@/app/lib/unknownValue";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { buildFunnel14d, FUNNEL_EVENT_NAMES, type FunnelEventRow } from "@/app/lib/analyticsFunnel";
 
 export const revalidate = 0;
 
@@ -27,6 +28,7 @@ export async function GET() {
 
   const supabase = getSupabaseAdminClient();
   const since7d = daysAgoIso(7);
+  const since14d = daysAgoIso(14);
   const since30d = daysAgoIso(30);
 
   try {
@@ -113,6 +115,15 @@ export async function GET() {
       .limit(60);
     if (latestError) throw latestError;
 
+    const { data: funnelRows, error: funnelError } = await supabase
+      .from("analytics_events")
+      .select("event,session_id,path")
+      .gte("created_at", since14d)
+      .in("event", [...FUNNEL_EVENT_NAMES])
+      .limit(20000);
+    if (funnelError) throw funnelError;
+    const funnel14d = buildFunnel14d((funnelRows ?? []) as FunnelEventRow[]);
+
     const { data: referralVoteRows, error: referralVoteRowsError } = await supabase
       .from("analytics_events")
       .select("meta")
@@ -159,7 +170,12 @@ export async function GET() {
       {
         ok: true,
         since7d,
+        since14d,
         since30d,
+        funnel14d: {
+          ...funnel14d,
+          sampleLimit: 20000,
+        },
         summary: {
           uniqueSessions7d: uniqueSessions.size,
           uniqueSessions30d: uniqueSessions30d.size,

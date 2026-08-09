@@ -248,6 +248,8 @@ export default async function SharedPollPage(props: {
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-xl shadow-emerald-500/15 sm:p-6">
               <DetailVoteButtons
                 questionId={poll.question.id}
+                questionTitle={poll.question.title}
+                shareUrl={shareUrl}
                 closesAt={poll.question.closesAt}
                 answerMode={answerMode}
                 options={options}
@@ -481,6 +483,8 @@ export default async function SharedPollPage(props: {
             <div className="lg:col-span-3">
               <DetailVoteButtons
                 questionId={poll.question.id}
+                questionTitle={poll.question.title}
+                shareUrl={shareUrl}
                 closesAt={poll.question.closesAt}
                 answerMode={answerMode}
                 options={options}

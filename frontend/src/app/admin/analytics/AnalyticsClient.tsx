@@ -38,6 +38,30 @@ type Kpis = {
   topSharers?: { userId: string; displayName: string; conversions: number }[];
 };
 
+type Funnel14d = {
+  trackingStartedAt: string;
+  sampleLimit?: number;
+  stages: {
+    homeSessions: number;
+    feedImpressions: number;
+    questionOpens: number;
+    voteStarts: number;
+    voters: number;
+    sharePromptViews: number;
+    sharers: number;
+    registrations: number;
+  };
+  conversions: {
+    homeToFeedPct: number;
+    feedToQuestionOpenPct: number;
+    feedToVoteStartPct: number;
+    voteStartToVotePct: number;
+    voteToSharePromptPct: number;
+    sharePromptToSharePct: number;
+    homeToRegisterPct: number;
+  };
+};
+
 function formatDate(value: string) {
   const ms = Date.parse(value);
   if (!Number.isFinite(ms)) return value;
@@ -68,6 +92,7 @@ export default function AnalyticsClient() {
   const [latest, setLatest] = useState<LatestRow[]>([]);
   const [since7d, setSince7d] = useState<string | null>(null);
   const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [funnel14d, setFunnel14d] = useState<Funnel14d | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -81,6 +106,7 @@ export default function AnalyticsClient() {
       }
       setSummary((json.summary ?? null) as Summary | null);
       setKpis((json.kpis ?? null) as Kpis | null);
+      setFunnel14d((json.funnel14d ?? null) as Funnel14d | null);
       setTopPages((Array.isArray(json.topPages) ? json.topPages : []) as TopPage[]);
       setLatest((Array.isArray(json.latest) ? json.latest : []) as LatestRow[]);
       setSince7d(typeof json.since7d === "string" ? json.since7d : null);
@@ -88,6 +114,7 @@ export default function AnalyticsClient() {
       setError(e instanceof Error ? e.message : "Analytics konnten nicht geladen werden.");
       setSummary(null);
       setKpis(null);
+      setFunnel14d(null);
       setTopPages([]);
       setLatest([]);
     } finally {
@@ -146,6 +173,41 @@ export default function AnalyticsClient() {
         <Card label="Logins" value={`${summary?.logins7d ?? 0}`} hint="Login (7 Tage)" />
         <Card label="Registrierungen" value={`${summary?.registers7d ?? 0}`} hint="Register (7 Tage)" />
       </div>
+
+      <section className="mt-8 border-y border-white/10 py-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">14-Tage-Kernfunnel</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Unique Sessions je Schritt. Die neuen Zwischenstufen werden seit dem 09.08.2026 erfasst.
+            </p>
+          </div>
+          {funnel14d?.sampleLimit ? (
+            <span className="text-[11px] text-slate-500">Maximal {funnel14d.sampleLimit} Events</span>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card label="Startseite" value={`${funnel14d?.stages.homeSessions ?? 0}`} hint="Startseiten-Sessions" />
+          <Card label="Umfrage gesehen" value={`${funnel14d?.stages.feedImpressions ?? 0}`} hint="erste Karte im Sichtbereich" />
+          <Card label="Details geöffnet" value={`${funnel14d?.stages.questionOpens ?? 0}`} hint="aus dem Feed" />
+          <Card label="Stimme begonnen" value={`${funnel14d?.stages.voteStarts ?? 0}`} hint="Antwort ausgewählt" />
+          <Card label="Abgestimmt" value={`${funnel14d?.stages.voters ?? 0}`} hint="erfolgreiche Stimmen" />
+          <Card label="Share-Aufruf gesehen" value={`${funnel14d?.stages.sharePromptViews ?? 0}`} hint="nach erfolgreicher Stimme" />
+          <Card label="Geteilt" value={`${funnel14d?.stages.sharers ?? 0}`} hint="Share oder Kopie" />
+          <Card label="Registriert" value={`${funnel14d?.stages.registrations ?? 0}`} hint="Registrierungen" />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Card label="Start → Umfrage" value={`${funnel14d?.conversions.homeToFeedPct ?? 0}%`} />
+          <Card label="Umfrage → Details" value={`${funnel14d?.conversions.feedToQuestionOpenPct ?? 0}%`} />
+          <Card label="Umfrage → Stimmversuch" value={`${funnel14d?.conversions.feedToVoteStartPct ?? 0}%`} />
+          <Card label="Stimmversuch → Stimme" value={`${funnel14d?.conversions.voteStartToVotePct ?? 0}%`} />
+          <Card label="Stimme → Share-Aufruf" value={`${funnel14d?.conversions.voteToSharePromptPct ?? 0}%`} />
+          <Card label="Share-Aufruf → Share" value={`${funnel14d?.conversions.sharePromptToSharePct ?? 0}%`} />
+          <Card label="Start → Registrierung" value={`${funnel14d?.conversions.homeToRegisterPct ?? 0}%`} />
+        </div>
+      </section>
 
       <div className="mt-8 rounded-3xl border border-white/10 bg-black/20 p-4">
         <div className="text-sm font-semibold text-white">KPI-Board (Growth & Viral)</div>

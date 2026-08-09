@@ -22,6 +22,7 @@ export function ShareLinkButton({
   shareText?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const resolveReferralUrl = useCallback(async (): Promise<string> => {
     try {
@@ -51,28 +52,34 @@ export function ShareLinkButton({
   }, [copied]);
 
   const onClick = useCallback(async () => {
-    const shareUrl = await resolveReferralUrl();
-    if (action === "share") {
-      try {
-        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-          await navigator.share({ url: shareUrl, title: shareTitle, text: shareText });
-          trackShare("share", url, "native");
-          return;
-        }
-      } catch {
-        // User canceled share dialog - fall through to copy.
-      }
-    }
-
+    if (busy) return;
+    setBusy(true);
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      trackShare("copy", url, "clipboard");
-    } catch {
-      window.prompt("Link kopieren:", shareUrl);
-      trackShare("copy", url, "prompt");
+      const shareUrl = await resolveReferralUrl();
+      if (action === "share") {
+        try {
+          if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+            await navigator.share({ url: shareUrl, title: shareTitle, text: shareText });
+            trackShare("share", url, "native");
+            return;
+          }
+        } catch (error: unknown) {
+          if (error instanceof Error && error.name === "AbortError") return;
+          // Nicht unterstuetzte Share-Dialoge fallen auf Kopieren zurueck.
+        }
+      }
+
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        trackShare("copy", url, "clipboard");
+      } catch {
+        window.prompt("Link kopieren:", shareUrl);
+      }
+    } finally {
+      setBusy(false);
     }
-  }, [action, resolveReferralUrl, shareText, shareTitle, url]);
+  }, [action, busy, resolveReferralUrl, shareText, shareTitle, url]);
 
   const base =
     variant === "primary"
@@ -151,11 +158,18 @@ export function ShareLinkButton({
       </svg>
     );
 
-  const ariaLabel = copied ? "Kopiert" : label;
+  const ariaLabel = busy ? "Link wird vorbereitet" : copied ? "Kopiert" : label;
 
   return (
-    <button type="button" onClick={onClick} className={`${base} ${style} ${className}`} aria-label={ariaLabel} title={ariaLabel}>
-      {variant === "icon" ? icon : copied ? "Kopiert" : label}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={`${base} ${style} ${busy ? "cursor-wait opacity-70" : ""} ${className}`}
+      aria-label={ariaLabel}
+      title={ariaLabel}
+    >
+      {variant === "icon" ? icon : busy ? "Bereite Link vor..." : copied ? "Kopiert" : label}
     </button>
   );
 }

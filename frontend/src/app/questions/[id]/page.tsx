@@ -531,6 +531,8 @@ export default async function QuestionDetail(props: {
           <DetailVoteButtons
             className="mt-4 space-y-3"
             questionId={id}
+            questionTitle={question.title}
+            shareUrl={shareUrl}
             closesAt={question.closesAt}
             answerMode={answerMode}
             options={options}

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { triggerAhaMicrocopy } from "@/app/lib/ahaMicrocopy";
+import { trackEvent } from "@/app/lib/analytics";
 import { recordFeedVoteDelta } from "@/app/lib/feedVoteSync";
 import {
   clearVoteCooldown,
@@ -30,6 +31,8 @@ export function DetailVoteButtons({
   answerMode,
   options,
   closesAt,
+  questionTitle,
+  shareUrl,
   className,
 }: {
   questionId: string;
@@ -38,6 +41,8 @@ export function DetailVoteButtons({
   answerMode?: "binary" | "options";
   options?: PollOption[] | null;
   closesAt?: string | null;
+  questionTitle: string;
+  shareUrl?: string;
   className?: string;
 }) {
   const router = useRouter();
@@ -72,6 +77,7 @@ export function DetailVoteButtons({
       return;
     }
     const prevChoice = choice;
+    trackEvent("vote_start", { questionId, answerMode: "binary", source: "detail" });
     setSubmitting(true);
     setError(null);
     setChoice(nextChoice);
@@ -119,9 +125,14 @@ export function DetailVoteButtons({
       }
 
       invalidateProfileCaches();
-      triggerAhaMicrocopy({ closesAt: closesAt ?? null });
+      triggerAhaMicrocopy({
+        closesAt: closesAt ?? null,
+        questionId,
+        questionTitle,
+        shareUrl: shareUrl ?? `${window.location.origin}/questions/${encodeURIComponent(questionId)}`,
+        choiceLabel: nextChoice === "yes" ? "Ja" : "Nein",
+      });
       recordFeedVoteDelta({ kind: "binary", questionId, choice: nextChoice });
-      showToast(`Gespeichert: ${nextChoice === "yes" ? "Ja" : "Nein"}`, "success");
       router.refresh();
     } catch {
       setChoice(prevChoice);
@@ -142,6 +153,7 @@ export function DetailVoteButtons({
       return;
     }
     const prevOptionId = optionId;
+    trackEvent("vote_start", { questionId, answerMode: "options", source: "detail" });
     setSubmitting(true);
     setError(null);
     setOptionId(nextOptionId);
@@ -188,10 +200,15 @@ export function DetailVoteButtons({
       }
 
       invalidateProfileCaches();
-      triggerAhaMicrocopy({ closesAt: closesAt ?? null });
-      recordFeedVoteDelta({ kind: "options", questionId, optionId: nextOptionId });
       const label = (options ?? []).find((o) => o.id === nextOptionId)?.label;
-      showToast(`Gespeichert: ${label ?? "Abgestimmt"}`, "success");
+      triggerAhaMicrocopy({
+        closesAt: closesAt ?? null,
+        questionId,
+        questionTitle,
+        shareUrl: shareUrl ?? `${window.location.origin}/questions/${encodeURIComponent(questionId)}`,
+        choiceLabel: label ?? "Abgestimmt",
+      });
+      recordFeedVoteDelta({ kind: "options", questionId, optionId: nextOptionId });
       router.refresh();
     } catch {
       setOptionId(prevOptionId);

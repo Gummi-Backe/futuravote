@@ -2,8 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ShareLinkButton } from "@/app/components/ShareLinkButton";
+import { trackEvent } from "@/app/lib/analytics";
 
-type AhaPayload = { closesAt?: string | null };
+type AhaPayload = {
+  closesAt?: string | null;
+  questionId?: string;
+  questionTitle?: string;
+  shareUrl?: string;
+  choiceLabel?: string;
+  firstVote?: boolean;
+};
 
 function formatClosesAt(closesAt?: string | null) {
   if (!closesAt) return null;
@@ -26,7 +35,16 @@ export function AhaMicrocopyToast() {
     return () => window.removeEventListener("fv:aha", onAha);
   }, []);
 
-  // Kein Auto-Close: Nutzer soll in Ruhe lesen können.
+  useEffect(() => {
+    if (!open) return;
+    trackEvent("share_prompt_view", {
+      questionId: payload.questionId ?? "",
+      firstVote: payload.firstVote === true,
+    });
+    if (payload.firstVote === true) return;
+    const timer = window.setTimeout(() => setOpen(false), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [open, payload.firstVote, payload.questionId]);
 
   const closesAtLabel = useMemo(() => formatClosesAt(payload.closesAt), [payload.closesAt]);
 
@@ -38,43 +56,66 @@ export function AhaMicrocopyToast() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">
-              So funktioniert Future-Vote
+              {payload.firstVote ? "So funktioniert Future-Vote" : "Stimme gespeichert"}
             </p>
             <p className="mt-1 text-sm font-semibold text-white">
-              Du hast abgestimmt — jetzt zählt, ob du später recht hattest.
+              {payload.choiceLabel
+                ? `Deine Antwort "${payload.choiceLabel}" wurde gezählt.`
+                : "Deine Stimme wurde gezählt."}
             </p>
-            <p className="mt-2 text-sm text-slate-200">
-              {closesAtLabel ? (
-                <>
-                  Diese Frage endet am <span className="font-semibold text-slate-50">{closesAtLabel}</span>. Danach wird sie{" "}
-                  <span className="font-semibold text-slate-50">mit Quelle</span> aufgelöst.
-                </>
-              ) : (
-                <>
-                  Nach der Deadline wird diese Frage <span className="font-semibold text-slate-50">mit Quelle</span> aufgelöst.
-                </>
-              )}{" "}
-              Dann siehst du, ob dein Tipp richtig war.
-            </p>
+            {payload.firstVote ? (
+              <p className="mt-2 text-sm text-slate-200">
+                {closesAtLabel ? (
+                  <>
+                    Diese Frage endet am <span className="font-semibold text-slate-50">{closesAtLabel}</span>. Danach wird sie{" "}
+                    <span className="font-semibold text-slate-50">mit Quelle</span> aufgelöst.
+                  </>
+                ) : (
+                  <>
+                    Nach der Deadline wird diese Frage <span className="font-semibold text-slate-50">mit Quelle</span> aufgelöst.
+                  </>
+                )}{" "}
+                Dann siehst du, ob dein Tipp richtig war.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-200">
+                Lade andere ein, damit das Ergebnis mehr als nur eine Einzelmeinung zeigt.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              {payload.shareUrl ? (
+                <ShareLinkButton
+                  url={payload.shareUrl}
+                  label="Umfrage teilen"
+                  action="share"
+                  variant="primary"
+                  shareTitle="Future-Vote Umfrage"
+                  shareText={payload.questionTitle ? `Stimme ab: ${payload.questionTitle}` : "Stimme bei Future-Vote ab."}
+                  className="!rounded-full !px-4 !py-2 !text-xs"
+                />
+              ) : null}
               <Link
-                href="/archiv"
+                href="/"
+                onClick={() => setOpen(false)}
                 className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40"
               >
-                Archiv ansehen
+                Weiter abstimmen
               </Link>
-              <Link
-                href="/regeln"
-                className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40"
-              >
-                Regeln &amp; Auflösung
-              </Link>
+              {payload.firstVote ? (
+                <Link
+                  href="/regeln"
+                  onClick={() => setOpen(false)}
+                  className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 hover:border-emerald-200/40"
+                >
+                  So wird aufgelöst
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="inline-flex items-center justify-center rounded-full border border-emerald-200/25 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25"
               >
-                Verstanden
+                Schließen
               </button>
             </div>
           </div>

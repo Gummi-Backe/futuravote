@@ -8,6 +8,7 @@ import { FormattedText } from "./components/FormattedText";
 import { getShortDescription } from "./lib/descriptionText";
 import { invalidateProfileCaches } from "./lib/profileCache";
 import { triggerAhaMicrocopy } from "./lib/ahaMicrocopy";
+import { trackEvent } from "./lib/analytics";
 import { consumeFeedVoteDeltas, recordFeedVoteDelta } from "./lib/feedVoteSync";
 import {
   clearVoteCooldown,
@@ -267,7 +268,7 @@ function EventCard({
   return (
       <article
         data-feed-item-id={`q:${question.id}`}
-        className={`group relative flex h-full w-full max-w-xl flex-col gap-5 rounded-3xl border p-6 shadow-xl transition hover:-translate-y-1 mx-auto ${
+        className={`group relative mx-auto flex h-full w-full max-w-xl flex-col gap-4 rounded-2xl border p-4 shadow-xl transition hover:-translate-y-1 sm:gap-5 sm:rounded-3xl sm:p-6 ${
           isResolvable
             ? "border-white/[0.156] bg-white/5 shadow-emerald-500/[0.234] hover:border-emerald-300/[0.624] hover:shadow-emerald-400/[0.39]"
             : "border-amber-200/[0.375] bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.09),rgba(2,6,23,0.95)_70%)] shadow-amber-500/[0.210] hover:border-amber-200/[0.283] hover:shadow-amber-400/[0.314]"
@@ -363,11 +364,11 @@ function EventCard({
                 src={question.imageUrl}
                 alt={question.title}
                 loading="lazy"
-                thumbWrapperClassName="inline-flex max-h-24 max-w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30"
-                thumbImageClassName="h-auto w-auto max-h-24 max-w-[7rem] object-contain transition-transform duration-500 group-hover:scale-105"
+                thumbWrapperClassName="inline-flex max-h-20 max-w-[5.5rem] items-center justify-center overflow-hidden rounded-xl bg-black/30 sm:max-h-24 sm:max-w-[7rem] sm:rounded-2xl"
+                thumbImageClassName="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain transition-transform duration-500 group-hover:scale-105 sm:max-h-24 sm:max-w-[7rem]"
               />
             ) : (
-              <div className="flex h-24 w-[7rem] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+              <div className="flex h-20 w-[5.5rem] items-center justify-center overflow-hidden rounded-xl bg-black/30 sm:h-24 sm:w-[7rem] sm:rounded-2xl">
                 <div
                   className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/10 to-white/0 text-2xl text-white/60"
                   style={{ backgroundColor: `${question.categoryColor}22`, color: question.categoryColor }}
@@ -826,6 +827,7 @@ export default function Home() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const feedImpressionKeyRef = useRef<string | null>(null);
   const tabTouchStart = useRef<number | null>(null);
   const categoryTouchStart = useRef<number | null>(null);
   const [draftSubmittingId, setDraftSubmittingId] = useState<string | null>(null);
@@ -1516,6 +1518,59 @@ export default function Home() {
     () => filteredQuestions.slice(0, visibleQuestionCount),
     [filteredQuestions, visibleQuestionCount]
   );
+  const firstVisibleQuestionId = visibleQuestions[0]?.id ?? null;
+
+  useEffect(() => {
+    if (loading || mainView === "review" || !firstVisibleQuestionId) return;
+    const impressionKey = [
+      mainView,
+      activeTab,
+      activeCategory ?? "",
+      activeRegion ?? "",
+      typeFilter,
+      firstVisibleQuestionId,
+    ].join("|");
+    if (feedImpressionKeyRef.current === impressionKey) return;
+
+    const element = Array.from(document.querySelectorAll<HTMLElement>("[data-feed-item-id]")).find(
+      (item) => item.dataset.feedItemId === `q:${firstVisibleQuestionId}`
+    );
+    if (!element) return;
+
+    const recordImpression = () => {
+      if (feedImpressionKeyRef.current === impressionKey) return;
+      feedImpressionKeyRef.current = impressionKey;
+      trackEvent("feed_impression", {
+        questionId: firstVisibleQuestionId,
+        tab: activeTab,
+        view: mainView,
+      });
+    };
+
+    if (!("IntersectionObserver" in window)) {
+      recordImpression();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.2)) return;
+        recordImpression();
+        observer.disconnect();
+      },
+      { threshold: [0.2] }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [
+    activeCategory,
+    activeRegion,
+    activeTab,
+    firstVisibleQuestionId,
+    loading,
+    mainView,
+    typeFilter,
+  ]);
 
   const filteredDrafts = useMemo(() => {
     let result = drafts;
@@ -1829,6 +1884,7 @@ export default function Home() {
       const alreadyVoted = prevQuestion?.userChoice;
       if (alreadyVoted) return;
 
+      trackEvent("vote_start", { questionId, answerMode: "binary", source: "feed" });
       setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
       setSubmittingId(questionId);
       setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, userChoice: choice } : q)));
@@ -1875,11 +1931,16 @@ export default function Home() {
         );
         invalidateProfileCaches();
         setError(null);
-        triggerAhaMicrocopy({ closesAt: updated.closesAt ?? null });
         if (data.alreadyVoted) {
           showToast("Du hast bereits abgestimmt.", "error");
         } else {
-          showToast("Deine Stimme wurde gezählt.", "success");
+          triggerAhaMicrocopy({
+            closesAt: updated.closesAt ?? null,
+            questionId,
+            questionTitle: updated.title ?? prevQuestion?.title ?? "Future-Vote Umfrage",
+            shareUrl: `${window.location.origin}/questions/${encodeURIComponent(questionId)}`,
+            choiceLabel: choice === "yes" ? "Ja" : "Nein",
+          });
         }
       } catch {
         clearVoteCooldown();
@@ -1917,6 +1978,7 @@ export default function Home() {
       const alreadyVoted = prevQuestion?.userOptionId;
       if (alreadyVoted) return;
 
+      trackEvent("vote_start", { questionId, answerMode: "options", source: "feed" });
       setVoteCooldownUntil(Date.now() + FV_VOTE_COOLDOWN_DEFAULT_MS);
       setSubmittingId(questionId);
       setQuestions((prev) =>
@@ -1987,11 +2049,18 @@ export default function Home() {
         setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         invalidateProfileCaches();
         setError(null);
-        triggerAhaMicrocopy({ closesAt: updated.closesAt ?? null });
         if (data.alreadyVoted) {
           showToast("Du hast bereits abgestimmt.", "error");
         } else {
-          showToast("Deine Stimme wurde gezählt.", "success");
+          const selectedOptionId = typeof updated.userOptionId === "string" ? updated.userOptionId : optionId;
+          const selectedLabel = updated.options?.find((option) => option.id === selectedOptionId)?.label;
+          triggerAhaMicrocopy({
+            closesAt: updated.closesAt ?? null,
+            questionId,
+            questionTitle: updated.title ?? prevQuestion?.title ?? "Future-Vote Umfrage",
+            shareUrl: `${window.location.origin}/questions/${encodeURIComponent(questionId)}`,
+            choiceLabel: selectedLabel ?? "Abgestimmt",
+          });
         }
       } catch (e: unknown) {
         clearVoteCooldown();
@@ -2359,26 +2428,26 @@ export default function Home() {
       className={`${isLeaving ? "page-leave" : "page-enter"} min-h-screen bg-transparent text-slate-50`}
     >
       <FirstStepsOverlay />
-      <div className="mx-auto max-w-6xl px-4 pb-12 pt-6 lg:px-6">
-        <header className="flex flex-col gap-6 rounded-3xl border border-white/10 bg-white/10 px-4 py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:px-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-xl text-emerald-100 shadow-lg shadow-emerald-500/40">
+      <div className="mx-auto max-w-6xl px-3 pb-12 pt-3 sm:px-4 sm:pt-6 lg:px-6">
+        <header className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/10 px-3 py-4 shadow-2xl shadow-emerald-500/10 backdrop-blur sm:gap-6 sm:rounded-3xl sm:px-6 sm:py-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-lg text-emerald-100 shadow-lg shadow-emerald-500/40 sm:h-11 sm:w-11 sm:rounded-2xl sm:text-xl">
                 FV
               </div>
               <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.3rem] text-emerald-200/80">FUTURE-VOTE</p>
-                <h1 className="text-3xl font-semibold leading-tight text-white md:text-4xl">
+                <p className="text-[10px] uppercase tracking-[0.2rem] text-emerald-200/80 sm:text-xs sm:tracking-[0.3rem]">FUTURE-VOTE</p>
+                <h1 className="text-2xl font-semibold leading-tight text-white sm:text-3xl md:text-4xl">
                   Umfragen &amp; Prognosen, schnell abgestimmt.
                 </h1>
-                <p className="mt-1 max-w-2xl text-sm font-semibold text-emerald-100/90">
+                <p className="mt-1 max-w-2xl text-xs font-semibold text-emerald-100/90 sm:text-sm">
                   Deine Meinung. Deine Prognose. Deine Stimme.
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
+            <div className="flex w-full shrink-0 flex-col items-end gap-2 md:w-auto">
               {currentUser && (
-                <div className="flex items-center gap-2 rounded-xl bg-black/30 px-3 py-2 text-xs text-slate-200">
+                <div className="flex w-full items-center justify-between gap-2 rounded-xl bg-black/30 px-2 py-1.5 text-xs text-slate-200 md:w-auto md:px-3 md:py-2">
                   <button
                     type="button"
                     onClick={() => navigateWithTransition("/profil")}
@@ -2393,7 +2462,7 @@ export default function Home() {
                         .slice(0, 2)
                         .toUpperCase() || "U"}
                     </span>
-                    <span>Eingeloggt als {currentUser.displayName}</span>
+                    <span className="max-w-[10rem] truncate sm:max-w-none">Eingeloggt als {currentUser.displayName}</span>
                   </button>
                   {currentUser.role === "admin" && (
                     <button
@@ -2420,7 +2489,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => navigateWithTransition("/auth")}
-                  className="rounded-xl bg-emerald-500/80 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500"
+                  className="w-full rounded-xl bg-emerald-500/80 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:bg-emerald-500 md:w-auto md:py-3"
                   title="Einloggen oder registrieren"
                 >
                   Login / Register
@@ -3064,10 +3133,10 @@ export default function Home() {
           )}
         </div>
 
-        <section className="sticky top-0 z-30 mt-8">
+        <section className="sticky top-0 z-30 mt-4 sm:mt-8">
           <div className="-mx-2 rounded-2xl border border-white/10 bg-slate-950/80 px-2 py-2 shadow-sm shadow-black/30 backdrop-blur-sm sm:px-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
+              <h2 className="hidden items-center gap-2 text-xl font-semibold text-white sm:flex">
                 {mainView === "review" ? (
                   <>
                     <span aria-hidden="true">🗳️</span>
@@ -3081,7 +3150,7 @@ export default function Home() {
                 )}
               </h2>
 
-              <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
                 {mainView !== "review" ? (
                   <span className="hidden lg:inline text-sm text-slate-300">Engagement + Freshness + Trust</span>
                 ) : null}
@@ -3091,7 +3160,7 @@ export default function Home() {
                 
 
                 <div
-                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
+                  className="grid w-full grid-cols-3 overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur sm:inline-flex sm:w-auto"
                   role="group"
                   aria-label="Bereich"
                   title="Zwischen Alle, Feed und Review umschalten"
@@ -3099,7 +3168,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setMainView("all")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold transition sm:px-4 ${
                       mainView === "all" ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
                     }`}
                   >
@@ -3108,7 +3177,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setMainView("feed")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold transition sm:px-4 ${
                       mainView === "feed" ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
                     }`}
                   >
@@ -3117,7 +3186,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setMainView("review")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold transition sm:px-4 ${
                       mainView === "review" ? "bg-emerald-500/25 text-white" : "text-slate-100 hover:bg-white/5"
                     }`}
                   >
@@ -3125,7 +3194,7 @@ export default function Home() {
                   </button>
                 </div>
 <div
-                  className="inline-flex overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur"
+                  className="grid w-full grid-cols-2 overflow-hidden rounded-full border border-white/10 bg-white/5 shadow-sm shadow-black/20 backdrop-blur sm:inline-flex sm:w-auto"
                   role="group"
                   aria-label="Abstimmungsfilter"
                   title="Wähle, ob du noch offene oder bereits abgestimmte Fragen sehen willst"
@@ -3133,7 +3202,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setGuestVotedFilter("exclude")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold transition sm:px-4 ${
                       guestVotedFilter === "exclude"
                         ? "bg-emerald-500/25 text-white"
                         : "text-slate-100 hover:bg-white/5"
@@ -3145,7 +3214,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setGuestVotedFilter("only")}
-                    className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold transition ${
+                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold transition sm:px-4 ${
                       guestVotedFilter === "only"
                         ? "bg-emerald-500/25 text-white"
                         : "text-slate-100 hover:bg-white/5"
@@ -3223,6 +3292,7 @@ export default function Home() {
                       onVote={(choice) => handleVote(q.id, choice)}
                        onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
                        onOpenDetails={(href) => {
+                         trackEvent("question_open", { questionId: q.id, source: "feed" });
                          saveFeedUiStateNow();
                          saveFeedScrollAnchor(`q:${q.id}`);
                          navigateWithTransition(href);
@@ -3408,6 +3478,7 @@ export default function Home() {
                       onVote={(choice) => handleVote(q.id, choice)}
                        onVoteOption={(optionId) => handleVoteOption(q.id, optionId)}
                        onOpenDetails={(href) => {
+                         trackEvent("question_open", { questionId: q.id, source: "answered_feed" });
                          saveFeedUiStateNow();
                          saveFeedScrollAnchor(`q:${q.id}`);
                          navigateWithTransition(href);
