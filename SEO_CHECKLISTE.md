@@ -13,13 +13,16 @@ Diese Liste wird in der angegebenen Reihenfolge abgearbeitet. Ein Punkt wird ers
 
 ## 1. Serverseitiges Umfrageverzeichnis
 
-- [ ] `/questions` nicht mehr auf die Startseite umleiten, sondern als eigene oeffentliche Uebersicht umsetzen.
-- [ ] Aktive oeffentliche Umfragen bereits im Server-HTML ausgeben.
-- [ ] Normale crawlbare Links (`<a href>` beziehungsweise Next.js `Link`) zu jeder Umfrage verwenden.
-- [ ] Seitennavigation fuer alle Umfragen einbauen, damit auch aeltere Eintraege erreichbar bleiben.
-- [ ] Eindeutigen Seitentitel, Beschreibung, H1 und kanonische URL fuer `/questions` setzen.
-- [ ] `/questions` in Navigation oder Footer und in die Sitemap aufnehmen.
-- [ ] Mobile Darstellung, Statuscode, Canonical, Indexierbarkeit und HTML-Ausgabe testen.
+- [x] `/questions` nicht mehr auf die Startseite umleiten, sondern als eigene oeffentliche Uebersicht umsetzen.
+- [x] Aktive oeffentliche Umfragen bereits im Server-HTML ausgeben.
+- [x] Normale crawlbare Links (`<a href>` beziehungsweise Next.js `Link`) zu jeder Umfrage verwenden.
+- [x] Seitennavigation fuer alle Umfragen einbauen, damit auch aeltere Eintraege erreichbar bleiben.
+- [x] Eindeutigen Seitentitel, Beschreibung, H1 und kanonische URL fuer `/questions` setzen.
+- [x] `/questions` in Navigation oder Footer und in die Sitemap aufnehmen.
+- [x] Mobile Darstellung, Statuscode, Canonical, Indexierbarkeit und HTML-Ausgabe testen.
+
+Produktionspruefung am 09.08.2026: 20 aktive Fragen auf zwei Seiten, HTTP 200, korrekte Canonicals,
+crawlbare Links bereits im Server-HTML, Eintrag in der Sitemap sowie kein horizontaler Ueberlauf auf Mobil und Desktop.
 
 ## 2. Themenseiten
 
