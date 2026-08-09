@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { trackEvent, trackShare } from "@/app/lib/analytics";
 import { resolveShareUrl } from "@/app/lib/referralClient";
 import { addShareTracking, type ShareChannel } from "@/app/lib/shareChannels";
@@ -232,9 +233,10 @@ export function QuestionShareMenu({
         Teilen
       </button>
 
-      {open ? (
+      {open && typeof document !== "undefined"
+        ? createPortal(
         <div
-          className="overlay-enter fixed inset-0 z-[998] flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center"
+          className="overlay-enter fixed inset-0 z-[998] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setOpen(false);
           }}
@@ -337,8 +339,10 @@ export function QuestionShareMenu({
               {error ?? (copied ? "Link wurde kopiert." : "")}
             </p>
           </section>
-        </div>
-      ) : null}
+        </div>,
+        document.body
+      )
+        : null}
     </>
   );
 }
