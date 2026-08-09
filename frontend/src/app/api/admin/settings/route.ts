@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getAdminSettings, updateAdminSettings } from "@/app/lib/adminSettings";
+import { mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -32,6 +33,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
@@ -56,4 +60,3 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: e?.message ?? "Speichern fehlgeschlagen." }, { status: 500 });
   }
 }
-

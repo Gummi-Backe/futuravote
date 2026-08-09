@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -9,7 +10,7 @@ type Body = {
   size?: "1024x1024" | "1024x1536" | "1536x1024";
 };
 
-type ImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini" | "dall-e-3";
+type ImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
 
 type OpenAiImagePayload = {
   error?: {
@@ -30,7 +31,6 @@ const IMAGE_MODEL_ORDER: readonly ImageModel[] = [
   "gpt-image-1.5",
   "gpt-image-1",
   "gpt-image-1-mini",
-  "dall-e-3",
 ];
 
 function isImageModel(raw: string | undefined): raw is ImageModel {
@@ -38,8 +38,7 @@ function isImageModel(raw: string | undefined): raw is ImageModel {
     raw === "gpt-image-2" ||
     raw === "gpt-image-1.5" ||
     raw === "gpt-image-1" ||
-    raw === "gpt-image-1-mini" ||
-    raw === "dall-e-3"
+    raw === "gpt-image-1-mini"
   );
 }
 
@@ -58,15 +57,8 @@ function getImageModelCandidates(): ImageModel[] {
   return candidates;
 }
 
-function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
+function mapSizeForModel(_model: ImageModel, size: Body["size"]): string {
   const chosen = size === "1024x1536" || size === "1536x1024" ? size : "1024x1024";
-
-  if (model === "dall-e-3") {
-    if (chosen === "1536x1024") return "1792x1024";
-    if (chosen === "1024x1536") return "1024x1792";
-    return "1024x1024";
-  }
-
   return chosen;
 }
 
@@ -90,12 +82,26 @@ function shouldTryNextImageModel(payload: OpenAiImagePayload | null, status: num
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
     return NextResponse.json({ error: "Nur Admins duerfen diese Route nutzen." }, { status: 403 });
+  }
+
+  const imageRate = await consumeRateLimit({
+    request,
+    scope: "admin-image-generate",
+    identifier: `user:${user.id}`,
+    limit: 20,
+    windowSeconds: 60 * 60,
+  });
+  if (!imageRate.allowed) {
+    return rateLimitResponse(imageRate, "Bildlimit erreicht. Bitte später erneut versuchen.");
   }
 
   let body: Body;
@@ -134,7 +140,6 @@ export async function POST(request: Request) {
         model: candidate,
         prompt,
         size,
-        ...(candidate === "dall-e-3" ? { quality: "standard" } : null),
       }),
     });
 

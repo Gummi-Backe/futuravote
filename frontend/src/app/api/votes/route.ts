@@ -11,28 +11,15 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { creditReferralVote } from "@/app/data/dbSupabaseReferrals";
-
-const RATE_LIMIT_MS = 5000;
-const lastVoteBySession = new Map<string, number>();
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
-function errorStatusForMessage(message: string): number {
-  const msg = message.toLowerCase();
-  if (
-    msg.includes("ungueltig") ||
-    msg.includes("ungültig") ||
-    msg.includes("invalid payload") ||
-    msg.includes("mindestens") ||
-    msg.includes("option")
-  ) {
-    return 400;
-  }
-  return 500;
-}
-
 export async function POST(request: Request) {
   try {
+    const invalidSource = mutationRequestGuard(request);
+    if (invalidSource) return invalidSource;
+
     const body = (await request.json().catch(() => null)) as
       | { questionId?: string; choice?: unknown; optionId?: unknown }
       | null;
@@ -65,21 +52,32 @@ export async function POST(request: Request) {
       }
     }
 
-    const now = Date.now();
-    const lastVote = lastVoteBySession.get(sessionId) ?? 0;
-    const diff = now - lastVote;
-    if (diff < RATE_LIMIT_MS) {
+    const [globalRate, questionRate] = await Promise.all([
+      consumeRateLimit({
+        request,
+        scope: "vote-global",
+        identifier: userId ? `user:${userId}` : undefined,
+        limit: userId ? 120 : 60,
+        windowSeconds: 10 * 60,
+      }),
+      consumeRateLimit({
+        request,
+        scope: `vote-question:${questionId}`,
+        identifier: userId ? `user:${userId}` : undefined,
+        limit: userId ? 5 : 3,
+        windowSeconds: 24 * 60 * 60,
+      }),
+    ]);
+    const blockedRate = !globalRate.allowed ? globalRate : !questionRate.allowed ? questionRate : null;
+    if (blockedRate) {
       await logAnalyticsEventServer({
         event: "rate_limit_vote",
         sessionId,
         userId,
         path: `/questions/${questionId ?? ""}`,
-        meta: { retryAfterMs: RATE_LIMIT_MS - diff },
+        meta: { retryAfterSeconds: blockedRate.retryAfterSeconds },
       });
-      return NextResponse.json(
-        { error: "Too Many Requests", retryAfterMs: RATE_LIMIT_MS - diff },
-        { status: 429, headers: { "Retry-After": `${Math.ceil((RATE_LIMIT_MS - diff) / 1000)}` } }
-      );
+      return rateLimitResponse(blockedRate, "Zu viele Abstimmungsversuche. Bitte später erneut versuchen.");
     }
 
     const existing = await getQuestionByIdFromSupabase(questionId, sessionId, userId);
@@ -106,10 +104,6 @@ export async function POST(request: Request) {
     const updated = result?.question ?? null;
     const alreadyVoted = Boolean(result?.alreadyVoted);
     if (!alreadyVoted) {
-      lastVoteBySession.set(sessionId, now);
-    }
-
-    if (!alreadyVoted) {
       await logAnalyticsEventServer({
         event: "vote_question",
         sessionId,
@@ -127,9 +121,14 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unbekannter Fehler";
     console.error("Vote failed:", message);
+    const status = typeof (e as any)?.status === "number" ? (e as any).status : 500;
+    const publicMessage =
+      status < 500 && message
+        ? message
+        : "Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut.";
     return NextResponse.json(
-      { error: message || "Deine Stimme konnte nicht gespeichert werden. Bitte versuche es erneut." },
-      { status: errorStatusForMessage(message || "") }
+      { error: publicMessage },
+      { status }
     );
   }
 }

@@ -7,6 +7,8 @@ import type { AnswerMode, PollVisibility } from "@/app/data/mock";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
 import { buildDraftReviewUrl, buildPrivatePollUrl } from "@/app/lib/publicUrls";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { computeDefaultResolutionDeadlineIso, resolutionDeadlineFollowsPollClose } from "@/app/lib/draftValidation";
 
 export const revalidate = 0;
 
@@ -147,30 +149,6 @@ function countWords(raw: string): number {
   return cleaned.split(" ").filter(Boolean).length;
 }
 
-function addDaysIso(iso: string, days: number): string | null {
-  const baseMs = Date.parse(iso);
-  if (!Number.isFinite(baseMs)) return null;
-  const nextMs = baseMs + days * 24 * 60 * 60 * 1000;
-  return new Date(nextMs).toISOString();
-}
-
-function computeDefaultResolutionDeadlineIso({
-  closesAtIso,
-  timeLeftHours,
-}: {
-  closesAtIso?: string;
-  timeLeftHours: number;
-}): string {
-  const baseIso =
-    closesAtIso && !Number.isNaN(Date.parse(closesAtIso))
-      ? closesAtIso
-      : new Date(Date.now() + timeLeftHours * 60 * 60 * 1000).toISOString();
-  return (
-    addDaysIso(baseIso, 31) ??
-    new Date(Date.now() + (timeLeftHours * 60 * 60 + 31 * 24 * 60 * 60) * 1000).toISOString()
-  );
-}
-
 function isAllowedGptImageUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);
@@ -219,6 +197,9 @@ async function isReachableGptImageUrl(rawUrl: string): Promise<boolean> {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request, { allowBearer: true });
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const cookieSessionId = cookieStore.get("fv_user")?.value ?? null;
   let sessionId: string | null = cookieSessionId;
@@ -263,6 +244,20 @@ export async function POST(request: Request) {
 
   if (!user) {
     return errorResponse(401, "Bitte melde dich an, bevor du eine Frage vorschlägst.", "unauthorized");
+  }
+  if (!user.emailVerified) {
+    return errorResponse(403, "Bitte bestätige zuerst deine E-Mail-Adresse.", "email_verification_required");
+  }
+
+  const createRate = await consumeRateLimit({
+    request,
+    scope: "draft-create",
+    identifier: `user:${user.id}`,
+    limit: 20,
+    windowSeconds: 60 * 60,
+  });
+  if (!createRate.allowed) {
+    return rateLimitResponse(createRate, "Zu viele neue Umfragen. Bitte später erneut versuchen.");
   }
 
   let body: DraftInput;
@@ -603,6 +598,20 @@ export async function POST(request: Request) {
         "Bitte setze eine Auflösungs-Deadline (Datum/Uhrzeit).",
         "resolution_deadline_required",
         [{ field: "resolutionDeadline", issue: "required_for_public_resolvable" }]
+      );
+    }
+    if (!resolutionDeadlineFollowsPollClose({
+      resolutionDeadline: resolutionDeadlineToSave,
+      targetClosesAt,
+      reviewHours: timeLeftHours,
+      defaultPollDays: 14,
+      nowMs: Date.now(),
+    })) {
+      return errorResponse(
+        400,
+        "Die Auflösungs-Deadline muss nach dem Abstimmungsende liegen.",
+        "resolution_deadline_must_follow_close",
+        [{ field: "resolutionDeadline", issue: "must_be_after_poll_close", value: resolutionDeadlineToSave }]
       );
     }
   } else if (resolutionCriteria || effectiveResolutionSource || resolutionDeadline || resolutionSourcesRaw.length > 0) {

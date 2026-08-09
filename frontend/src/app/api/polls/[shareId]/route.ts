@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getPollByShareIdFromSupabase, incrementViewsForQuestionInSupabase } from "@/app/data/dbSupabase";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 
 export const revalidate = 0;
 
@@ -18,8 +19,10 @@ export async function GET(_: Request, context: Params) {
   const cookieStore = await cookies();
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
+  const userSessionId = cookieStore.get("fv_user")?.value;
+  const user = userSessionId ? await getUserBySessionSupabase(userSessionId).catch(() => null) : null;
 
-  const poll = await getPollByShareIdFromSupabase({ shareId, sessionId });
+  const poll = await getPollByShareIdFromSupabase({ shareId, sessionId, userId: user?.id ?? null });
   if (!poll) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }

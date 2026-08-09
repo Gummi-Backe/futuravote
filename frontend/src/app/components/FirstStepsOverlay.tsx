@@ -14,12 +14,16 @@ export function FirstStepsOverlay() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    let openTimer: number | null = null;
     try {
       if (window.localStorage.getItem(STORAGE_KEY) === "1") return;
-      setOpen(true);
+      openTimer = window.setTimeout(() => setOpen(true), 0);
     } catch {
       // Falls Storage geblockt ist: kein Overlay erzwingen.
     }
+    return () => {
+      if (openTimer !== null) window.clearTimeout(openTimer);
+    };
   }, []);
 
   const close = useCallback(() => {
@@ -170,4 +174,3 @@ export function FirstStepsOverlay() {
     </div>
   );
 }
-

@@ -5,11 +5,9 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { addQuestionComment, listQuestionComments, type CommentStance } from "@/app/data/dbSupabaseComments";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
-
-const RATE_LIMIT_MS = 5000;
-const lastCommentByUser = new Map<string, number>();
 
 function isMissingRelation(error: unknown): boolean {
   const code = String((error as any)?.code ?? "");
@@ -144,6 +142,9 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const resolved = await props.params;
   const questionId = resolved?.id;
   if (!questionId) return NextResponse.json({ error: "ID fehlt." }, { status: 400 });
@@ -163,21 +164,32 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Bitte zuerst E-Mail bestätigen." }, { status: 403 });
   }
 
-  const now = Date.now();
-  const last = lastCommentByUser.get(user.id) ?? 0;
-  const diff = now - last;
-  if (diff < RATE_LIMIT_MS) {
+  const [burstRate, dailyRate] = await Promise.all([
+    consumeRateLimit({
+      request,
+      scope: "comment-create-burst",
+      identifier: `user:${user.id}`,
+      limit: 1,
+      windowSeconds: 5,
+    }),
+    consumeRateLimit({
+      request,
+      scope: "comment-create-daily",
+      identifier: `user:${user.id}`,
+      limit: 30,
+      windowSeconds: 24 * 60 * 60,
+    }),
+  ]);
+  const blockedRate = !burstRate.allowed ? burstRate : !dailyRate.allowed ? dailyRate : null;
+  if (blockedRate) {
     await logAnalyticsEventServer({
       event: "rate_limit_comment",
       sessionId: sessionId,
       userId: user.id,
       path: `/questions/${questionId}`,
-      meta: { retryAfterMs: RATE_LIMIT_MS - diff },
+      meta: { retryAfterSeconds: blockedRate.retryAfterSeconds },
     });
-    return NextResponse.json(
-      { error: "Bitte kurz warten.", retryAfterMs: RATE_LIMIT_MS - diff },
-      { status: 429, headers: { "Retry-After": `${Math.ceil((RATE_LIMIT_MS - diff) / 1000)}` } }
-    );
+    return rateLimitResponse(blockedRate, "Zu viele Kommentare. Bitte später erneut versuchen.");
   }
 
   const body = (await request.json().catch(() => null)) as any;
@@ -200,7 +212,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       body: text,
       sourceUrl,
     });
-    lastCommentByUser.set(user.id, now);
     return NextResponse.json({ ok: true, comment }, { status: 200 });
   } catch (e: unknown) {
     const code = (e as any)?.code as string | undefined;

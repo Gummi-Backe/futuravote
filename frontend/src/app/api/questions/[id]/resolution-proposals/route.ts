@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -166,7 +167,8 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
         { status: 500 }
       );
     }
-    return NextResponse.json({ error: `Supabase Fehler: ${error.message}` }, { status: 500 });
+    console.error("Resolution proposals list failed", error);
+    return NextResponse.json({ error: "Aufloesungsvorschlaege konnten nicht geladen werden." }, { status: 500 });
   }
 
   const rows: ProposalRow[] = ((data ?? []) as any[]).map((r: any) => {
@@ -201,6 +203,9 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const resolved = await props.params;
   const questionId = resolved?.id;
   if (!questionId) return NextResponse.json({ error: "ID fehlt." }, { status: 400 });
@@ -223,6 +228,17 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   const user = await getUserBySessionSupabase(sessionId).catch(() => null);
   if (!user) return NextResponse.json({ error: "Bitte einloggen." }, { status: 401 });
   if (!user.emailVerified) return NextResponse.json({ error: "Bitte zuerst E-Mail bestätigen." }, { status: 403 });
+
+  const proposalRate = await consumeRateLimit({
+    request,
+    scope: "resolution-proposal",
+    identifier: `user:${user.id}`,
+    limit: 20,
+    windowSeconds: 24 * 60 * 60,
+  });
+  if (!proposalRate.allowed) {
+    return rateLimitResponse(proposalRate, "Zu viele Auflösungsvorschläge. Bitte später erneut versuchen.");
+  }
 
   const ended = String(question.closesAt).slice(0, 10) < todayUtcDateIso();
   const resolvedOutcome = question.resolvedOutcome === "yes" || question.resolvedOutcome === "no" ? question.resolvedOutcome : null;
@@ -262,7 +278,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         { status: 500 }
       );
     }
-    return NextResponse.json({ error: `Supabase Fehler: ${upsertErr.message}` }, { status: 500 });
+    console.error("Resolution proposal save failed", upsertErr);
+    return NextResponse.json({ error: "Aufloesungsvorschlag konnte nicht gespeichert werden." }, { status: 500 });
   }
 
   // Neu laden, damit wir konsistente Zaehler + sources haben
@@ -274,7 +291,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     .limit(200);
 
   if (listErr) {
-    return NextResponse.json({ error: `Supabase Fehler: ${listErr.message}` }, { status: 500 });
+    console.error("Resolution proposals reload failed", listErr);
+    return NextResponse.json({ error: "Aufloesungsvorschlaege konnten nicht geladen werden." }, { status: 500 });
   }
 
   const normalizedRows: ProposalRow[] = ((rows ?? []) as any[]).map((r: any) => {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { adminResolveQuestionInSupabase } from "@/app/data/dbSupabase";
+import { mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -103,6 +104,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
@@ -198,4 +202,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true, question });
 }
-

@@ -230,10 +230,12 @@ export async function hasAdminUserSupabase(): Promise<boolean> {
 export async function createUserSessionSupabase(userId: string): Promise<string> {
   const supabase = getSupabaseAdminClient();
   const id = randomUUID();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const { error } = await supabase.from("user_sessions").insert({
     id,
     user_id: userId,
+    expires_at: expiresAt,
   });
 
   if (error) {
@@ -250,6 +252,7 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
     .from("user_sessions")
     .select(
       `
+        expires_at,
         users (
           id,
           email,
@@ -263,6 +266,7 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
       `
     )
     .eq("id", sessionId)
+    .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
   if (error) {

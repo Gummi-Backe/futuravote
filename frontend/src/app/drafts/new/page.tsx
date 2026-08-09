@@ -39,6 +39,20 @@ function getPreviewCategoryLetter(category: string, customCategory: string, useC
   return value.charAt(0).toUpperCase() || "?";
 }
 
+function getDateStringDaysFromNow(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + Math.max(0, Math.floor(days)));
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function getDayAfterDateString(value: string): string | null {
+  const parsed = Date.parse(`${value}T12:00:00`);
+  if (!Number.isFinite(parsed)) return null;
+  const date = new Date(parsed);
+  date.setDate(date.getDate() + 1);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
 type UploadImageJson = { imageUrl?: string; error?: string };
 
 const MAX_ORIGINAL_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -127,7 +141,7 @@ export default function NewDraftPage() {
   const [endDate, setEndDate] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
   const minEndDate = getTodayDateString();
-  const minResolutionDate = getTodayDateString();
+  const minResolutionDate = getDayAfterDateString(endDate) ?? getDateStringDaysFromNow(18);
   const minResolutionTime = getMinTimeStringForDate(resolutionDeadlineDate || minResolutionDate);
   const isPrivatePoll = visibility === "link_only";
   const effectiveMinResolutionTime =
@@ -344,9 +358,9 @@ export default function NewDraftPage() {
   }, [endDate, endTime, isPrivatePoll, minEndDate]);
 
   useEffect(() => {
-    if (resolutionDeadlineDate) return;
-    setResolutionDeadlineDate(endDate || minEndDate);
-  }, [endDate, minEndDate, resolutionDeadlineDate]);
+    if (resolutionDeadlineDate && resolutionDeadlineDate >= minResolutionDate) return;
+    setResolutionDeadlineDate(minResolutionDate);
+  }, [minResolutionDate, resolutionDeadlineDate]);
 
   useEffect(() => {
     if (resolutionDeadlineTime) return;
@@ -575,7 +589,7 @@ export default function NewDraftPage() {
       return;
     }
 
-    let finalCategory = isPrivatePoll ? "Privat" : useCustomCategory ? customCategory.trim() : category.trim();
+    const finalCategory = isPrivatePoll ? "Privat" : useCustomCategory ? customCategory.trim() : category.trim();
     if (!finalCategory) {
       setError("Bitte wähle eine Kategorie oder gib eine eigene ein.");
       return;

@@ -8,7 +8,6 @@ export const revalidate = 0;
 export async function GET() {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
-  const reviewSessionId = cookieStore.get("fv_session")?.value ?? null;
   if (!sessionId) {
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
   }
@@ -56,12 +55,10 @@ export async function GET() {
     .eq("user_id", user.id)
     .eq("choice", "no");
 
-  const { count: reviewsTotal } = reviewSessionId
-    ? await supabase
-        .from("draft_reviews")
-        .select("id", { count: "exact", head: true })
-        .eq("session_id", reviewSessionId)
-    : { count: 0 };
+  const { count: reviewsTotal } = await supabase
+    .from("draft_reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("reviewer_user_id", user.id);
 
   const accepted = draftsAccepted ?? 0;
   const rejected = draftsRejected ?? 0;

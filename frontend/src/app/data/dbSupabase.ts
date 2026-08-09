@@ -65,61 +65,11 @@ type QuestionsRankCursor = {
   id: string;
 };
 
-type ReportsCountRow = {
-  item_id: string;
-  reporter_session_id: string | null;
-};
-
 type QuestionUpdateMetaRow = {
   question_id: string | null;
   body: string | null;
   created_at: string | null;
 };
-
-async function fetchOpenReportDistinctSessionsByItemId(options: {
-  supabase: ReturnType<typeof getSupabaseAdminClient>;
-  kind: "question" | "draft";
-  itemIds: string[];
-}): Promise<Map<string, number>> {
-  const { supabase, kind, itemIds } = options;
-  const ids = itemIds.filter((id) => typeof id === "string" && id.length > 0).slice(0, 500);
-  if (ids.length === 0) return new Map();
-
-  try {
-    const { data, error } = await supabase
-      .from("reports")
-      .select("item_id,reporter_session_id")
-      .eq("kind", kind)
-      .eq("status", "open")
-      .in("item_id", ids)
-      .limit(5000);
-
-    if (error) {
-      const code = (error as any)?.code as string | undefined;
-      if (code === "42P01") return new Map();
-      return new Map();
-    }
-
-    const map = new Map<string, Set<string>>();
-    for (const row of (data as ReportsCountRow[]) ?? []) {
-      const itemId = String((row as any).item_id ?? "");
-      if (!itemId) continue;
-      const session = String((row as any).reporter_session_id ?? "");
-      if (!session) continue;
-      const set = map.get(itemId) ?? new Set<string>();
-      set.add(session);
-      map.set(itemId, set);
-    }
-
-    const counts = new Map<string, number>();
-    for (const [itemId, sessions] of map.entries()) {
-      counts.set(itemId, sessions.size);
-    }
-    return counts;
-  } catch {
-    return new Map();
-  }
-}
 
 async function fetchLatestQuestionUpdatesMeta(options: {
   supabase: ReturnType<typeof getSupabaseAdminClient>;
@@ -331,6 +281,7 @@ type DraftRow = {
   time_left_hours: number;
   target_closes_at: string | null;
   status: string | null;
+  decision_source?: string | null;
   created_at: string | null;
   visibility: PollVisibility | null;
   share_id: string | null;
@@ -874,8 +825,6 @@ export async function getQuestionsPageFromSupabase(options: {
   const { sessionId, userId, voted, limit, offset, cursor, tab, category, region, query: titleQuery } = options;
   const supabase = getSupabaseAdminClient();
   const cursorMode = Boolean(cursor);
-  const adminSettings = await getAdminSettings();
-  const quarantineThreshold = Math.max(1, adminSettings.reportQuarantineThreshold);
 
   const stopwords = new Set([
     "der",
@@ -1205,21 +1154,7 @@ export async function getQuestionsPageFromSupabase(options: {
       return mapQuestion(row, vote, optionsMap.get(row.id), updatesMap.get(row.id));
     });
 
-    const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
-      supabase,
-      kind: "question",
-      itemIds: rawItems.map((i) => i.id),
-    });
-
-    const items = rawItems
-      .map((item) => {
-        const reports = reportCounts.get(item.id) ?? 0;
-        const isQuarantined = reports >= quarantineThreshold;
-        return { ...item, isQuarantined };
-      })
-      .filter((item) => !item.isQuarantined);
-
-    return { items, total: scored.length, nextCursor: null };
+    return { items: rawItems, total: scored.length, nextCursor: null };
   }
 
   const total = effectiveCursorMode ? totalCount ?? typedRows.length : count ?? typedRows.length;
@@ -1240,20 +1175,6 @@ export async function getQuestionsPageFromSupabase(options: {
     const vote = sessionVotesMap.get(row.id) ?? userVotesMap.get(row.id);
     return mapQuestion(row, vote, optionsMap.get(row.id), updatesMap.get(row.id));
   });
-
-  const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
-    supabase,
-    kind: "question",
-    itemIds: rawItems.map((i) => i.id),
-  });
-
-  const items = rawItems
-    .map((item) => {
-      const reports = reportCounts.get(item.id) ?? 0;
-      const isQuarantined = reports >= quarantineThreshold;
-      return { ...item, isQuarantined };
-    })
-    .filter((item) => !item.isQuarantined);
 
   const lastRow = pageRows[pageRows.length - 1];
   let nextCursor: string | null = null;
@@ -1283,7 +1204,7 @@ export async function getQuestionsPageFromSupabase(options: {
     }
   }
 
-  return { items, total, nextCursor };
+  return { items: rawItems, total, nextCursor };
 }
 export async function getQuestionByIdFromSupabase(
   id: string,
@@ -1291,8 +1212,6 @@ export async function getQuestionByIdFromSupabase(
   userId?: string | null
 ): Promise<QuestionWithVotes | null> {
   const supabase = getSupabaseAdminClient();
-  const adminSettings = await getAdminSettings();
-  const quarantineThreshold = Math.max(1, adminSettings.reportQuarantineThreshold);
 
   const { data: row, error } = await supabase
     .from("questions")
@@ -1354,10 +1273,7 @@ export async function getQuestionByIdFromSupabase(
   // Eingeloggte Nutzer: Account-Vote hat Vorrang vor Session-Vote (geräteübergreifend konsistent).
   const updatesMap = await fetchLatestQuestionUpdatesMeta({ supabase, questionIds: [id] });
   const mapped = mapQuestion(questionRow, userVote ?? sessionVote, optionsMap.get(id), updatesMap.get(id));
-  const reportCounts = await fetchOpenReportDistinctSessionsByItemId({ supabase, kind: "question", itemIds: [id] });
-  const reports = reportCounts.get(id) ?? 0;
-  const isQuarantined = reports >= quarantineThreshold;
-  return { ...mapped, isQuarantined };
+  return mapped;
 }
 
 export type SharedPoll =
@@ -1367,8 +1283,9 @@ export type SharedPoll =
 export async function getPollByShareIdFromSupabase(options: {
   shareId: string;
   sessionId?: string;
+  userId?: string | null;
 }): Promise<SharedPoll | null> {
-  const { shareId, sessionId } = options;
+  const { shareId, sessionId, userId } = options;
   const supabase = getSupabaseAdminClient();
 
   const { data: questionRow, error: questionError } = await supabase
@@ -1492,12 +1409,12 @@ export async function getPollByShareIdFromSupabase(options: {
   }
 
   let alreadyReviewed = false;
-  if (sessionId) {
+  if (userId || sessionId) {
     const { data: reviewRow, error: reviewError } = await supabase
       .from("draft_reviews")
       .select("id")
       .eq("draft_id", (draftRow as any).id)
-      .eq("session_id", sessionId)
+      .eq(userId ? "reviewer_user_id" : "session_id", userId ?? sessionId)
       .maybeSingle();
 
     if (reviewError) {
@@ -1531,81 +1448,29 @@ export async function voteOnQuestionInSupabase(
 ): Promise<{ question: QuestionWithVotes | null; alreadyVoted: boolean }> {
   const supabase = getSupabaseAdminClient();
 
-  // Doppelvotes für eingeloggte Nutzer verhindern (geräteübergreifend)
-  if (userId) {
-    const { data: existingUserVotes, error: existingUserError } = await supabase
-      .from("votes")
-      .select("question_id")
-      .eq("question_id", id)
-      .eq("user_id", userId)
-      .limit(1);
-
-    if (existingUserError) {
-      throw new Error(`Supabase Vote-Check (User) fehlgeschlagen: ${existingUserError.message}`);
-    }
-    if ((existingUserVotes as any[])?.length) {
-      return { question: await getQuestionByIdFromSupabase(id, sessionId, userId), alreadyVoted: true };
-    }
-  }
-
-  // Doppelvotes in derselben Session verhindern (Gäste / zusätzliches Sicherheitsnetz)
-  const { data: existingVotes, error: existingError } = await supabase
-    .from("votes")
-    .select("question_id")
-    .eq("question_id", id)
-    .eq("session_id", sessionId)
-    .limit(1);
-
-  if (existingError) {
-    throw new Error(`Supabase Vote-Check fehlgeschlagen: ${existingError.message}`);
-  }
-  if ((existingVotes as any[])?.length) {
-    return { question: await getQuestionByIdFromSupabase(id, sessionId, userId), alreadyVoted: true };
-  }
-
-  const now = new Date().toISOString();
-
-  const { error: insertError } = await supabase.from("votes").insert({
-    question_id: id,
-    session_id: sessionId,
-    user_id: userId ?? null,
-    choice,
-    created_at: now,
+  const { data: atomicResult, error: atomicError } = await supabase.rpc("cast_question_vote", {
+    p_question_id: id,
+    p_session_id: sessionId,
+    p_user_id: userId ?? null,
+    p_choice: choice,
+    p_option_id: null,
   });
-
-  if (insertError) {
-    throw new Error(`Supabase Vote-Insert fehlgeschlagen: ${insertError.message}`);
+  if (!atomicError) {
+    return {
+      question: await getQuestionByIdFromSupabase(id, sessionId, userId),
+      alreadyVoted: Boolean(atomicResult),
+    };
   }
-
-  // Aktuelle Zaehler laden und explizit hochzaehlen
-  const { data: countsRow, error: countsError } = await supabase
-    .from("questions")
-    .select("yes_votes, no_votes")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (countsError) {
-    throw new Error(`Supabase Vote-Update (Select) fehlgeschlagen: ${countsError.message}`);
-  }
-  if (!countsRow) {
-    return { question: null, alreadyVoted: false };
-  }
-
-  const currentYes = (countsRow as any).yes_votes ?? 0;
-  const currentNo = (countsRow as any).no_votes ?? 0;
-  const nextYes = choice === "yes" ? currentYes + 1 : currentYes;
-  const nextNo = choice === "no" ? currentNo + 1 : currentNo;
-
-  const { error: updateError } = await supabase
-    .from("questions")
-    .update({ yes_votes: nextYes, no_votes: nextNo })
-    .eq("id", id);
-
-  if (updateError) {
-    throw new Error(`Supabase Vote-Update fehlgeschlagen: ${updateError.message}`);
-  }
-
-  return { question: await getQuestionByIdFromSupabase(id, sessionId, userId), alreadyVoted: false };
+  const atomicMessage = String((atomicError as any)?.message ?? "");
+  const err = new Error(
+    atomicMessage.includes("question_closed")
+      ? "Diese Abstimmung ist bereits beendet."
+      : atomicMessage.includes("question_not_found")
+        ? "Frage nicht gefunden."
+        : "Deine Stimme konnte nicht sicher gespeichert werden."
+  );
+  (err as any).status = atomicMessage.includes("question_not_found") ? 404 : atomicMessage.includes("question_closed") ? 409 : 500;
+  throw err;
 }
 
 export async function voteOnQuestionOptionInSupabase(options: {
@@ -1617,81 +1482,45 @@ export async function voteOnQuestionOptionInSupabase(options: {
   const supabase = getSupabaseAdminClient();
   const { questionId, optionId, sessionId, userId } = options;
 
-  // Doppelvotes für eingeloggte Nutzer verhindern (geräteübergreifend)
-  if (userId) {
-    const { data: existingUserVotes, error: existingUserError } = await supabase
-      .from("votes")
-      .select("question_id")
-      .eq("question_id", questionId)
-      .eq("user_id", userId)
-      .limit(1);
-
-    if (existingUserError) {
-      throw new Error(`Supabase Vote-Check (User) fehlgeschlagen: ${existingUserError.message}`);
-    }
-    if ((existingUserVotes as any[])?.length) {
-      return { question: await getQuestionByIdFromSupabase(questionId, sessionId, userId), alreadyVoted: true };
-    }
-  }
-
-  // Doppelvotes in derselben Session verhindern (Gäste / zusätzliches Sicherheitsnetz)
-  const { data: existingVotes, error: existingError } = await supabase
-    .from("votes")
-    .select("question_id")
-    .eq("question_id", questionId)
-    .eq("session_id", sessionId)
-    .limit(1);
-
-  if (existingError) {
-    throw new Error(`Supabase Vote-Check fehlgeschlagen: ${existingError.message}`);
-  }
-  if ((existingVotes as any[])?.length) {
-    return { question: await getQuestionByIdFromSupabase(questionId, sessionId, userId), alreadyVoted: true };
-  }
-
-  const { data: optionRow, error: optionError } = await supabase
-    .from("question_options")
-    .select("id, question_id, votes_count")
-    .eq("id", optionId)
-    .maybeSingle();
-
-  if (optionError) {
-    throw new Error(`Supabase Option-Check fehlgeschlagen: ${optionError.message}`);
-  }
-  if (!optionRow || (optionRow as any).question_id !== questionId) {
-    throw new Error("Ungültige Option für diese Frage.");
-  }
-
-  const now = new Date().toISOString();
-
-  const { error: insertError } = await supabase.from("votes").insert({
-    question_id: questionId,
-    session_id: sessionId,
-    user_id: userId ?? null,
-    choice: null,
-    option_id: optionId,
-    created_at: now,
+  const { data: atomicResult, error: atomicError } = await supabase.rpc("cast_question_vote", {
+    p_question_id: questionId,
+    p_session_id: sessionId,
+    p_user_id: userId ?? null,
+    p_choice: null,
+    p_option_id: optionId,
   });
-
-  if (insertError) {
-    throw new Error(`Supabase Vote-Insert fehlgeschlagen: ${insertError.message}`);
+  if (!atomicError) {
+    return {
+      question: await getQuestionByIdFromSupabase(questionId, sessionId, userId),
+      alreadyVoted: Boolean(atomicResult),
+    };
   }
-
-  const currentVotes = Math.max(0, Number((optionRow as any).votes_count) || 0);
-  const { error: updateError } = await supabase
-    .from("question_options")
-    .update({ votes_count: currentVotes + 1 })
-    .eq("id", optionId);
-
-  if (updateError) {
-    throw new Error(`Supabase Vote-Update (option) fehlgeschlagen: ${updateError.message}`);
-  }
-
-  return { question: await getQuestionByIdFromSupabase(questionId, sessionId, userId), alreadyVoted: false };
+  const atomicMessage = String((atomicError as any)?.message ?? "");
+  const err = new Error(
+    atomicMessage.includes("question_closed")
+      ? "Diese Abstimmung ist bereits beendet."
+      : atomicMessage.includes("question_not_found")
+        ? "Frage nicht gefunden."
+        : atomicMessage.includes("invalid_option")
+          ? "Ungültige Antwortoption."
+          : "Deine Stimme konnte nicht sicher gespeichert werden."
+  );
+  (err as any).status = atomicMessage.includes("question_not_found") ? 404 : atomicMessage.includes("question_closed") ? 409 : atomicMessage.includes("invalid_option") ? 400 : 500;
+  throw err;
 }
 
 export async function incrementViewsForQuestionInSupabase(questionId: string): Promise<void> {
   const supabase = getSupabaseAdminClient();
+
+  const { error: atomicError } = await supabase.rpc("increment_question_views", {
+    p_question_id: questionId,
+  });
+  if (!atomicError) return;
+  const atomicMessage = String((atomicError as any)?.message ?? "");
+  const atomicCode = String((atomicError as any)?.code ?? "");
+  if (atomicCode !== "PGRST202" && !atomicMessage.includes("increment_question_views")) {
+    throw new Error("Supabase View-Update fehlgeschlagen.");
+  }
 
   const { data: row, error } = await supabase
     .from("questions")
@@ -1746,6 +1575,8 @@ function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
     votesAgainst: row.votes_against ?? 0,
     timeLeftHours: roundedTimeLeft,
     status: (row.status ?? "open") as Draft["status"],
+    decisionSource:
+      row.decision_source === "community" || row.decision_source === "admin" ? row.decision_source : undefined,
     visibility: (row.visibility ?? "public") as PollVisibility,
     shareId: row.share_id ?? undefined,
     answerMode: normalizeAnswerMode(row.answer_mode ?? "binary"),
@@ -1807,6 +1638,7 @@ export async function getDraftsForCreatorFromSupabase(options: {
 
 export async function getDraftsPageFromSupabase(options: {
   sessionId?: string;
+  userId?: string | null;
   limit: number;
   offset: number;
   cursor?: string | null;
@@ -1816,10 +1648,8 @@ export async function getDraftsPageFromSupabase(options: {
   query?: string | null;
   voted?: "include" | "exclude" | "only";
 }): Promise<{ items: Draft[]; total: number; nextCursor: string | null }> {
-  const { sessionId, limit, offset, cursor, category, region, status, query: titleQuery, voted } = options;
+  const { sessionId, userId, limit, offset, cursor, category, region, status, query: titleQuery, voted } = options;
   const supabase = getSupabaseAdminClient();
-  const adminSettings = await getAdminSettings();
-  const quarantineThreshold = Math.max(1, adminSettings.reportQuarantineThreshold);
   const cursorMode = Boolean(cursor);
   const votedFilter: "include" | "exclude" | "only" = voted ?? "include";
   const shouldFilterReviewedDrafts = votedFilter !== "include";
@@ -1882,11 +1712,11 @@ export async function getDraftsPageFromSupabase(options: {
   const searchMode = searchTokens.length > 0;
 
   let reviewedDraftIds: string[] = [];
-  if (shouldFilterReviewedDrafts && sessionId) {
+  if (shouldFilterReviewedDrafts && (userId || sessionId)) {
     const { data: reviews, error: reviewsError } = await supabase
       .from("draft_reviews")
       .select("draft_id, created_at")
-      .eq("session_id", sessionId)
+      .eq(userId ? "reviewer_user_id" : "session_id", userId ?? sessionId)
       .order("created_at", { ascending: false })
       .limit(MAX_REVIEWED_DRAFT_IDS_FOR_FILTER);
 
@@ -2017,14 +1847,7 @@ export async function getDraftsPageFromSupabase(options: {
     const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
     const rawItems = picked.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
 
-    const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
-      supabase,
-      kind: "draft",
-      itemIds: rawItems.map((i) => i.id),
-    });
-
-    const items = rawItems.filter((item) => (reportCounts.get(item.id) ?? 0) < quarantineThreshold);
-    return { items, total: scored.length, nextCursor: null };
+    return { items: rawItems, total: scored.length, nextCursor: null };
   }
 
   const total = effectiveCursorMode ? totalCount ?? rows.length : count ?? rows.length;
@@ -2035,14 +1858,6 @@ export async function getDraftsPageFromSupabase(options: {
     .map((row) => row.id);
   const optionsMap = await fetchDraftOptionsMap({ supabase, draftIds: optionDraftIds });
   const rawItems = pageRows.map((row) => mapDraftRow(row, optionsMap.get(row.id)));
-
-  const reportCounts = await fetchOpenReportDistinctSessionsByItemId({
-    supabase,
-    kind: "draft",
-    itemIds: rawItems.map((i) => i.id),
-  });
-
-  const items = rawItems.filter((item) => (reportCounts.get(item.id) ?? 0) < quarantineThreshold);
 
   const lastRow = pageRows[pageRows.length - 1];
   const nextCursor =
@@ -2055,7 +1870,7 @@ export async function getDraftsPageFromSupabase(options: {
         })
       : null;
 
-  return { items, total, nextCursor };
+  return { items: rawItems, total, nextCursor };
 }
 export async function createDraftInSupabase(input: {
   title: string;
@@ -2390,7 +2205,7 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
 
     const { error: updateDraftError } = await supabase
       .from("drafts")
-      .update({ status: "accepted" })
+      .update({ status: "accepted", decision_source: "community" })
       .eq("id", row.id);
     if (updateDraftError) {
       throw new Error(`Supabase maybePromoteDraft (update draft) fehlgeschlagen: ${updateDraftError.message}`);
@@ -2398,7 +2213,7 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
   } else if (votesAgainst >= votesFor + minLead) {
     const { error: updateDraftError } = await supabase
       .from("drafts")
-      .update({ status: "rejected" })
+      .update({ status: "rejected", decision_source: "community" })
       .eq("id", row.id);
     if (updateDraftError) {
       throw new Error(`Supabase maybePromoteDraft (reject draft) fehlgeschlagen: ${updateDraftError.message}`);
@@ -2409,7 +2224,8 @@ async function maybePromoteDraftInSupabase(row: DraftRow): Promise<void> {
 export async function voteOnDraftInSupabase(
   id: string,
   choice: DraftReviewChoice,
-  sessionId: string
+  sessionId: string,
+  reviewerUserId: string
 ): Promise<{ draft: Draft | null; alreadyVoted: boolean }> {
   const supabase = getSupabaseAdminClient();
 
@@ -2441,53 +2257,51 @@ export async function voteOnDraftInSupabase(
     }
   }
 
-  // Prevent multiple reviews for the same draft within the same anonymous session.
-  const { error: reviewInsertError } = await supabase
-    .from("draft_reviews")
-    .insert({ draft_id: id, session_id: sessionId, choice });
+  const { data: atomicData, error: atomicError } = await supabase.rpc("cast_draft_review", {
+    p_draft_id: id,
+    p_session_id: sessionId,
+    p_reviewer_user_id: reviewerUserId,
+    p_choice: choice,
+  });
+  if (!atomicError) {
+    const atomicRow = Array.isArray(atomicData) ? atomicData[0] : atomicData;
+    const alreadyVoted = Boolean((atomicRow as any)?.already_voted);
+    const effectiveRow = {
+      ...draftRow,
+      votes_for: Number((atomicRow as any)?.votes_for ?? draftRow.votes_for ?? 0),
+      votes_against: Number((atomicRow as any)?.votes_against ?? draftRow.votes_against ?? 0),
+    } as DraftRow;
 
-  if (reviewInsertError) {
-    const code = (reviewInsertError as any).code as string | undefined;
-    if (code === "23505") {
-      const optionsMap =
-        normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
-          ? await fetchDraftOptionsMap({ supabase, draftIds: [draftRow.id] })
-          : new Map<string, PollOption[]>();
-      return { draft: mapDraftRow(draftRow, optionsMap.get(draftRow.id)), alreadyVoted: true };
-    }
-    if (code === "42P01") {
-      throw new Error(
-        "Supabase table 'draft_reviews' is missing. Run supabase/draft_reviews.sql in the Supabase SQL Editor first."
-      );
-    }
-    throw new Error(`Supabase voteOnDraft (review insert) fehlgeschlagen: ${reviewInsertError.message}`);
+    if (!alreadyVoted) await maybePromoteDraftInSupabase(effectiveRow);
+
+    const { data: finalData, error: finalError } = await supabase.from("drafts").select("*").eq("id", id).maybeSingle();
+    if (finalError) throw new Error("Draft konnte nach dem Review nicht geladen werden.");
+    const finalRow = (finalData ?? effectiveRow) as DraftRow;
+    const optionsMap =
+      normalizeAnswerMode(finalRow.answer_mode ?? "binary") === "options"
+        ? await fetchDraftOptionsMap({ supabase, draftIds: [finalRow.id] })
+        : new Map<string, PollOption[]>();
+    return { draft: mapDraftRow(finalRow, optionsMap.get(finalRow.id)), alreadyVoted };
   }
 
-  const nextVotesFor = choice === "good" ? (draftRow.votes_for ?? 0) + 1 : draftRow.votes_for ?? 0;
-  const nextVotesAgainst = choice === "bad" ? (draftRow.votes_against ?? 0) + 1 : draftRow.votes_against ?? 0;
-
-  const { data: updatedRow, error: updateError } = await supabase
-    .from("drafts")
-    .update({
-      votes_for: nextVotesFor,
-      votes_against: nextVotesAgainst,
-    })
-    .eq("id", id)
-    .select("*")
-    .maybeSingle();
-
-  if (updateError) {
-    throw new Error(`Supabase voteOnDraft (update) fehlgeschlagen: ${updateError.message}`);
-  }
-  const effectiveRow = (updatedRow ?? draftRow) as DraftRow;
-
-  await maybePromoteDraftInSupabase(effectiveRow);
-
-  const optionsMap =
-    normalizeAnswerMode(effectiveRow.answer_mode ?? "binary") === "options"
-      ? await fetchDraftOptionsMap({ supabase, draftIds: [effectiveRow.id] })
-      : new Map<string, PollOption[]>();
-  return { draft: mapDraftRow(effectiveRow, optionsMap.get(effectiveRow.id)), alreadyVoted: false };
+  const atomicMessage = String((atomicError as any)?.message ?? "");
+  const err = new Error(
+    atomicMessage.includes("review_expired")
+      ? "Review-Zeitraum abgelaufen."
+      : atomicMessage.includes("self_review_not_allowed")
+        ? "Du kannst deinen eigenen Vorschlag nicht bewerten."
+        : atomicMessage.includes("draft_not_found")
+          ? "Draft nicht gefunden."
+          : "Review konnte nicht sicher gespeichert werden."
+  );
+  (err as any).status = atomicMessage.includes("review_expired")
+    ? 410
+    : atomicMessage.includes("self_review_not_allowed")
+      ? 403
+      : atomicMessage.includes("draft_not_found")
+        ? 404
+        : 500;
+  throw err;
 }
 export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | null> {
   const supabase = getSupabaseAdminClient();
@@ -2561,7 +2375,7 @@ export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | nu
 
     const { data: acceptedRow, error: updateDraftError } = await supabase
       .from("drafts")
-      .update({ status: "accepted" })
+      .update({ status: "accepted", decision_source: "admin" })
       .eq("id", id)
       .select("*")
       .maybeSingle();
@@ -2597,7 +2411,7 @@ export async function adminRejectDraftInSupabase(id: string): Promise<Draft | nu
   if ((draftRow.status ?? "open") !== "rejected") {
     const { data: updatedRow, error: updateError } = await supabase
       .from("drafts")
-      .update({ status: "rejected" })
+      .update({ status: "rejected", decision_source: "admin" })
       .eq("id", id)
       .select("*")
       .maybeSingle();

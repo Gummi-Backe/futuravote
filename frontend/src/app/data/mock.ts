@@ -88,6 +88,7 @@ export type Draft = {
   votesAgainst: number;
   timeLeftHours: number;
   status?: "open" | "accepted" | "rejected";
+  decisionSource?: "community" | "admin";
   visibility?: PollVisibility;
   shareId?: string;
   answerMode?: AnswerMode;

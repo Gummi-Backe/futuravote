@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getOauthAccessContextByTokenSupabase } from "@/app/data/dbSupabaseOauth";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
-import { guardGptRateLimit } from "../_lib";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -14,7 +14,7 @@ type Body = {
   size?: "1024x1024";
 };
 
-type ImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini" | "dall-e-3";
+type ImageModel = "gpt-image-2" | "gpt-image-1.5" | "gpt-image-1" | "gpt-image-1-mini";
 
 type OpenAiImagePayload = {
   error?: {
@@ -35,7 +35,6 @@ const IMAGE_MODEL_ORDER: readonly ImageModel[] = [
   "gpt-image-1.5",
   "gpt-image-1",
   "gpt-image-1-mini",
-  "dall-e-3",
 ];
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
@@ -58,8 +57,7 @@ function isImageModel(raw: string | undefined): raw is ImageModel {
     raw === "gpt-image-2" ||
     raw === "gpt-image-1.5" ||
     raw === "gpt-image-1" ||
-    raw === "gpt-image-1-mini" ||
-    raw === "dall-e-3"
+    raw === "gpt-image-1-mini"
   );
 }
 
@@ -99,9 +97,6 @@ function shouldTryNextImageModel(payload: OpenAiImagePayload | null, status: num
 
 function mapSizeForModel(model: ImageModel, size: Body["size"]): string {
   const selected = size === "1024x1024" ? "1024x1024" : "1024x1024";
-  if (model === "dall-e-3") {
-    return "1024x1024";
-  }
   return selected;
 }
 
@@ -118,12 +113,12 @@ function buildSafePrompt(rawPrompt: string): string {
 }
 
 export async function POST(request: Request) {
-  const limited = guardGptRateLimit(request);
-  if (limited) return limited;
+  const invalidSource = mutationRequestGuard(request, { allowBearer: true });
+  if (invalidSource) return invalidSource;
 
   const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization") ?? "";
   const bearerToken = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : null;
-  let authenticated = false;
+  let authenticatedUserId: string | null = null;
 
   if (bearerToken) {
     try {
@@ -140,7 +135,7 @@ export async function POST(request: Request) {
           { status: 403, headers: { "Cache-Control": "no-store" } }
         );
       }
-      authenticated = true;
+      authenticatedUserId = ctx.user.id;
     } catch {
       return NextResponse.json(
         { error: "ungueltiger token", errorCode: "invalid_token" },
@@ -151,14 +146,35 @@ export async function POST(request: Request) {
     const cookieStore = await cookies();
     const sessionId = cookieStore.get("fv_user")?.value;
     const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
-    authenticated = Boolean(user);
+    authenticatedUserId = user?.id ?? null;
   }
 
-  if (!authenticated) {
+  if (!authenticatedUserId) {
     return NextResponse.json(
       { error: "Bitte anmelden oder OAuth verbinden.", errorCode: "unauthorized" },
       { status: 401, headers: { "Cache-Control": "no-store" } }
     );
+  }
+
+  const [hourlyImageRate, dailyImageRate] = await Promise.all([
+    consumeRateLimit({
+      request,
+      scope: "gpt-image-hourly",
+      identifier: `user:${authenticatedUserId}`,
+      limit: 10,
+      windowSeconds: 60 * 60,
+    }),
+    consumeRateLimit({
+      request,
+      scope: "gpt-image-daily",
+      identifier: `user:${authenticatedUserId}`,
+      limit: 30,
+      windowSeconds: 24 * 60 * 60,
+    }),
+  ]);
+  const blockedImageRate = !hourlyImageRate.allowed ? hourlyImageRate : !dailyImageRate.allowed ? dailyImageRate : null;
+  if (blockedImageRate) {
+    return rateLimitResponse(blockedImageRate, "Bildlimit erreicht. Bitte später erneut versuchen.");
   }
 
   let body: Body;
@@ -216,7 +232,6 @@ export async function POST(request: Request) {
         model: candidate,
         prompt: safePrompt,
         size,
-        ...(candidate === "dall-e-3" ? { quality: "standard" } : null),
       }),
     });
 

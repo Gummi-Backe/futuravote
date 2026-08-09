@@ -51,9 +51,9 @@ export default function SettingsClient(props: { initial: AdminSettings }) {
     <div className="rounded-3xl border border-white/10 bg-black/20 p-5 shadow-2xl shadow-black/30 backdrop-blur">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-white">Auto-Quarantäne bei Meldungen</span>
+          <span className="text-sm font-semibold text-white">Priorität ab Meldungen</span>
           <span className="text-xs text-slate-300">
-            Ab wie vielen unabhängigen Meldungen (pro Inhalt) der Inhalt für Nutzer ausgeblendet wird (Admin sieht ihn weiterhin).
+            Ab wie vielen unabhängigen Meldungen ein Inhalt in der Moderation hervorgehoben wird. Sichtbar bleibt er, bis ein Admin entscheidet.
           </span>
           <input
             type="number"
@@ -121,4 +121,3 @@ export default function SettingsClient(props: { initial: AdminSettings }) {
     </div>
   );
 }
-

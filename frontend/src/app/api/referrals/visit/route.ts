@@ -5,6 +5,7 @@ import { verifyReferralToken } from "@/app/lib/referrals";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { consumeRateLimit, mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -27,9 +28,25 @@ function extractQuestionIdFromPath(path: string): string | null {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
+
+  const visitRate = await consumeRateLimit({
+    request,
+    scope: "referral-visit",
+    identifier: `session:${sessionId}`,
+    limit: 60,
+    windowSeconds: 60 * 60,
+  });
+  if (!visitRate.allowed) {
+    const response = NextResponse.json({ ok: true, throttled: true }, { status: 200 });
+    if (!existingSession) response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
+    return response;
+  }
 
   const bodyRaw: unknown = await request.json().catch(() => null);
   const body = isRecord(bodyRaw) ? bodyRaw : {};
@@ -113,4 +130,3 @@ export async function POST(request: Request) {
   if (!existingSession) response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
   return response;
 }
-

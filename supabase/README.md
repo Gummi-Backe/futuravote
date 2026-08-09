@@ -10,6 +10,8 @@ sollte RLS (Row Level Security) aktiv sein.
 - Inhalt aus `supabase/poll_options.sql` ausfuehren (einmalig, fuer Options-Umfragen + Prognose/Meinungs-Umfrage Toggle)
 - Inhalt aus `supabase/votes_hardening.sql` ausfuehren (einmalig, empfohlen: Votes-Constraints + votes.id)
 - Inhalt aus `supabase/draft_reviews.sql` ausfuehren (einmalig)
+- Inhalt aus `supabase/phase0_security_hardening.sql` direkt vor dem zugehoerigen App-Deploy ausfuehren
+  (persistente Limits, atomare Votes/Reviews, 30-Tage-Sessions)
 - Inhalt aus `supabase/password_resets.sql` ausfuehren (einmalig)
 - Inhalt aus `supabase/question_metrics_daily.sql` ausfuehren (einmalig, fuer Trend Etappe 2 Snapshots)
 - Inhalt aus `supabase/rls_policies.sql` ausfuehren (idempotent)

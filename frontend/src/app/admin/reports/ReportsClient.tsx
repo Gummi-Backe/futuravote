@@ -19,7 +19,7 @@ type ReportRow = {
   status: ReportStatus;
   created_at: string;
   report_count?: number;
-  is_quarantined?: boolean;
+  needs_priority_review?: boolean;
 };
 
 const reasonLabel: Record<string, string> = {
@@ -212,9 +212,9 @@ export default function ReportsClient() {
                       <span className="rounded-full border border-slate-200/20 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100">
                         Meldungen: {r.report_count ?? 0}
                       </span>
-                      {status === "open" && r.is_quarantined ? (
+                      {status === "open" && r.needs_priority_review ? (
                         <span className="rounded-full border border-amber-300/40 bg-amber-500/20 px-3 py-1 text-[11px] font-semibold text-amber-100">
-                          Quarantäne aktiv
+                          Priorität: mehrere Meldungen
                         </span>
                       ) : null}
                       <span className="text-[11px] text-slate-400">{formatDate(r.created_at)}</span>

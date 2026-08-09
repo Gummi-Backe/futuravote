@@ -7,6 +7,8 @@ import { ReportButton } from "@/app/components/ReportButton";
 import { DraftReviewClient } from "@/app/p/[shareId]/DraftReviewClient";
 import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
 import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { getAdminSettings } from "@/app/lib/adminSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,7 @@ type DraftRow = {
   votes_against: number | null;
   time_left_hours: number | null;
   status: string | null;
+  decision_source: string | null;
   created_at: string | null;
   visibility: PollVisibility | null;
   share_id: string | null;
@@ -75,6 +78,8 @@ function mapDraftRow(row: DraftRow, options?: PollOption[]): Draft {
     votesAgainst: Math.max(0, Number(row.votes_against ?? 0) || 0),
     timeLeftHours: Math.max(0, Math.round(timeLeft)),
     status: (row.status ?? "open") as Draft["status"],
+    decisionSource:
+      row.decision_source === "community" || row.decision_source === "admin" ? row.decision_source : undefined,
     visibility: (row.visibility ?? "public") as PollVisibility,
     shareId: row.share_id ?? undefined,
     answerMode: row.answer_mode === "options" ? "options" : "binary",
@@ -100,7 +105,7 @@ export default async function ReviewDraftDetailPage(props: { params: Promise<{ i
   const { data: row, error } = await supabase
     .from("drafts")
     .select(
-      "id,creator_id,title,description,region,image_url,image_credit,category,votes_for,votes_against,time_left_hours,status,created_at,visibility,share_id,answer_mode,is_resolvable,resolution_criteria,resolution_source,resolution_sources,resolution_deadline"
+      "id,creator_id,title,description,region,image_url,image_credit,category,votes_for,votes_against,time_left_hours,status,decision_source,created_at,visibility,share_id,answer_mode,is_resolvable,resolution_criteria,resolution_source,resolution_sources,resolution_deadline"
     )
     .eq("id", id)
     .eq("visibility", "public")
@@ -127,19 +132,23 @@ export default async function ReviewDraftDetailPage(props: { params: Promise<{ i
   }
 
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get("fv_session")?.value ?? null;
+  const userSessionId = cookieStore.get("fv_user")?.value;
+  const currentUser = userSessionId ? await getUserBySessionSupabase(userSessionId).catch(() => null) : null;
   let alreadyReviewed = false;
-  if (sessionId) {
+  if (currentUser) {
     const { data: reviewRows, error: reviewError } = await supabase
       .from("draft_reviews")
       .select("id")
       .eq("draft_id", id)
-      .eq("session_id", sessionId)
+      .eq("reviewer_user_id", currentUser.id)
       .limit(1);
     alreadyReviewed = !reviewError && Boolean(reviewRows && reviewRows.length > 0);
   }
 
-  const draft = mapDraftRow(draftRow, options);
+  const [draft, adminSettings] = await Promise.all([
+    Promise.resolve(mapDraftRow(draftRow, options)),
+    getAdminSettings(),
+  ]);
   const discussWithGptUrl = buildFutureVoteGptDiscussUrl({
     title: draft.title,
     category: draft.category,
@@ -163,7 +172,19 @@ export default async function ReviewDraftDetailPage(props: { params: Promise<{ i
             <FutureVoteGptLink href={discussWithGptUrl} />
             <ReportButton kind="draft" itemId={draft.id} itemTitle={draft.title} />
           </div>
-          <DraftReviewClient initialDraft={draft} alreadyReviewedInitial={alreadyReviewed} />
+          {!currentUser ? <p className="text-sm text-amber-100">Zum Bewerten bitte anmelden.</p> : null}
+          {currentUser && !currentUser.emailVerified ? (
+            <p className="text-sm text-amber-100">Bitte bestätige zuerst deine E-Mail-Adresse.</p>
+          ) : null}
+          <DraftReviewClient
+            initialDraft={draft}
+            alreadyReviewedInitial={alreadyReviewed}
+            readOnly={!currentUser?.emailVerified || currentUser.id === draft.creatorId}
+            reviewRules={{
+              minTotalReviews: adminSettings.draftMinTotalReviews,
+              minLead: adminSettings.draftMinLead,
+            }}
+          />
         </section>
       </div>
     </main>

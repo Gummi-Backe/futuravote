@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase, getUserPasswordHashByIdSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvUserClearCookieOptions } from "@/app/lib/fvUserCookie";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -58,6 +59,9 @@ async function tryDeleteOrIgnoreMissingTable(
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   if (!sessionId) {
@@ -67,6 +71,17 @@ export async function POST(request: Request) {
   const user = await getUserBySessionSupabase(sessionId);
   if (!user) {
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
+  }
+
+  const deleteRate = await consumeRateLimit({
+    request,
+    scope: "profile-delete",
+    identifier: `user:${user.id}`,
+    limit: 5,
+    windowSeconds: 60 * 60,
+  });
+  if (!deleteRate.allowed) {
+    return rateLimitResponse(deleteRate, "Zu viele Versuche. Bitte später erneut versuchen.");
   }
 
   let body: { password?: string; confirmText?: string };
@@ -154,12 +169,13 @@ export async function POST(request: Request) {
     // User löschen (FKs mit on delete cascade räumen abhängige Tabellen auf).
     const { error: userDelError } = await supabase.from("users").delete().eq("id", user.id);
     if (userDelError) {
-      return NextResponse.json({ error: `Account konnte nicht gelöscht werden: ${userDelError.message}` }, { status: 500 });
+      console.error("Account deletion failed", userDelError);
+      return NextResponse.json({ error: "Account konnte nicht geloescht werden." }, { status: 500 });
     }
 
     return logoutResponse({ ok: true }, 200, request);
-  } catch (error: any) {
-    const msg = typeof error?.message === "string" ? error.message : "Unbekannter Fehler";
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Account deletion threw", error);
+    return NextResponse.json({ error: "Account konnte nicht geloescht werden." }, { status: 500 });
   }
 }

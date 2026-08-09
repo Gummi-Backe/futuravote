@@ -7,6 +7,7 @@ import {
   adminDeleteDraftInSupabase,
   adminRejectDraftInSupabase,
 } from "@/app/data/dbSupabase";
+import { mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -28,6 +29,9 @@ export async function GET() {
   return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
 }
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;

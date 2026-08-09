@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { categories } from "@/app/data/mock";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -469,12 +470,26 @@ async function callPerplexity(opts: { apiKey: string; model: string; prompt: str
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;
 
   if (!user || user.role !== "admin") {
     return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
+  }
+
+  const suggestRate = await consumeRateLimit({
+    request,
+    scope: "admin-ai-suggestion",
+    identifier: `user:${user.id}`,
+    limit: 30,
+    windowSeconds: 60 * 60,
+  });
+  if (!suggestRate.allowed) {
+    return rateLimitResponse(suggestRate, "KI-Limit erreicht. Bitte später erneut versuchen.");
   }
 
   let body: Body;

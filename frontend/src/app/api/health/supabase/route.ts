@@ -14,7 +14,7 @@ export async function GET() {
 
     if (error) {
       console.error("Supabase health check failed:", error);
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Datenbank ist derzeit nicht erreichbar." }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, questionsInSupabase: count ?? 0 });
@@ -23,10 +23,9 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-        error: err instanceof Error ? err.message : "Unbekannter Fehler beim Supabase-Healthcheck",
+        error: "Datenbank ist derzeit nicht erreichbar.",
       },
       { status: 500 }
     );
   }
 }
-

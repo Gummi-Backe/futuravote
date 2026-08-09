@@ -11,6 +11,7 @@ import { createEmailVerificationTokenSupabase } from "@/app/data/dbSupabaseUsers
 import { sendVerificationEmail } from "@/app/lib/email";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { getFvUserCookieOptions } from "@/app/lib/fvUserCookie";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -21,6 +22,9 @@ function hashPassword(password: string): string {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const { email, password, displayName } = (await request.json()) as {
     email?: string;
     password?: string;
@@ -45,6 +49,19 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  const [ipRate, accountRate] = await Promise.all([
+    consumeRateLimit({ request, scope: "auth-register-ip", limit: 5, windowSeconds: 60 * 60 }),
+    consumeRateLimit({
+      request,
+      scope: "auth-register-account",
+      identifier: `email:${trimmedEmail}`,
+      limit: 3,
+      windowSeconds: 24 * 60 * 60,
+    }),
+  ]);
+  const blockedRate = !ipRate.allowed ? ipRate : !accountRate.allowed ? accountRate : null;
+  if (blockedRate) return rateLimitResponse(blockedRate, "Zu viele Registrierungsversuche. Bitte spaeter erneut versuchen.");
 
   try {
     const existing = await getUserByEmailSupabase(trimmedEmail);

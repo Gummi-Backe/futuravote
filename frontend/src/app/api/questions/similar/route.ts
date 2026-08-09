@@ -192,7 +192,8 @@ export async function GET(request: Request) {
     .limit(200);
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    console.error("Similar question lookup failed", error);
+    return NextResponse.json({ ok: false, error: "Aehnliche Fragen konnten nicht geprueft werden." }, { status: 500 });
   }
 
   const rows = ((data as any[]) ?? []) as MatchRow[];

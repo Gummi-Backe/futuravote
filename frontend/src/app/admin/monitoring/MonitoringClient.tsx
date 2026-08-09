@@ -37,14 +37,18 @@ function okFromMeta(meta: any | null): boolean | null {
   return typeof ok === "boolean" ? ok : null;
 }
 
-function Pill({ status }: { status: "ok" | "warn" | "unknown" }) {
+type HealthStatus = "ok" | "warn" | "critical" | "unknown";
+
+function Pill({ status }: { status: HealthStatus }) {
   const cls =
     status === "ok"
       ? "border-emerald-300/30 bg-emerald-500/15 text-emerald-50"
       : status === "warn"
         ? "border-amber-300/30 bg-amber-500/15 text-amber-50"
+        : status === "critical"
+          ? "border-rose-300/40 bg-rose-500/20 text-rose-50"
         : "border-white/10 bg-white/5 text-slate-200";
-  const label = status === "ok" ? "OK" : status === "warn" ? "Warnung" : "–";
+  const label = status === "ok" ? "OK" : status === "warn" ? "Veraltet" : status === "critical" ? "Kritisch" : "–";
   return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{label}</span>;
 }
 
@@ -63,19 +67,27 @@ function CronRow({
   last,
   onRun,
   runLabel,
+  nowUtc,
 }: {
   title: string;
   last: LastEvent;
   onRun?: () => void;
   runLabel?: string;
+  nowUtc?: string | null;
 }) {
-  const status = useMemo(() => {
-    if (!last.createdAt) return "unknown" as const;
+  const { status, ageHours } = useMemo(() => {
+    if (!last.createdAt) return { status: "unknown" as const, ageHours: null };
+    const createdMs = Date.parse(last.createdAt);
+    if (!Number.isFinite(createdMs)) return { status: "unknown" as const, ageHours: null };
+    const referenceMs = nowUtc ? Date.parse(nowUtc) : Number.NaN;
+    if (!Number.isFinite(referenceMs)) return { status: "unknown" as const, ageHours: null };
+    const age = Math.max(0, (referenceMs - createdMs) / (60 * 60 * 1000));
     const ok = okFromMeta(last.meta);
-    if (ok === true) return "ok" as const;
-    if (ok === false) return "warn" as const;
-    return "unknown" as const;
-  }, [last.createdAt, last.meta]);
+    if (ok === false || age >= 48) return { status: "critical" as const, ageHours: age };
+    if (age >= 26) return { status: "warn" as const, ageHours: age };
+    if (ok === true) return { status: "ok" as const, ageHours: age };
+    return { status: "unknown" as const, ageHours: age };
+  }, [last.createdAt, last.meta, nowUtc]);
 
   const detail = useMemo(() => {
     const meta = last.meta;
@@ -95,6 +107,7 @@ function CronRow({
         </div>
         <div className="mt-1 text-xs text-slate-400">
           Letzter Lauf: {formatDate(last.createdAt)}
+          {typeof ageHours === "number" ? ` · vor ${Math.round(ageHours)} Std.` : ""}
           {detail ? ` · ${detail}` : ""}
         </div>
       </div>
@@ -267,18 +280,20 @@ export default function MonitoringClient() {
           <CronRow
             title="Auflösungs-Vorschläge"
             last={data?.crons.resolutionSuggestions ?? { createdAt: null, meta: null }}
+            nowUtc={data?.nowUtc}
             onRun={runBusy ? undefined : () => void runResolutionCron()}
             runLabel={runBusy === "resolution" ? "Läuft..." : "Jetzt ausführen"}
           />
           <CronRow
             title="Trend-Snapshots (Fragen)"
             last={data?.crons.questionMetrics ?? { createdAt: null, meta: null }}
+            nowUtc={data?.nowUtc}
             onRun={runBusy ? undefined : () => void runMetricsCron()}
             runLabel={runBusy === "metrics" ? "Läuft..." : "Jetzt ausführen"}
           />
-          <CronRow title="Creator-Benachrichtigungen" last={data?.crons.creatorNotifications ?? { createdAt: null, meta: null }} />
-          <CronRow title="Private Umfragen: Ergebnis" last={data?.crons.privatePollResults ?? { createdAt: null, meta: null }} />
-          <CronRow title="Private Umfragen: Erinnerung" last={data?.crons.privatePollReminders ?? { createdAt: null, meta: null }} />
+          <CronRow title="Creator-Benachrichtigungen" last={data?.crons.creatorNotifications ?? { createdAt: null, meta: null }} nowUtc={data?.nowUtc} />
+          <CronRow title="Private Umfragen: Ergebnis" last={data?.crons.privatePollResults ?? { createdAt: null, meta: null }} nowUtc={data?.nowUtc} />
+          <CronRow title="Private Umfragen: Erinnerung" last={data?.crons.privatePollReminders ?? { createdAt: null, meta: null }} nowUtc={data?.nowUtc} />
         </div>
 
         <div className="mt-4 text-[11px] text-slate-500">

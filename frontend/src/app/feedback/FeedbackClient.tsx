@@ -31,8 +31,11 @@ export function FeedbackClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setUrl(window.location.href);
-    setUserAgent(window.navigator.userAgent || "");
+    const contextTimer = window.setTimeout(() => {
+      setUrl(window.location.href);
+      setUserAgent(window.navigator.userAgent || "");
+    }, 0);
+    return () => window.clearTimeout(contextTimer);
   }, []);
 
   const payload = useMemo(

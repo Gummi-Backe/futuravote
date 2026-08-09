@@ -5,6 +5,12 @@ import type { Draft } from "@/app/data/mock";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { splitDescriptionText } from "@/app/lib/descriptionText";
 import { ExpandableDescription } from "@/app/questions/[id]/ExpandableDescription";
+import {
+  DEFAULT_DRAFT_REVIEW_RULES,
+  getDraftDecisionText,
+  getDraftReviewProgress,
+  type DraftReviewRules,
+} from "@/app/lib/draftReviewRules";
 
 type DraftReviewChoice = "good" | "bad";
 
@@ -34,10 +40,12 @@ export function DraftReviewClient({
   initialDraft,
   alreadyReviewedInitial,
   readOnly = false,
+  reviewRules = DEFAULT_DRAFT_REVIEW_RULES,
 }: {
   initialDraft: Draft;
   alreadyReviewedInitial: boolean;
   readOnly?: boolean;
+  reviewRules?: DraftReviewRules;
 }) {
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [submitting, setSubmitting] = useState(false);
@@ -57,17 +65,16 @@ export function DraftReviewClient({
     } catch {
       // ignore
     }
-  }, [draft.id]);
+  }, [draft.id, readOnly]);
 
   const totalReviews = draft.votesFor + draft.votesAgainst;
   const yesPct = Math.round((draft.votesFor / Math.max(1, totalReviews)) * 100);
   const noPct = 100 - yesPct;
   const descriptionParts = splitDescriptionText(draft.description);
 
-  const lead = Math.abs(draft.votesFor - draft.votesAgainst);
-  const reviewsRemaining = Math.max(0, 5 - totalReviews);
-  const leadRemaining = Math.max(0, 2 - lead);
-  const thresholdReached = totalReviews >= 5 && lead >= 2;
+  const { lead, minLead, minTotalReviews, reviewsRemaining, leadRemaining, thresholdReached } =
+    getDraftReviewProgress(draft.votesFor, draft.votesAgainst, reviewRules);
+  const isClosed = draft.status === "accepted" || draft.status === "rejected";
 
   const statusLabel =
     draft.status === "accepted" ? "Angenommen" : draft.status === "rejected" ? "Abgelehnt" : "Offen";
@@ -85,15 +92,15 @@ export function DraftReviewClient({
   const thresholdText = useMemo(() => {
     const partA =
       reviewsRemaining > 0
-        ? `Noch ${reviewsRemaining} Reviews bis mind. 5 (${totalReviews}/5)`
-        : `Mindestens 5 Reviews erreicht (${totalReviews}/5)`;
+        ? `Noch ${reviewsRemaining} Reviews bis mind. ${minTotalReviews} (${totalReviews}/${minTotalReviews})`
+        : `Mindestens ${minTotalReviews} Reviews erreicht (${totalReviews}/${minTotalReviews})`;
     const partB = thresholdReached
-      ? `Schwelle erreicht (${lead}/2)`
+      ? `Schwelle erreicht (${lead}/${minLead})`
       : leadRemaining > 0
-        ? `Noch ${leadRemaining} Vorsprung bis Entscheidung (${lead}/2)`
-        : `Vorsprung erreicht (${lead}/2)`;
+        ? `Noch ${leadRemaining} Vorsprung bis Entscheidung (${lead}/${minLead})`
+        : `Vorsprung erreicht (${lead}/${minLead})`;
     return { partA, partB };
-  }, [lead, leadRemaining, reviewsRemaining, thresholdReached, totalReviews]);
+  }, [lead, leadRemaining, minLead, minTotalReviews, reviewsRemaining, thresholdReached, totalReviews]);
 
   const submit = useCallback(
     async (choice: DraftReviewChoice) => {
@@ -196,10 +203,16 @@ export function DraftReviewClient({
       </div>
       <VoteBar yesPct={yesPct} noPct={noPct} />
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
-        <span>{thresholdText.partA}</span>
-        <span>{thresholdText.partB}</span>
-      </div>
+      {isClosed ? (
+        <p className="text-[11px] text-slate-300">
+          {getDraftDecisionText(draft.decisionSource)}
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
+          <span>{thresholdText.partA}</span>
+          <span>{thresholdText.partB}</span>
+        </div>
+      )}
 
       {readOnly ? (
         <p className="text-xs text-slate-400">

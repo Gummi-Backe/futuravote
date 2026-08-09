@@ -200,7 +200,11 @@ export async function GET(request: Request) {
     .limit(MAX_CANDIDATE_ROWS);
 
   if (error) {
-    return withCacheHeaders(NextResponse.json({ ok: false, error: error.message }), 3);
+    console.error("GPT similar question lookup failed", error);
+    return withCacheHeaders(
+      NextResponse.json({ ok: false, error: "Aehnliche Fragen konnten nicht geprueft werden." }),
+      3
+    );
   }
 
   const rows = (data ?? []) as MatchRow[];

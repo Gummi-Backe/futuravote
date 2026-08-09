@@ -229,7 +229,7 @@ export default function RegelnPage() {
         <div className="space-y-4">
           <InfoCard title="1) Klare Fragen (wichtig für Seriosität)">
             <ul className="list-disc space-y-2 pl-5">
-              <li>Formuliere messbar: Es muss am Ende eindeutig "Ja" oder "Nein" sein.</li>
+              <li>Formuliere messbar: Es muss am Ende eindeutig &quot;Ja&quot; oder &quot;Nein&quot; sein.</li>
               <li>Schreibe Datum/Zeitraum in den Titel, wenn das Ergebnis davon abhängt.</li>
               <li>Vermeide doppelte Fragen – wenn es das Thema schon gab, ändere Zeitraum oder Kriterium.</li>
             </ul>
@@ -251,7 +251,7 @@ export default function RegelnPage() {
           <InfoCard title="3) Meinungs-Umfragen (Ja/Nein und Optionen)">
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                Ja/Nein-Umfrage: "Ja" und "Nein" sind eine direkte Zustimmung/Ablehnung zur Frage.
+                Ja/Nein-Umfrage: &quot;Ja&quot; und &quot;Nein&quot; sind eine direkte Zustimmung/Ablehnung zur Frage.
               </li>
             </ul>
             <div className="mt-3">
@@ -285,7 +285,7 @@ export default function RegelnPage() {
                 eingetragen.
               </li>
               <li>
-                "Ja" bedeutet hier: Du hältst es bis zum Enddatum für wahrscheinlicher, dass das Ereignis eintritt.
+                &quot;Ja&quot; bedeutet hier: Du hältst es bis zum Enddatum für wahrscheinlicher, dass das Ereignis eintritt.
               </li>
               <li>Im Archiv siehst du später Ergebnis, Quelle und wie die Community lag.</li>
             </ul>
@@ -339,7 +339,7 @@ export default function RegelnPage() {
               <li>Wir können Beiträge ausblenden oder löschen, wenn sie gegen diese Regeln verstoßen.</li>
               <li>Bei schweren oder wiederholten Verstößen können Konten eingeschränkt oder gesperrt werden.</li>
               <li>
-                Wenn dir etwas auffällt: Nutze den <span className="font-semibold">"Melden"</span>-Button in den Details.
+                Wenn dir etwas auffällt: Nutze den <span className="font-semibold">&quot;Melden&quot;</span>-Button in den Details.
               </li>
             </ul>
           </InfoCard>
@@ -347,7 +347,7 @@ export default function RegelnPage() {
           <InfoCard title="10) Account löschen">
             <p>
               Du kannst dein Konto jederzeit selbst im Profil unter{" "}
-              <span className="font-semibold">"Account löschen"</span> löschen. Dabei werden personenbezogene Kontodaten
+              <span className="font-semibold">&quot;Account löschen&quot;</span> löschen. Dabei werden personenbezogene Kontodaten
               entfernt; öffentliche Inhalte können anonymisiert bestehen bleiben.
             </p>
           </InfoCard>

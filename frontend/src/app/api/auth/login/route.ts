@@ -7,6 +7,7 @@ import {
 } from "@/app/data/dbSupabaseUsers";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { getFvUserCookieOptions } from "@/app/lib/fvUserCookie";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -18,12 +19,28 @@ function verifyPassword(password: string, stored: string): boolean {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const { email, password } = (await request.json()) as { email?: string; password?: string };
 
   const trimmedEmail = (email ?? "").trim().toLowerCase();
   if (!trimmedEmail || !password) {
     return NextResponse.json({ error: "Bitte E-Mail und Passwort eingeben." }, { status: 400 });
   }
+
+  const [ipRate, accountRate] = await Promise.all([
+    consumeRateLimit({ request, scope: "auth-login-ip", limit: 12, windowSeconds: 15 * 60 }),
+    consumeRateLimit({
+      request,
+      scope: "auth-login-account",
+      identifier: `email:${trimmedEmail}`,
+      limit: 6,
+      windowSeconds: 15 * 60,
+    }),
+  ]);
+  const blockedRate = !ipRate.allowed ? ipRate : !accountRate.allowed ? accountRate : null;
+  if (blockedRate) return rateLimitResponse(blockedRate, "Zu viele Anmeldeversuche. Bitte spaeter erneut versuchen.");
 
   try {
     const user = await getUserByEmailSupabase(trimmedEmail);

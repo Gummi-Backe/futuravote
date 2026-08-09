@@ -60,10 +60,15 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setError(null);
 
-    void fetch(`/api/questions/${encodeURIComponent(questionId)}/trend?days=${days}`)
+    void Promise.resolve()
+      .then(() => {
+        if (alive) {
+          setLoading(true);
+          setError(null);
+        }
+        return fetch(`/api/questions/${encodeURIComponent(questionId)}/trend?days=${days}`);
+      })
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as TrendResponse | { error?: string } | null;
         if (!res.ok) {
@@ -73,7 +78,11 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
       })
       .then((data) => {
         if (!alive) return;
-        setAnswerMode(data?.answerMode === "options" ? "options" : "binary");
+        const nextAnswerMode = data?.answerMode === "options" ? "options" : "binary";
+        setAnswerMode(nextAnswerMode);
+        if (nextAnswerMode === "options") {
+          setMetric((current) => (current === "yesPct" ? "total" : current));
+        }
         setOptions(Array.isArray(data?.options) ? data.options.filter((o) => o && o.id && o.label) : []);
         setPoints(data?.points ?? []);
       })
@@ -93,12 +102,6 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
       alive = false;
     };
   }, [questionId, days]);
-
-  useEffect(() => {
-    if (answerMode === "options" && metric === "yesPct") {
-      setMetric("total");
-    }
-  }, [answerMode, metric]);
 
   const labels = useMemo(() => points.map((p) => formatShortDay(p.date)), [points]);
 
@@ -123,29 +126,34 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
   }, [optionIds, points]);
   const viewsSeries = useMemo(() => {
     let last = 0;
-    return points.map((p) => {
+    const values: number[] = [];
+    for (const p of points) {
       const value = typeof p.views === "number" ? p.views : null;
-      if (value === null) return last;
-      last = value;
-      return value;
-    });
+      if (value !== null) last = value;
+      values.push(last);
+    }
+    return values;
   }, [points]);
   const rankingSeries = useMemo(() => {
     let last = 0;
-    return points.map((p) => {
+    const values: number[] = [];
+    for (const p of points) {
       const value = typeof p.rankingScore === "number" ? p.rankingScore : null;
-      if (value === null) return last;
-      last = value;
-      return value;
-    });
+      if (value !== null) last = value;
+      values.push(last);
+    }
+    return values;
   }, [points]);
   const yesPctSeries = useMemo(() => {
-    let yesAcc = 0;
-    let totalAcc = 0;
-    return points.map((p) => {
-      yesAcc += typeof p.yes === "number" ? p.yes : 0;
-      totalAcc += p.total;
-      return totalAcc > 0 ? Math.round((yesAcc / totalAcc) * 100) : 0;
+    return points.map((_, index) => {
+      const totals = points.slice(0, index + 1).reduce(
+        (acc, point) => ({
+          yes: acc.yes + (typeof point.yes === "number" ? point.yes : 0),
+          total: acc.total + point.total,
+        }),
+        { yes: 0, total: 0 }
+      );
+      return totals.total > 0 ? Math.round((totals.yes / totals.total) * 100) : 0;
     });
   }, [points]);
 

@@ -19,6 +19,12 @@ import { ReportButton } from "./components/ReportButton";
 import { FirstStepsOverlay } from "./components/FirstStepsOverlay";
 import { AdminResolutionBanner } from "./components/AdminResolutionBanner";
 import { ZoomableImage } from "./components/ZoomableImage";
+import {
+  DEFAULT_DRAFT_REVIEW_RULES,
+  getDraftDecisionText,
+  getDraftReviewProgress,
+  type DraftReviewRules,
+} from "./lib/draftReviewRules";
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
@@ -542,6 +548,8 @@ function DraftCard({
   isSubmitting,
   hasVoted,
   votedChoice,
+  canReview,
+  reviewRules,
 }: {
   draft: Draft;
   onVote?: (choice: DraftReviewChoice) => void;
@@ -549,6 +557,8 @@ function DraftCard({
   isSubmitting?: boolean;
   hasVoted?: boolean;
   votedChoice?: DraftReviewChoice | null;
+  canReview?: boolean;
+  reviewRules: DraftReviewRules;
 }) {
   const shortDescription = getShortDescription(draft.description);
   const detailHref = `/review/drafts/${encodeURIComponent(draft.id)}`;
@@ -556,12 +566,10 @@ function DraftCard({
   const yesPct = Math.round((draft.votesFor / total) * 100);
   const noPct = 100 - yesPct;
   const totalReviews = draft.votesFor + draft.votesAgainst;
-  const reviewsRemaining = Math.max(0, 5 - totalReviews);
-  const lead = Math.abs(draft.votesFor - draft.votesAgainst);
-  const leadRemaining = Math.max(0, 2 - lead);
-  const thresholdReached = totalReviews >= 5 && lead >= 2;
+  const { lead, minLead, minTotalReviews, reviewsRemaining, leadRemaining, thresholdReached } =
+    getDraftReviewProgress(draft.votesFor, draft.votesAgainst, reviewRules);
   const isClosed = draft.status === "accepted" || draft.status === "rejected";
-  const disabled = Boolean(isSubmitting || hasVoted || isClosed);
+  const disabled = Boolean(!canReview || isSubmitting || hasVoted || isClosed);
   const hasReviewChoice = votedChoice === "good" || votedChoice === "bad";
   const statusLabel =
     draft.status === "accepted" ? "Angenommen" : draft.status === "rejected" ? "Abgelehnt" : "Offen";
@@ -662,20 +670,26 @@ function DraftCard({
         <span className="font-semibold text-rose-200">{draft.votesAgainst} Schlecht ({noPct}%)</span>
       </div>
       <VoteBar yesPct={yesPct} noPct={noPct} />
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
-        <span>
-          {reviewsRemaining > 0
-            ? `Noch ${reviewsRemaining} Reviews bis mind. 5 (${totalReviews}/5)`
-            : `Mindestens 5 Reviews erreicht (${totalReviews}/5)`}
-        </span>
-        <span>
-          {thresholdReached
-            ? `Schwelle erreicht (${lead}/2)`
-            : leadRemaining > 0
-            ? `Noch ${leadRemaining} Vorsprung bis Entscheidung (${lead}/2)`
-            : `Vorsprung erreicht (${lead}/2)`}
-        </span>
-      </div>
+      {isClosed ? (
+        <p className="text-[11px] text-slate-300">
+          {getDraftDecisionText(draft.decisionSource)}
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
+          <span>
+            {reviewsRemaining > 0
+              ? `Noch ${reviewsRemaining} Reviews bis mind. ${minTotalReviews} (${totalReviews}/${minTotalReviews})`
+              : `Mindestens ${minTotalReviews} Reviews erreicht (${totalReviews}/${minTotalReviews})`}
+          </span>
+          <span>
+            {thresholdReached
+              ? `Schwelle erreicht (${lead}/${minLead})`
+              : leadRemaining > 0
+                ? `Noch ${leadRemaining} Vorsprung bis Entscheidung (${lead}/${minLead})`
+                : `Vorsprung erreicht (${lead}/${minLead})`}
+          </span>
+        </div>
+      )}
       <div className="flex gap-3">
         <button
           type="button"
@@ -745,7 +759,14 @@ function DraftCard({
 }
 
 type CurrentUser =
-  | { id: string; email: string; displayName: string; role?: "user" | "admin"; defaultRegion?: string | null }
+  | {
+      id: string;
+      email: string;
+      displayName: string;
+      role?: "user" | "admin";
+      defaultRegion?: string | null;
+      emailVerified?: boolean;
+    }
   | null;
 
 type HomeCache = {
@@ -769,6 +790,7 @@ type HomeCache = {
   questionsTotal: number | null;
   answeredQuestionsTotal: number | null;
   draftsTotal: number | null;
+  draftReviewRules: DraftReviewRules;
   favoriteQuestions: Record<string, boolean>;
   favoritesUpdatedAt: number | null;
 };
@@ -837,6 +859,9 @@ export default function Home() {
     () => homeCache?.answeredQuestionsTotal ?? null
   );
   const [draftsTotal, setDraftsTotal] = useState<number | null>(() => homeCache?.draftsTotal ?? null);
+  const [draftReviewRules, setDraftReviewRules] = useState(() =>
+    homeCache?.draftReviewRules ?? DEFAULT_DRAFT_REVIEW_RULES
+  );
   const [mainView, setMainView] = useState<"all" | "feed" | "review">(() => {
     const cached = (homeCache as any)?.mainView;
     if (cached === "all" || cached === "feed" || cached === "review") return cached;
@@ -1083,6 +1108,15 @@ export default function Home() {
       setDraftsCursor(typeof draftsData.draftsNextCursor === "string" ? draftsData.draftsNextCursor : null);
       setQuestionsTotal(typeof questionsData.questionsTotal === "number" ? questionsData.questionsTotal : null);
       setDraftsTotal(typeof draftsData.draftsTotal === "number" ? draftsData.draftsTotal : null);
+      if (
+        Number.isFinite(draftsData?.draftReviewRules?.minTotalReviews) &&
+        Number.isFinite(draftsData?.draftReviewRules?.minLead)
+      ) {
+        setDraftReviewRules({
+          minTotalReviews: draftsData.draftReviewRules.minTotalReviews,
+          minLead: draftsData.draftReviewRules.minLead,
+        });
+      }
       resetAnsweredQuestions();
       setError(null);
       setToast(null);
@@ -1142,6 +1176,7 @@ export default function Home() {
       questionsTotal,
       answeredQuestionsTotal,
       draftsTotal,
+      draftReviewRules,
       favoriteQuestions,
       favoritesUpdatedAt,
     };
@@ -1166,6 +1201,7 @@ export default function Home() {
     questionsTotal,
     answeredQuestionsTotal,
     draftsTotal,
+    draftReviewRules,
     favoriteQuestions,
     favoritesUpdatedAt,
   ]);
@@ -3332,7 +3368,9 @@ export default function Home() {
                       onAdminAction={
                        currentUser?.role === "admin" ? (action) => handleAdminDraftAction(draft.id, action) : undefined
                       }
-                      isSubmitting={draftSubmittingId === draft.id}
+                     isSubmitting={draftSubmittingId === draft.id}
+                     canReview={Boolean(currentUser?.emailVerified && currentUser.id !== draft.creatorId)}
+                     reviewRules={draftReviewRules}
                        hasVoted={guestVotedFilter === "only" || Boolean(reviewedDrafts[draft.id])}
                       votedChoice={pendingDraftChoice[draft.id] ?? reviewedDraftChoices[draft.id] ?? null}
                     />

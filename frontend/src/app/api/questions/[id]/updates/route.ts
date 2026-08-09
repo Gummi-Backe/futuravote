@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { addQuestionUpdate, listQuestionUpdates } from "@/app/data/dbSupabaseQuestionUpdates";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -71,6 +72,9 @@ export async function GET(_: Request, props: { params: Promise<{ id: string }> }
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const resolved = await props.params;
   const questionId = resolved?.id;
   if (!questionId) return NextResponse.json({ error: "ID fehlt." }, { status: 400 });
@@ -86,12 +90,26 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
   const user = await getUserBySessionSupabase(sessionId).catch(() => null);
   if (!user) return NextResponse.json({ error: "Bitte einloggen." }, { status: 401 });
+  if (!user.emailVerified) {
+    return NextResponse.json({ error: "Bitte zuerst E-Mail bestätigen." }, { status: 403 });
+  }
 
   if (!question.creatorId || question.creatorId !== user.id) {
     return NextResponse.json(
       { error: "Nur der Ersteller dieser Frage darf Updates veröffentlichen." },
       { status: 403 }
     );
+  }
+
+  const updateRate = await consumeRateLimit({
+    request,
+    scope: `question-update:${questionId}`,
+    identifier: `user:${user.id}`,
+    limit: 10,
+    windowSeconds: 24 * 60 * 60,
+  });
+  if (!updateRate.allowed) {
+    return rateLimitResponse(updateRate, "Zu viele Updates. Bitte später erneut versuchen.");
   }
 
   const payload = (await request.json().catch(() => null)) as

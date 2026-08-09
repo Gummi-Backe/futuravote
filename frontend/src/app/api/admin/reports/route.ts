@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getAdminSettings } from "@/app/lib/adminSettings";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -27,7 +28,7 @@ type ReportRow = {
   status: ReportStatus;
   created_at: string;
   report_count?: number;
-  is_quarantined?: boolean;
+  needs_priority_review?: boolean;
 };
 
 function normalizeStatus(input: string | null): ReportStatus {
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
   const reports = ((data ?? []) as ReportRow[]).map((r) => ({
     ...r,
     report_count: 0,
-    is_quarantined: false,
+    needs_priority_review: false,
   }));
 
   if (reports.length === 0) {
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const quarantineThreshold = Math.max(1, settings.reportQuarantineThreshold);
+  const priorityThreshold = Math.max(1, settings.reportQuarantineThreshold);
   const countsByItem = new Map<string, number>();
   for (const row of (openCountsResult.data ?? []) as Array<{ kind: string; item_id: string }>) {
     const key = `${row.kind}:${row.item_id}`;
@@ -101,11 +102,11 @@ export async function GET(request: Request) {
 
   const enriched = reports.map((r) => {
     const reportCount = countsByItem.get(`${r.kind}:${r.item_id}`) ?? 0;
-    const isQuarantined = reportCount >= quarantineThreshold;
+    const needsPriorityReview = reportCount >= priorityThreshold;
     return {
       ...r,
       report_count: reportCount,
-      is_quarantined: isQuarantined,
+      needs_priority_review: needsPriorityReview,
     };
   });
 
@@ -114,8 +115,8 @@ export async function GET(request: Request) {
   }
 
   enriched.sort((a, b) => {
-    const aq = a.is_quarantined ? 1 : 0;
-    const bq = b.is_quarantined ? 1 : 0;
+    const aq = a.needs_priority_review ? 1 : 0;
+    const bq = b.needs_priority_review ? 1 : 0;
     if (aq !== bq) return bq - aq;
 
     const ac = a.report_count ?? 0;
@@ -132,6 +133,9 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   const user = sessionId ? await getUserBySessionSupabase(sessionId) : null;

@@ -4,11 +4,9 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { consumeRateLimit, mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
-
-const RATE_LIMIT_MS = 1200;
-const lastEventBySession = new Map<string, number>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -39,14 +37,21 @@ function normalizeMeta(input: unknown): Record<string, unknown> | null {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
 
-  const now = Date.now();
-  const last = lastEventBySession.get(sessionId) ?? 0;
-  const diff = now - last;
-  if (diff < RATE_LIMIT_MS) {
+  const analyticsRate = await consumeRateLimit({
+    request,
+    scope: "analytics-event",
+    identifier: `session:${sessionId}`,
+    limit: 120,
+    windowSeconds: 10 * 60,
+  });
+  if (!analyticsRate.allowed) {
     const response = NextResponse.json({ ok: true, throttled: true }, { status: 200 });
     if (!existingSession) response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
     return response;
@@ -100,12 +105,9 @@ export async function POST(request: Request) {
     }
   } catch (e) {
     console.warn("analytics failed", e);
-  } finally {
-    lastEventBySession.set(sessionId, now);
   }
 
   const response = NextResponse.json({ ok: true }, { status: 200 });
   if (!existingSession) response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
   return response;
 }
-

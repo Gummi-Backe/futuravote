@@ -21,7 +21,7 @@ export function getFvUserCookieOptions(request: Request) {
   return {
     path: "/",
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     maxAge: FV_USER_COOKIE_MAX_AGE_SECONDS,
     ...(domain ? { domain } : {}),
@@ -33,10 +33,9 @@ export function getFvUserClearCookieOptions(request: Request) {
   return {
     path: "/",
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     maxAge: 0,
     ...(domain ? { domain } : {}),
   };
 }
-

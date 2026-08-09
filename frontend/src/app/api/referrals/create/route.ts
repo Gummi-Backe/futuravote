@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createReferralToken } from "@/app/lib/referrals";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -32,12 +33,26 @@ function addQueryParams(path: string, params: Array<[string, string]>): string {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const userSessionId = cookieStore.get("fv_user")?.value;
   if (!userSessionId) return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
 
   const currentUser = await getUserBySessionSupabase(userSessionId).catch(() => null);
   if (!currentUser?.id) return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
+
+  const referralRate = await consumeRateLimit({
+    request,
+    scope: "referral-create",
+    identifier: `user:${currentUser.id}`,
+    limit: 60,
+    windowSeconds: 60 * 60,
+  });
+  if (!referralRate.allowed) {
+    return rateLimitResponse(referralRate, "Zu viele Freigabelinks. Bitte später erneut versuchen.");
+  }
 
   const bodyRaw: unknown = await request.json().catch(() => null);
   const body = (bodyRaw && typeof bodyRaw === "object" ? (bodyRaw as Record<string, unknown>) : {}) as Record<string, unknown>;
@@ -48,8 +63,9 @@ export async function POST(request: Request) {
   let token: string;
   try {
     token = createReferralToken({ sharerUserId: currentUser.id, targetPath });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Referral konnte nicht erstellt werden." }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Referral token creation failed", error);
+    return NextResponse.json({ error: "Freigabelink konnte nicht erstellt werden." }, { status: 500 });
   }
 
   const headerStore = await headers();

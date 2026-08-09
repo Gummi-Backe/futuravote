@@ -407,7 +407,7 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
 
               <div className="mt-2 space-y-2 border-t border-white/10 pt-2">
                 <div className="flex items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 shadow-sm shadow-black/20">
-                  <span className="font-medium text-slate-100">Draft-Reviews (dieses Gerät)</span>
+                  <span className="font-medium text-slate-100">Draft-Reviews</span>
                   <span className="rounded-full bg-black/40 px-2 py-1 text-[11px] font-semibold text-slate-50">
                     {stats.reviewsTotal}
                   </span>
@@ -420,7 +420,7 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
                 </div>
                 <p className="px-3 text-[11px] text-slate-400">
                   Der Vertrauens-Score basiert aktuell nur auf angenommen/abgelehnt bei deinen Vorschlägen (mind. 3
-                  Entscheidungen nötig). Reviews zählen nur für dieses Gerät.
+                  Entscheidungen nötig). Reviews sind deinem bestätigten Account zugeordnet.
                 </p>
               </div>
 

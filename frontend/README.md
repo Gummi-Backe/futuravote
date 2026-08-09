@@ -1,31 +1,44 @@
-## Future-Vote Frontend
-Next.js + Tailwind (App Router) mit Kachel-Feed fuer Ja/Nein-Prognosen, Draft-Review-Board und Mock-Daten.
+## FutureVote Frontend
+
+Next.js-App fuer oeffentliche Umfragen, Prognosen, Community-Reviews, private Link-Umfragen und Administration.
 
 ### Lokales Setup
-- `npm install`
-- `npm run dev` → http://localhost:3000
-- **Falls Turbopack/Sourcemap-Fehler:** `.env.development` setzt jetzt `NEXT_JAVASCRIPT_BUNDLER=webpack` und `NEXT_DISABLE_SOURCEMAPS=1`; einfach `npm run dev` neu starten (nimmt automatisch webpack + ohne Sourcemaps).
-- `npm run lint` → ESLint
-- `npm run build` → Produktionsbuild
 
-### Supabase / Sicherheit
-- Fuer Produktion/oeffentliche Tests: `SUPABASE_SERVICE_ROLE_KEY` als Server-Secret setzen und RLS aktivieren.
-- SQL dafuer liegt in `../supabase/rls_policies.sql`.
+1. `npm install`
+2. `.env.local` mit den benoetigten Entwicklungswerten anlegen. Die Datei bleibt durch `.gitignore` privat.
+3. `npm run dev` starten und `http://localhost:3000` oeffnen.
+4. Vor einem Rollout `npm run check` ausfuehren.
 
+Ohne `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` und `SUPABASE_SERVICE_ROLE_KEY`
+kann die Seitenschale lokal starten, datenabhaengige APIs antworten aber nicht erfolgreich.
 
-### Struktur
-- `src/app/page.tsx` → Landing + Kachel-Grid + Draft-Review (Mock-Daten)
-- `src/app/questions/[id]/page.tsx` → Frage-Detailseite (Mock-Daten)
-- `src/app/data/mock.ts` → Mock-Daten/Typen
-- `src/app/api/questions/route.ts` → Mock-API fuer Feed/Drafts
-- `src/app/layout.tsx` → Fonts/Metadata
-- `src/app/globals.css` → Basis-Theme (Gradient, Buttons)
+### Wichtige Server-Secrets
 
-### Deployment Hinweis (Strato + Vercel)
-- In Vercel `future-vote.de` als Domain hinterlegen, DNS bei Strato per CNAME/A auf Vercel zeigen (siehe Vercel Domain-Settings).
-- SSL erledigt Vercel automatisch nach DNS-Propagation.
-- Backend spaeter auf eigener Subdomain (z. B. `api.future-vote.de`).
+- `SUPABASE_SERVICE_ROLE_KEY`: serverseitiger Datenbank- und Storage-Zugriff.
+- `OPENAI_API_KEY`: Bild- und Admin-KI-Funktionen.
+- `FV_CRON_SECRET`: Schutz der Cron-Routen.
+- `FV_RATE_LIMIT_SECRET`: eigener Pepper fuer persistente Rate-Limit-Schluessel. Falls nicht gesetzt, wird ein vorhandenes Server-Secret verwendet.
+- `FV_REFERRAL_SECRET`: Signatur der Empfehlungslinks.
+- `NEXT_PUBLIC_BASE_URL`: kanonische Produktionsadresse.
 
-### Weiteres
-- Produkt-/Scope-Idee: `../IDEA_OVERVIEW.md`
-- Vorgehensplan: `../IMPLEMENTATION_PLAN.md`
+Secrets niemals in Git, Screenshots, Browserfelder ohne klaren Zweck oder oeffentliche Logs schreiben.
+
+### Supabase und Sicherheit
+
+- Die App nutzt eigene Tabellen fuer Nutzer und Sessions, nicht Supabase Auth.
+- Sensible Tabellen sind serverseitig ueber den Service-Role-Key erreichbar und durch RLS vor oeffentlichem Lesen geschuetzt.
+- Vor dem Phase-0-App-Deploy muss `../supabase/phase0_security_hardening.sql` ausgefuehrt werden.
+- Die genaue Reihenfolge und Pruefung steht in `../PHASE0_ROLLOUT.md`.
+
+### Vercel
+
+Die konfigurierte Vercel-Projektwurzel ist `frontend`. Deshalb liegt `vercel.json` in diesem Ordner. Nur so werden Build-Konfiguration und die fuenf Cron-Jobs vom Projekt erkannt.
+
+### Pruefkommandos
+
+- `npm run lint`: ESLint, Warnungen bleiben als technische Schuld sichtbar.
+- `npm run typecheck`: TypeScript ohne Ausgabe.
+- `npm test`: schnelle Regel- und Sicherheitspruefungen.
+- `npm run check:gpt-contract`: Vertrag des FutureVote-GPT.
+- `npm run build`: Produktions-Build.
+- `npm run check`: alle obigen Pruefungen in CI-Reihenfolge.

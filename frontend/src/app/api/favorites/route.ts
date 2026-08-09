@@ -7,6 +7,7 @@ import {
   removeFavoriteQuestion,
   toggleFavoriteQuestion,
 } from "@/app/data/dbSupabaseFavorites";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -31,6 +32,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   if (!sessionId) {
@@ -40,6 +44,17 @@ export async function POST(request: Request) {
   const user = await getUserBySessionSupabase(sessionId).catch(() => null);
   if (!user) {
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
+  }
+
+  const favoriteRate = await consumeRateLimit({
+    request,
+    scope: "favorite-change",
+    identifier: `user:${user.id}`,
+    limit: 120,
+    windowSeconds: 10 * 60,
+  });
+  if (!favoriteRate.allowed) {
+    return rateLimitResponse(favoriteRate, "Zu viele Änderungen. Bitte später erneut versuchen.");
   }
 
   const body: unknown = await request.json().catch(() => null);
@@ -68,4 +83,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Konnte Favorit nicht speichern." }, { status: 500 });
   }
 }
-

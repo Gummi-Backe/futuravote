@@ -4,7 +4,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -24,6 +26,9 @@ function revalidatePublicDiscoveryPaths(questionId?: string) {
 
 export async function POST(request: Request) {
   try {
+    const invalidSource = mutationRequestGuard(request);
+    if (invalidSource) return invalidSource;
+
     let body: VoteBody;
     try {
       body = (await request.json()) as VoteBody;
@@ -44,8 +49,25 @@ export async function POST(request: Request) {
     const cookieStore = await cookies();
     const existingSession = cookieStore.get("fv_session")?.value;
     const sessionId = existingSession ?? randomUUID();
+    const userSessionId = cookieStore.get("fv_user")?.value;
+    const user = userSessionId ? await getUserBySessionSupabase(userSessionId).catch(() => null) : null;
+    if (!user) {
+      return NextResponse.json({ error: "Für Community-Reviews ist eine Anmeldung erforderlich." }, { status: 401 });
+    }
+    if (!user.emailVerified) {
+      return NextResponse.json({ error: "Bitte bestätige zuerst deine E-Mail-Adresse." }, { status: 403 });
+    }
 
-    const { draft, alreadyVoted } = await voteOnDraftInSupabase(draftId, choice, sessionId);
+    const rate = await consumeRateLimit({
+      request,
+      scope: "draft-review",
+      identifier: `user:${user.id}`,
+      limit: 40,
+      windowSeconds: 60 * 60,
+    });
+    if (!rate.allowed) return rateLimitResponse(rate, "Zu viele Reviews. Bitte später erneut versuchen.");
+
+    const { draft, alreadyVoted } = await voteOnDraftInSupabase(draftId, choice, sessionId, user.id);
     if (!draft) {
       return NextResponse.json({ error: "Draft nicht gefunden." }, { status: 404 });
     }
@@ -54,6 +76,7 @@ export async function POST(request: Request) {
       await logAnalyticsEventServer({
         event: "review_draft",
         sessionId,
+        userId: user.id,
         path: "/",
         meta: { draftId, choice },
       });
@@ -72,8 +95,12 @@ export async function POST(request: Request) {
       typeof (err as any)?.status === "number" && Number.isFinite((err as any).status)
         ? (err as any).status
         : 500;
-    const message =
-      err instanceof Error && err.message ? err.message : "Draft-Review fehlgeschlagen. Bitte versuche es erneut.";
-    return NextResponse.json({ error: message }, { status });
+    const technicalMessage = err instanceof Error ? err.message : "Unbekannter Fehler";
+    console.error("Draft review failed:", technicalMessage);
+    const publicMessage =
+      status < 500 && technicalMessage
+        ? technicalMessage
+        : "Draft-Review fehlgeschlagen. Bitte versuche es erneut.";
+    return NextResponse.json({ error: publicMessage }, { status });
   }
 }

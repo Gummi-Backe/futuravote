@@ -6,6 +6,7 @@ import {
   getQuestionsPageFromSupabase,
 } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { ADMIN_SETTINGS_DEFAULTS, getAdminSettings } from "@/app/lib/adminSettings";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
 
 export const revalidate = 0;
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const [questionsPage, draftsPage] = await Promise.all([
+  const [questionsPage, draftsPage, adminSettings] = await Promise.all([
     includeQuestions
       ? getQuestionsPageFromSupabase({
           sessionId,
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
     includeDrafts
       ? getDraftsPageFromSupabase({
           sessionId,
+          userId: userId ?? undefined,
           limit: pageSize,
           offset: draftsOffset,
           cursor: draftsCursor,
@@ -81,6 +83,7 @@ export async function GET(request: Request) {
           voted,
         })
       : Promise.resolve({ items: [], total: 0, nextCursor: null }),
+    includeDrafts ? getAdminSettings() : Promise.resolve(ADMIN_SETTINGS_DEFAULTS),
   ]);
 
   const response = NextResponse.json({
@@ -90,6 +93,10 @@ export async function GET(request: Request) {
     draftsTotal: includeDrafts ? draftsPage.total : null,
     questionsNextCursor: includeQuestions ? questionsPage.nextCursor : null,
     draftsNextCursor: includeDrafts ? draftsPage.nextCursor : null,
+    draftReviewRules: {
+      minTotalReviews: adminSettings.draftMinTotalReviews,
+      minLead: adminSettings.draftMinLead,
+    },
   });
 
   response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());

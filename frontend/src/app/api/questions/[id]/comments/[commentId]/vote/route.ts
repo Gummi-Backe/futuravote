@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -56,6 +57,9 @@ async function getCountsForComment(commentId: string) {
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string; commentId: string }> }) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const resolved = await props.params;
   const questionId = resolved?.id;
   const commentId = resolved?.commentId;
@@ -74,6 +78,20 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
   const user = await getUserBySessionSupabase(sessionId).catch(() => null);
   if (!user) return NextResponse.json({ error: "Bitte einloggen." }, { status: 401 });
+  if (!user.emailVerified) {
+    return NextResponse.json({ error: "Bitte zuerst E-Mail bestätigen." }, { status: 403 });
+  }
+
+  const voteRate = await consumeRateLimit({
+    request,
+    scope: "comment-vote",
+    identifier: `user:${user.id}`,
+    limit: 120,
+    windowSeconds: 10 * 60,
+  });
+  if (!voteRate.allowed) {
+    return rateLimitResponse(voteRate, "Zu viele Kommentarbewertungen. Bitte später erneut versuchen.");
+  }
 
   let body: any;
   try {

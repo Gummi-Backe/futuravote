@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { deleteUserSessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvUserClearCookieOptions } from "@/app/lib/fvUserCookie";
+import { mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -34,6 +35,9 @@ function getCookieClearDomains(request: Request, resolvedDomain?: string): strin
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
   if (sessionId) {

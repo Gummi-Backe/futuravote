@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -20,10 +21,10 @@ type ReportBody = {
   pageUrl?: string | null;
 };
 
-const RATE_LIMIT_MS = 10_000;
-const lastReportBySession = new Map<string, number>();
-
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   let body: ReportBody;
   try {
     body = (await request.json()) as ReportBody;
@@ -53,22 +54,23 @@ export async function POST(request: Request) {
   const existingSession = cookieStore.get("fv_session")?.value;
   const sessionId = existingSession ?? randomUUID();
 
-  const now = Date.now();
-  const last = lastReportBySession.get(sessionId) ?? 0;
-  const diff = now - last;
-  if (diff < RATE_LIMIT_MS) {
-    return NextResponse.json(
-      { error: "Zu viele Meldungen. Bitte kurz warten.", retryAfterMs: RATE_LIMIT_MS - diff },
-      { status: 429, headers: { "Retry-After": `${Math.ceil((RATE_LIMIT_MS - diff) / 1000)}` } }
-    );
-  }
-
   // Optional: eingeloggten Nutzer speichern (fuer Admin-Kontext), aber Melden ist auch ohne Login erlaubt.
   const userSessionId = cookieStore.get("fv_user")?.value;
   let reporterUserId: string | null = null;
   if (userSessionId) {
     const user = await getUserBySessionSupabase(userSessionId).catch(() => null);
     if (user?.id) reporterUserId = user.id;
+  }
+
+  const reportRate = await consumeRateLimit({
+    request,
+    scope: "report-create",
+    identifier: reporterUserId ? `user:${reporterUserId}` : undefined,
+    limit: reporterUserId ? 20 : 6,
+    windowSeconds: 24 * 60 * 60,
+  });
+  if (!reportRate.allowed) {
+    return rateLimitResponse(reportRate, "Zu viele Meldungen. Bitte später erneut versuchen.");
   }
 
   const supabase = getSupabaseAdminClient();
@@ -99,10 +101,9 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-    return NextResponse.json({ error: `Meldung konnte nicht gespeichert werden: ${insertError.message}` }, { status: 500 });
+    console.error("Report konnte nicht gespeichert werden:", insertError);
+    return NextResponse.json({ error: "Meldung konnte nicht gespeichert werden." }, { status: 500 });
   }
-
-  lastReportBySession.set(sessionId, now);
 
   const response = NextResponse.json({ ok: true }, { status: 200 });
   response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());

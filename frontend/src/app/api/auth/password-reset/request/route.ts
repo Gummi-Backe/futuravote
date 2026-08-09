@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getUserByEmailSupabase } from "@/app/data/dbSupabaseUsers";
 import { createPasswordResetTokenSupabase } from "@/app/data/dbSupabaseUsers";
 import { sendPasswordResetEmail } from "@/app/lib/email";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
-const RATE_LIMIT_MS = 60_000;
-const lastRequestByKey = new Map<string, number>();
-
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   let body: { email?: string };
   try {
     body = (await request.json()) as { email?: string };
@@ -21,21 +22,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bitte gib eine gültige E-Mail-Adresse ein." }, { status: 400 });
   }
 
-  const forwarded = request.headers.get("x-forwarded-for") ?? "";
-  const ip = forwarded.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
-  const key = `${ip}|${email}`;
-
-  const now = Date.now();
-  const last = lastRequestByKey.get(key) ?? 0;
-  const diff = now - last;
-  if (diff < RATE_LIMIT_MS) {
-    return NextResponse.json(
-      { error: "Too Many Requests", retryAfterMs: RATE_LIMIT_MS - diff },
-      { status: 429, headers: { "Retry-After": `${Math.ceil((RATE_LIMIT_MS - diff) / 1000)}` } }
-    );
+  const [ipRate, emailRate] = await Promise.all([
+    consumeRateLimit({ request, scope: "password-reset-ip", limit: 5, windowSeconds: 60 * 60 }),
+    consumeRateLimit({
+      request,
+      scope: "password-reset-email",
+      identifier: `email:${email}`,
+      limit: 3,
+      windowSeconds: 60 * 60,
+    }),
+  ]);
+  const blockedRate = !ipRate.allowed ? ipRate : !emailRate.allowed ? emailRate : null;
+  if (blockedRate) {
+    return rateLimitResponse(blockedRate, "Zu viele Anfragen. Bitte später erneut versuchen.");
   }
-
-  lastRequestByKey.set(key, now);
 
   try {
     const user = await getUserByEmailSupabase(email);

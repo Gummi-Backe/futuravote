@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
 
@@ -11,6 +14,28 @@ const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "ima
 export const revalidate = 0;
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get("fv_user")?.value;
+  const user = sessionId ? await getUserBySessionSupabase(sessionId).catch(() => null) : null;
+  if (!user) {
+    return NextResponse.json({ error: "Bitte zuerst anmelden." }, { status: 401 });
+  }
+  if (!user.emailVerified) {
+    return NextResponse.json({ error: "Bitte zuerst die E-Mail-Adresse bestaetigen." }, { status: 403 });
+  }
+
+  const rate = await consumeRateLimit({
+    request,
+    scope: "image-upload",
+    identifier: `user:${user.id}`,
+    limit: 12,
+    windowSeconds: 60 * 60,
+  });
+  if (!rate.allowed) return rateLimitResponse(rate, "Zu viele Bild-Uploads. Bitte spaeter erneut versuchen.");
+
   const formData = await request.formData();
   const file = formData.get("file");
 

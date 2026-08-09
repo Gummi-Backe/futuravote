@@ -5,10 +5,14 @@ import {
   getUserBySessionSupabase,
 } from "@/app/data/dbSupabaseUsers";
 import { sendVerificationEmail } from "@/app/lib/email";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const cookieStore = await cookies();
   const sessionId = cookieStore.get("fv_user")?.value;
 
@@ -24,6 +28,17 @@ export async function POST(request: Request) {
 
     if (user.emailVerified) {
       return NextResponse.json({ ok: true, alreadyVerified: true });
+    }
+
+    const resendRate = await consumeRateLimit({
+      request,
+      scope: "verification-resend",
+      identifier: `user:${user.id}`,
+      limit: 3,
+      windowSeconds: 60 * 60,
+    });
+    if (!resendRate.allowed) {
+      return rateLimitResponse(resendRate, "Zu viele E-Mails angefordert. Bitte später erneut versuchen.");
     }
 
     const token = await createEmailVerificationTokenSupabase(user.id);
@@ -45,4 +60,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

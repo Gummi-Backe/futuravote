@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { resetPasswordByTokenSupabase } from "@/app/data/dbSupabaseUsers";
+import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -11,6 +12,19 @@ function hashPassword(password: string): string {
 }
 
 export async function POST(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
+  const resetRate = await consumeRateLimit({
+    request,
+    scope: "password-reset-confirm",
+    limit: 10,
+    windowSeconds: 60 * 60,
+  });
+  if (!resetRate.allowed) {
+    return rateLimitResponse(resetRate, "Zu viele Versuche. Bitte später erneut versuchen.");
+  }
+
   let body: { token?: string; password?: string; passwordConfirm?: string };
   try {
     body = (await request.json()) as { token?: string; password?: string; passwordConfirm?: string };

@@ -11,6 +11,7 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { ReportButton } from "@/app/components/ReportButton";
 import { getPollByShareIdFromSupabase } from "@/app/data/dbSupabase";
 import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
+import { getAdminSettings } from "@/app/lib/adminSettings";
 import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
 import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
 
@@ -97,13 +98,17 @@ async function getBaseUrl() {
 
 async function fetchSharedPoll(shareId: string): Promise<SharedPollResponse | null> {
   const cookieStore = await cookies();
-  const cookieHeader = cookieStore.get("fv_session")?.value;
+  const fvSession = cookieStore.get("fv_session")?.value;
+  const fvUser = cookieStore.get("fv_user")?.value;
+  const cookieHeader = [fvSession ? `fv_session=${fvSession}` : null, fvUser ? `fv_user=${fvUser}` : null]
+    .filter(Boolean)
+    .join("; ");
   const baseUrl = await getBaseUrl();
 
   try {
     const res = await fetch(`${baseUrl}/api/polls/${encodeURIComponent(shareId)}`, {
       cache: "no-store",
-      headers: cookieHeader ? { cookie: `fv_session=${cookieHeader}` } : undefined,
+      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     });
     if (res.status === 404) return null;
     if (!res.ok) return null;
@@ -140,6 +145,7 @@ export default async function SharedPollPage(props: {
 
   const poll = await fetchSharedPoll(shareId);
   if (!poll) notFound();
+  const adminSettings = poll.kind === "draft" ? await getAdminSettings() : null;
 
   const sharedQuestion = poll.kind === "question" ? poll.question : null;
   const answerMode = sharedQuestion?.answerMode ?? "binary";
@@ -352,7 +358,19 @@ export default async function SharedPollPage(props: {
                 <ReportButton kind="draft" itemId={poll.draft.id} itemTitle={poll.draft.title} shareId={shareId} />
               ) : null}
             </div>
-            <DraftReviewClient initialDraft={poll.draft} alreadyReviewedInitial={poll.alreadyReviewed} readOnly={isOwner} />
+            <DraftReviewClient
+              initialDraft={poll.draft}
+              alreadyReviewedInitial={poll.alreadyReviewed}
+              readOnly={isOwner}
+              reviewRules={
+                adminSettings
+                  ? {
+                      minTotalReviews: adminSettings.draftMinTotalReviews,
+                      minLead: adminSettings.draftMinLead,
+                    }
+                  : undefined
+              }
+            />
           </section>
         ) : (
           <section className="mt-6 grid gap-6 lg:grid-cols-3">

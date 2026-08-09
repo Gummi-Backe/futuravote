@@ -8,6 +8,7 @@ import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { ReportButton } from "@/app/components/ReportButton";
 import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
 import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
+import { getAdminSettings } from "@/app/lib/adminSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ type DraftRow = {
   votes_against: number | null;
   time_left_hours: number | null;
   status: string | null;
+  decision_source: string | null;
   created_at: string | null;
 };
 
@@ -51,6 +53,8 @@ function mapDraftRow(row: DraftRow): Draft {
     votesAgainst: row.votes_against ?? 0,
     timeLeftHours: roundedTimeLeft,
     status: (row.status ?? "open") as Draft["status"],
+    decisionSource:
+      row.decision_source === "community" || row.decision_source === "admin" ? row.decision_source : undefined,
   };
 }
 
@@ -70,26 +74,17 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
 
   const { data: row, error } = await supabase
     .from("drafts")
-    .select("id,creator_id,title,description,region,image_url,image_credit,category,votes_for,votes_against,time_left_hours,status,created_at")
+    .select("id,creator_id,title,description,region,image_url,image_credit,category,votes_for,votes_against,time_left_hours,status,decision_source,created_at")
     .eq("id", id)
     .eq("creator_id", currentUser.id)
     .maybeSingle();
 
   if (error || !row) notFound();
 
-  const sessionId = cookieStore.get("fv_session")?.value ?? null;
-  let alreadyReviewed = false;
-  if (sessionId) {
-    const { data: reviewRows, error: reviewError } = await supabase
-      .from("draft_reviews")
-      .select("id")
-      .eq("draft_id", id)
-      .eq("session_id", sessionId)
-      .limit(1);
-    alreadyReviewed = !reviewError && Boolean(reviewRows && reviewRows.length > 0);
-  }
-
-  const draft = mapDraftRow(row as DraftRow);
+  const [draft, adminSettings] = await Promise.all([
+    Promise.resolve(mapDraftRow(row as DraftRow)),
+    getAdminSettings(),
+  ]);
   const discussWithGptUrl = buildFutureVoteGptDiscussUrl({
     title: draft.title,
     category: draft.category,
@@ -116,7 +111,15 @@ export default async function DraftDetailPage(props: { params: Promise<{ id: str
             <FutureVoteGptLink href={discussWithGptUrl} />
             <ReportButton kind="draft" itemId={draft.id} itemTitle={draft.title} />
           </div>
-          <DraftReviewClient initialDraft={draft} alreadyReviewedInitial={alreadyReviewed} />
+          <DraftReviewClient
+            initialDraft={draft}
+            alreadyReviewedInitial
+            readOnly
+            reviewRules={{
+              minTotalReviews: adminSettings.draftMinTotalReviews,
+              minLead: adminSettings.draftMinLead,
+            }}
+          />
         </section>
       </div>
     </main>

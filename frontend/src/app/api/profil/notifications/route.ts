@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { mutationRequestGuard } from "@/app/lib/requestSecurity";
 
 export const revalidate = 0;
 
@@ -143,6 +144,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const invalidSource = mutationRequestGuard(request);
+  if (invalidSource) return invalidSource;
+
   const user = await getUserFromCookie();
   if (!user) {
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
@@ -189,7 +193,8 @@ export async function PUT(request: Request) {
         : undefined;
 
     return NextResponse.json({ ok: true, prefs: next, note });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Konnte Einstellungen nicht speichern." }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Notification preferences save failed", error);
+    return NextResponse.json({ error: "Konnte Einstellungen nicht speichern." }, { status: 500 });
   }
 }

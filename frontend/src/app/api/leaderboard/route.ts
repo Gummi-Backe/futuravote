@@ -59,7 +59,8 @@ export async function GET(request: Request) {
 
   const { data: resolvedRows, error: resolvedError } = await resolvedQuery;
   if (resolvedError) {
-    return NextResponse.json({ ok: false, error: resolvedError.message }, { status: 500 });
+    console.error("Leaderboard questions failed", resolvedError);
+    return NextResponse.json({ ok: false, error: "Rangliste konnte nicht geladen werden." }, { status: 500 });
   }
 
   const resolved = (resolvedRows ?? []) as ResolvedQuestionRow[];
@@ -98,7 +99,8 @@ export async function GET(request: Request) {
         .limit(20000);
 
     if (voteError) {
-      return NextResponse.json({ ok: false, error: voteError.message }, { status: 500 });
+      console.error("Leaderboard votes failed", voteError);
+      return NextResponse.json({ ok: false, error: "Rangliste konnte nicht geladen werden." }, { status: 500 });
     }
 
     (voteRows ?? []).forEach((v) => {
@@ -129,7 +131,8 @@ export async function GET(request: Request) {
     const chunk = userIds.slice(i, i + 200);
     const { data: userRows, error: userError } = await supabase.from("users").select("id,display_name").in("id", chunk);
     if (userError) {
-      return NextResponse.json({ ok: false, error: userError.message }, { status: 500 });
+      console.error("Leaderboard users failed", userError);
+      return NextResponse.json({ ok: false, error: "Rangliste konnte nicht geladen werden." }, { status: 500 });
     }
     ((userRows ?? []) as UserRow[]).forEach((u) => userById.set(u.id, u.display_name));
   }
