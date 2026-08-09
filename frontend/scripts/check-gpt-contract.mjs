@@ -48,6 +48,7 @@ function requireActionDescriptionWithinLimit(content, operationId, limit) {
 const questionsRoute = readFromFrontend("src/app/api/gpt/questions/route.ts");
 const similarRoute = readFromFrontend("src/app/api/gpt/questions/similar/route.ts");
 const draftsRoute = readFromFrontend("src/app/api/drafts/route.ts");
+const publicUrls = readFromFrontend("src/app/lib/publicUrls.ts");
 const writeSchema = readFromFrontend("src/app/api/gpt/openapi/write/route.ts");
 const writeAlias = readFromFrontend("src/app/futuravote-gpt-write-openapi.yaml/route.ts");
 const readSchema = readFromFrontend("public/futuravote-gpt-openapi.yaml");
@@ -58,6 +59,7 @@ requireText("similar route", similarRoute, "url: buildQuestionUrl(row.id)");
 requireText("draft response", draftsRoute, 'submissionType: "public_review"');
 requireText("private response", draftsRoute, 'submissionType: "private_link"');
 requireText("public review URL", draftsRoute, "reviewUrl");
+requireText("public review URL", publicUrls, "/review/drafts/");
 requireText("private share URL", draftsRoute, "shareUrl");
 requireText("explicit approval", draftsRoute, "if (isOauthGpt && !confirmSubmit)");
 requireText("private end date", draftsRoute, '"closes_at_required_for_link_only"');

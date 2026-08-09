@@ -10,7 +10,7 @@ export function buildQuestionUrl(id: string): string {
 }
 
 export function buildDraftReviewUrl(id: string): string {
-  return `${getPublicSiteUrl()}/drafts/${encodeURIComponent(id)}`;
+  return `${getPublicSiteUrl()}/review/drafts/${encodeURIComponent(id)}`;
 }
 
 export function buildPrivatePollUrl(shareId: string): string {
