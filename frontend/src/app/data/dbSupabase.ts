@@ -6,7 +6,6 @@ import path from "path";
 import { categories, type AnswerMode, type Draft, type PollOption, type PollVisibility, type Question } from "./mock";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getAdminSettings } from "@/app/lib/adminSettings";
-import { getSupabaseServerClient } from "@/app/lib/supabaseServerClient";
 
 export type VoteChoice = "yes" | "no";
 export type DraftReviewChoice = "good" | "bad";
@@ -366,10 +365,29 @@ const DATA_ROOT =
   process.env.DATA_DIR ?? (process.env.VERCEL ? "/tmp/futuravote" : path.join(process.cwd(), "data"));
 const IMAGES_DIR = path.join(DATA_ROOT, "images");
 
-function deleteImageFileIfPresent(imageUrl?: string | null) {
+async function deleteImageFileIfUnreferenced(imageUrl?: string | null) {
   if (!imageUrl) return;
 
   try {
+    const supabase = getSupabaseAdminClient();
+    const [questionsResult, draftsResult] = await Promise.all([
+      supabase.from("questions").select("id", { count: "exact", head: true }).eq("image_url", imageUrl),
+      supabase.from("drafts").select("id", { count: "exact", head: true }).eq("image_url", imageUrl),
+    ]);
+
+    if (questionsResult.error || draftsResult.error) {
+      console.error("Skipped image deletion because references could not be checked", {
+        imageUrl,
+        questionsError: questionsResult.error?.message,
+        draftsError: draftsResult.error?.message,
+      });
+      return;
+    }
+
+    if ((questionsResult.count ?? 0) > 0 || (draftsResult.count ?? 0) > 0) {
+      return;
+    }
+
     // Supabase-Public-URL? (neuer Weg)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (supabaseUrl && imageUrl.startsWith(supabaseUrl)) {
@@ -385,13 +403,10 @@ function deleteImageFileIfPresent(imageUrl?: string | null) {
             // Nur echte, pro Frage hochgeladene Bilder löschen.
             // Standard-/Shared-Bilder (z. B. question-images/anderebilder/...) dürfen nie gelöscht werden.
             if (!pathInBucket.startsWith("questions/")) return;
-            const supabase = getSupabaseServerClient();
-            supabase.storage
-              .from(IMAGE_BUCKET)
-              .remove([pathInBucket])
-              .catch((err) => {
-                console.error("Failed to delete image from Supabase Storage", err);
-              });
+            const { error: removeError } = await supabase.storage.from(IMAGE_BUCKET).remove([pathInBucket]);
+            if (removeError) {
+              console.error("Failed to delete image from Supabase Storage", removeError);
+            }
             return;
           }
         }
@@ -2615,12 +2630,12 @@ export async function adminDeleteDraftInSupabase(id: string): Promise<Draft | nu
   if (!row) return null;
 
   const draftRow = row as DraftRow;
-  deleteImageFileIfPresent(draftRow.image_url);
 
   const { error: deleteError } = await supabase.from("drafts").delete().eq("id", id);
   if (deleteError) {
     throw new Error(`Supabase adminDeleteDraft (delete) fehlgeschlagen: ${deleteError.message}`);
   }
+  await deleteImageFileIfUnreferenced(draftRow.image_url);
 
   const optionsMap =
     normalizeAnswerMode(draftRow.answer_mode ?? "binary") === "options"
@@ -2665,12 +2680,12 @@ export async function adminDeleteQuestionInSupabase(id: string): Promise<Questio
   if (!row) return null;
 
   const questionRow = row as QuestionRow;
-  deleteImageFileIfPresent(questionRow.image_url);
 
   const { error: deleteError } = await supabase.from("questions").delete().eq("id", id);
   if (deleteError) {
     throw new Error(`Supabase adminDeleteQuestion (delete) fehlgeschlagen: ${deleteError.message}`);
   }
+  await deleteImageFileIfUnreferenced(questionRow.image_url);
 
   return mapQuestion(questionRow);
 }
