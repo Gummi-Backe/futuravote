@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
+import Link from "next/link";
+import { House } from "lucide-react";
 import type { Metadata } from "next";
 import type { QuestionWithVotes } from "@/app/data/dbSupabase";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
@@ -286,10 +288,17 @@ export default async function QuestionDetail(props: {
       <ReferralVisitTracker />
       <div className="mx-auto max-w-4xl px-4 pb-12 pt-8 sm:pt-10 lg:px-6">
         <QuestionViewTracker questionId={id} />
-        <SmartBackButton
-          fallbackHref={backHref}
-          label={backLabel}
-        />
+        {isAdmin && (cameFromAdminReports || cameFromAdminResolutions) ? (
+          <SmartBackButton fallbackHref={backHref} label={backLabel} />
+        ) : (
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-emerald-300/60 active:translate-y-0"
+          >
+            <House className="h-4 w-4" aria-hidden="true" />
+            Startseite
+          </Link>
+        )}
 
         <header className="mt-4 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 px-4 py-5 sm:px-6 sm:py-6 shadow-2xl shadow-emerald-500/10 backdrop-blur">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
