@@ -62,6 +62,7 @@ requireText("public review URL", draftsRoute, "reviewUrl");
 requireText("public review URL", publicUrls, "/review/drafts/");
 requireText("private share URL", draftsRoute, "shareUrl");
 requireText("explicit approval", draftsRoute, "if (isOauthGpt && !confirmSubmit)");
+requireText("reachable GPT image", draftsRoute, '"image_unavailable_for_gpt"');
 requireText("private end date", draftsRoute, '"closes_at_required_for_link_only"');
 
 requireText("write schema", writeSchema, "version: 0.2.0");

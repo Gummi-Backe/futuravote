@@ -201,6 +201,23 @@ function isAllowedGptImageUrl(rawUrl: string): boolean {
   }
 }
 
+async function isReachableGptImageUrl(rawUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(rawUrl, {
+      method: "GET",
+      headers: { Range: "bytes=0-0" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    await response.body?.cancel().catch(() => undefined);
+    return response.ok && contentType.startsWith("image/");
+  } catch (error) {
+    console.error("GPT image availability check failed", error);
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const cookieSessionId = cookieStore.get("fv_user")?.value ?? null;
@@ -386,6 +403,15 @@ export async function POST(request: Request) {
       "imageUrl-Host ist für GPT-OAuth nicht freigegeben. Bitte nutze zuerst /api/gpt/generate-image.",
       "invalid_image_host_for_gpt",
       [{ field: "imageUrl", issue: "host_not_allowed_for_gpt" }]
+    );
+  }
+
+  if (isOauthGpt && imageUrl && !(await isReachableGptImageUrl(imageUrl))) {
+    return errorResponse(
+      422,
+      "Das erzeugte Bild ist nicht mehr erreichbar. Bitte erzeuge ein neues Bild und zeige die aktualisierte Vorschau erneut.",
+      "image_unavailable_for_gpt",
+      [{ field: "imageUrl", issue: "generated_image_not_reachable" }]
     );
   }
 
