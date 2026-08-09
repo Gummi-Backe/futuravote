@@ -13,6 +13,7 @@ import { getPollByShareIdFromSupabase } from "@/app/data/dbSupabase";
 import { ReferralVisitTracker } from "@/app/components/ReferralVisitTracker";
 import { getAdminSettings } from "@/app/lib/adminSettings";
 import { FutureVoteGptLink } from "@/app/components/FutureVoteGptLink";
+import { DirectImage } from "@/app/components/DirectImage";
 import { buildFutureVoteGptDiscussUrl } from "@/app/lib/futureVoteGpt";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +35,8 @@ function clampText(value: string, maxLen: number) {
 export async function generateMetadata(props: {
   params: Promise<{ shareId: string }> | { shareId: string };
 }): Promise<Metadata> {
-  const resolvedParams = await (props as any).params;
-  const shareId = (resolvedParams?.shareId as string) ?? "";
+  const resolvedParams = await props.params;
+  const shareId = resolvedParams.shareId ?? "";
 
   const metadataBase = new URL(getMetadataBaseUrl());
   const canonical = `/p/${encodeURIComponent(shareId)}`;
@@ -218,7 +219,7 @@ export default async function SharedPollPage(props: {
               <div className="flex items-start gap-3">
                 {poll.question.imageUrl ? (
                   <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]">
-                    <img
+                    <DirectImage
                       src={poll.question.imageUrl}
                       alt={poll.question.title}
                       className="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain sm:max-h-24 sm:max-w-[7rem]"
@@ -378,7 +379,7 @@ export default async function SharedPollPage(props: {
               <div className="flex items-start gap-3">
                 {poll.question.imageUrl ? (
                   <div className="inline-flex max-h-20 max-w-[5.5rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30 sm:max-h-24 sm:max-w-[7rem]">
-                    <img
+                    <DirectImage
                       src={poll.question.imageUrl}
                       alt={poll.question.title}
                       className="h-auto w-auto max-h-20 max-w-[5.5rem] object-contain sm:max-h-24 sm:max-w-[7rem]"

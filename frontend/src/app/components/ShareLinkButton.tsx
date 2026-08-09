@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { trackShare } from "@/app/lib/analytics";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export function ShareLinkButton({
   url,
@@ -34,8 +35,9 @@ export function ShareLinkButton({
         body: JSON.stringify({ targetPath }),
       });
       if (!res.ok) return url;
-      const json = (await res.json().catch(() => null)) as any;
-      const referralUrl = typeof json?.url === "string" ? json.url : null;
+      const parsedResponse: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsedResponse) ? parsedResponse : {};
+      const referralUrl = typeof json.url === "string" ? json.url : null;
       return referralUrl || url;
     } catch {
       return url;
@@ -52,8 +54,8 @@ export function ShareLinkButton({
     const shareUrl = await resolveReferralUrl();
     if (action === "share") {
       try {
-        if (typeof navigator !== "undefined" && "share" in navigator && typeof (navigator as any).share === "function") {
-          await (navigator as any).share({ url: shareUrl, title: shareTitle, text: shareText });
+        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+          await navigator.share({ url: shareUrl, title: shareTitle, text: shareText });
           trackShare("share", url, "native");
           return;
         }

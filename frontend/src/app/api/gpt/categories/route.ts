@@ -12,6 +12,12 @@ type CategoryInfo = {
   draftsCount: number;
 };
 
+type CategoryRow = {
+  category: string | null;
+  category_icon: string | null;
+  category_color: string | null;
+};
+
 function normalizeCategory(value: unknown): string | null {
   const v = typeof value === "string" ? value.trim() : "";
   return v ? v : null;
@@ -37,7 +43,7 @@ export async function GET(request: Request) {
 
     const map = new Map<string, CategoryInfo>();
 
-    for (const row of (questionRows as any[]) ?? []) {
+    for (const row of (questionRows ?? []) as CategoryRow[]) {
       const cat = normalizeCategory(row?.category);
       if (!cat) continue;
       const existing =
@@ -55,7 +61,7 @@ export async function GET(request: Request) {
       map.set(cat, existing);
     }
 
-    for (const row of (draftRows as any[]) ?? []) {
+    for (const row of (draftRows ?? []) as CategoryRow[]) {
       const cat = normalizeCategory(row?.category);
       if (!cat) continue;
       const existing =

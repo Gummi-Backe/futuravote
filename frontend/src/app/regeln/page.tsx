@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 export const metadata = {
@@ -80,7 +81,7 @@ function ExampleBinaryCard({
       headerLeft={
         <div className="flex items-center gap-3">
           <div className="h-6 w-6 overflow-hidden rounded-full bg-black/30">
-            <img src="/icons/icon-192.png" alt="" className="h-full w-full object-cover opacity-90" loading="lazy" />
+            <Image src="/icons/icon-192.png" alt="" width={24} height={24} className="h-full w-full object-cover opacity-90" />
           </div>
           <div className="min-w-0">
             <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-300">{category}</div>
@@ -98,11 +99,12 @@ function ExampleBinaryCard({
       <div className="flex gap-4">
         <div className="flex-shrink-0">
           <div className="inline-flex max-h-14 max-w-[3.8rem] items-center justify-center overflow-hidden rounded-lg bg-black/30">
-            <img
+            <Image
               src="/icons/icon-512.png"
               alt=""
+              width={56}
+              height={56}
               className="h-auto w-auto max-h-14 max-w-[3.8rem] object-contain"
-              loading="lazy"
             />
           </div>
           <p className="mt-1 text-[9px] leading-tight text-slate-400">Bild: Beispiel</p>
@@ -148,7 +150,7 @@ function ExampleOptionsCard() {
       headerLeft={
         <div className="flex items-center gap-3">
           <div className="h-6 w-6 overflow-hidden rounded-full bg-black/30">
-            <img src="/icons/icon-192.png" alt="" className="h-full w-full object-cover opacity-90" loading="lazy" />
+            <Image src="/icons/icon-192.png" alt="" width={24} height={24} className="h-full w-full object-cover opacity-90" />
           </div>
           <div className="min-w-0">
             <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-300">Wirtschaft</div>
@@ -168,11 +170,12 @@ function ExampleOptionsCard() {
       <div className="flex gap-4">
         <div className="flex-shrink-0">
           <div className="inline-flex max-h-14 max-w-[3.8rem] items-center justify-center overflow-hidden rounded-lg bg-black/30">
-            <img
+            <Image
               src="/icons/icon-512.png"
               alt=""
+              width={56}
+              height={56}
               className="h-auto w-auto max-h-14 max-w-[3.8rem] object-contain"
-              loading="lazy"
             />
           </div>
           <p className="mt-1 text-[9px] leading-tight text-slate-400">Bild: Beispiel</p>

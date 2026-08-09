@@ -61,7 +61,7 @@ export async function GET(request: Request, context: Params) {
           .select("id,label,sort_order")
           .eq("question_id", id)
           .order("sort_order", { ascending: true })
-      : { data: null as any };
+      : { data: null as OptionRow[] | null };
 
   // Etappe 2: bevorzugt Snapshot-Tabellen (skalierbar), fallback auf Roh-Votes wenn nicht vorhanden.
   const { data: metricsData, error: metricsError } = await supabase
@@ -81,7 +81,7 @@ export async function GET(request: Request, context: Params) {
           .gte("day", startDay)
           .lte("day", todayDay)
           .order("day", { ascending: true })
-      : { data: null as any, error: null as any };
+      : { data: null as OptionMetricRow[] | null, error: null };
 
   if (answerMode === "binary" && !metricsError && Array.isArray(metricsData) && metricsData.length > 0) {
     const byDate = new Map<string, { yes: number; no: number; views: number | null; rankingScore: number | null }>();
@@ -144,10 +144,10 @@ export async function GET(request: Request, context: Params) {
 
     const byDateOptions = new Map<string, Map<string, number>>();
     for (const row of (optionMetricsData as unknown as OptionMetricRow[])) {
-      const day = String((row as any)?.day ?? "");
-      const optionId = String((row as any)?.option_id ?? "");
+      const day = String(row.day ?? "");
+      const optionId = String(row.option_id ?? "");
       if (!day || !optionId) continue;
-      const votes = Math.max(0, Number((row as any)?.votes ?? 0) || 0);
+      const votes = Math.max(0, Number(row.votes ?? 0) || 0);
       const map = byDateOptions.get(day) ?? new Map<string, number>();
       map.set(optionId, votes);
       byDateOptions.set(day, map);

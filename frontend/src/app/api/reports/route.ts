@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getErrorCode } from "@/app/lib/unknownValue";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
   });
 
   if (insertError) {
-    const code = (insertError as any).code as string | undefined;
+    const code = getErrorCode(insertError);
     if (code === "23505") {
       const response = NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
       response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { mutationRequestGuard } from "@/app/lib/requestSecurity";
+import { getErrorMessage, isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -27,9 +28,8 @@ const DEFAULT_PREFS: NotificationPrefs = {
 };
 
 function isMissingColumnSchemaCacheError(error: unknown): boolean {
-  const e = error as any;
-  const code = typeof e?.code === "string" ? e.code : "";
-  const message = typeof e?.message === "string" ? e.message : "";
+  const code = isRecord(error) && typeof error.code === "string" ? error.code : "";
+  const message = getErrorMessage(error, "");
   return (
     code === "PGRST204" ||
     message.includes("schema cache") ||
@@ -44,7 +44,7 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
 }
 
 function extractMissingColumnName(error: unknown): string | null {
-  const message = String((error as any)?.message ?? "");
+  const message = getErrorMessage(error, "");
   const match = message.match(/Could not find the '([^']+)' column/i);
   return match?.[1] ? String(match[1]) : null;
 }
@@ -74,7 +74,7 @@ async function selectPrefsRow(
   for (let i = 0; i < columns.length; i += 1) {
     const select = remaining.join(", ");
     const { data, error } = await supabase.from("notification_preferences").select(select).eq("user_id", userId).maybeSingle();
-    if (!error) return (data ?? null) as any;
+    if (!error) return (data ?? null) as Record<string, unknown> | null;
     if (!isMissingColumnSchemaCacheError(error)) throw error;
     const missing = extractMissingColumnName(error);
     if (!missing) throw error;
@@ -98,7 +98,7 @@ async function upsertWithMissingColumnRetry(
     if (!isMissingColumnSchemaCacheError(error)) throw error;
     const missing = extractMissingColumnName(error);
     if (!missing || removed.has(missing) || !(missing in remaining)) throw error;
-    delete (remaining as any)[missing];
+    delete remaining[missing];
     removed.add(missing);
   }
 
@@ -114,25 +114,25 @@ export async function GET() {
   const supabase = getSupabaseAdminClient();
 
   try {
-    const data = (await selectPrefsRow(supabase, user.id)) as any;
+    const data = await selectPrefsRow(supabase, user.id);
 
     const prefs: NotificationPrefs = {
-      allEmailsEnabled: normalizeBoolean((data as any)?.all_emails_enabled, DEFAULT_PREFS.allEmailsEnabled),
-      privatePollResults: normalizeBoolean((data as any)?.private_poll_results, DEFAULT_PREFS.privatePollResults),
+      allEmailsEnabled: normalizeBoolean(data?.all_emails_enabled, DEFAULT_PREFS.allEmailsEnabled),
+      privatePollResults: normalizeBoolean(data?.private_poll_results, DEFAULT_PREFS.privatePollResults),
       privatePollEndingSoon: normalizeBoolean(
-        (data as any)?.private_poll_ending_soon,
+        data?.private_poll_ending_soon,
         DEFAULT_PREFS.privatePollEndingSoon
       ),
       creatorPublicQuestionEnded: normalizeBoolean(
-        (data as any)?.creator_public_question_ended,
+        data?.creator_public_question_ended,
         DEFAULT_PREFS.creatorPublicQuestionEnded
       ),
       creatorPublicQuestionResolved: normalizeBoolean(
-        (data as any)?.creator_public_question_resolved,
+        data?.creator_public_question_resolved,
         DEFAULT_PREFS.creatorPublicQuestionResolved
       ),
-      creatorDraftAccepted: normalizeBoolean((data as any)?.creator_draft_accepted, DEFAULT_PREFS.creatorDraftAccepted),
-      creatorDraftRejected: normalizeBoolean((data as any)?.creator_draft_rejected, DEFAULT_PREFS.creatorDraftRejected),
+      creatorDraftAccepted: normalizeBoolean(data?.creator_draft_accepted, DEFAULT_PREFS.creatorDraftAccepted),
+      creatorDraftRejected: normalizeBoolean(data?.creator_draft_rejected, DEFAULT_PREFS.creatorDraftRejected),
     };
 
     return NextResponse.json({ ok: true, prefs });

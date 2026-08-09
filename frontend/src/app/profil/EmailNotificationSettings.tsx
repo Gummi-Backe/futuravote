@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PROFILE_NOTIFICATION_PREFS_CACHE_KEY } from "@/app/lib/profileCache";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type NotificationPrefs = {
   allEmailsEnabled: boolean;
@@ -64,15 +65,16 @@ export function EmailNotificationSettings() {
     setLoading((prev) => prev || !initial);
     try {
       const res = await fetch("/api/profil/notifications", { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as any;
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
       if (!res.ok) {
-        throw new Error(json?.error ?? "Konnte Einstellungen nicht laden.");
+        throw new Error(typeof json.error === "string" ? json.error : "Konnte Einstellungen nicht laden.");
       }
       const next = (json?.prefs ?? DEFAULT_PREFS) as NotificationPrefs;
       setPrefs(next);
       writeCache(next);
-    } catch (e: any) {
-      setError(e?.message ?? "Konnte Einstellungen nicht laden.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Konnte Einstellungen nicht laden.");
     } finally {
       setLoading(false);
     }
@@ -93,17 +95,18 @@ export function EmailNotificationSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
       });
-      const json = (await res.json().catch(() => null)) as any;
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
       if (!res.ok) {
-        throw new Error(json?.error ?? "Konnte Einstellungen nicht speichern.");
+        throw new Error(typeof json.error === "string" ? json.error : "Konnte Einstellungen nicht speichern.");
       }
       if (inflightSaveRef.current !== token) return;
       const saved = (json?.prefs ?? next) as NotificationPrefs;
       setPrefs(saved);
       writeCache(saved);
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (inflightSaveRef.current !== token) return;
-      setError(e?.message ?? "Konnte Einstellungen nicht speichern.");
+      setError(e instanceof Error ? e.message : "Konnte Einstellungen nicht speichern.");
     } finally {
       if (inflightSaveRef.current === token) setSaving(false);
     }

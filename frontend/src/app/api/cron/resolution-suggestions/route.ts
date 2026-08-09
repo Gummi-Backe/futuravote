@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -12,12 +13,32 @@ type Suggestion = {
   sources: string[];
 };
 
+type ResolutionCandidateRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  region: string | null;
+  closes_at: string | null;
+  resolution_criteria: string | null;
+  resolution_source: string | null;
+  resolution_deadline: string | null;
+  visibility: string | null;
+  resolved_outcome: string | null;
+  resolved_option_id: string | null;
+  answer_mode: string | null;
+  is_resolvable: boolean | null;
+};
+
+type ResolutionOptionRow = { id: string; label: string | null; sort_order: number | null };
+type PendingSuggestionRow = { question_id: string; source_kind: string | null };
+
 function isVercelCron(request: Request): boolean {
   const header = request.headers.get("x-vercel-cron");
   return header === "1" || header === "true";
 }
 
-function safeJsonFromText(text: string): any | null {
+function safeJsonFromText(text: string): unknown {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
@@ -29,12 +50,13 @@ function safeJsonFromText(text: string): any | null {
   }
 }
 
-function normalizeSuggestion(raw: any, opts: { answerMode: "binary" | "options"; validOptionIds?: string[] }): Suggestion | null {
-  const outcome = raw?.suggestedOutcome;
+function normalizeSuggestion(raw: unknown, opts: { answerMode: "binary" | "options"; validOptionIds?: string[] }): Suggestion | null {
+  const data = isRecord(raw) ? raw : {};
+  const outcome = data.suggestedOutcome;
   let suggestedOutcome: Suggestion["suggestedOutcome"] =
     outcome === "yes" || outcome === "no" || outcome === "unknown" ? outcome : "unknown";
 
-  const suggestedOptionIdRaw = raw?.suggestedOptionId;
+  const suggestedOptionIdRaw = data.suggestedOptionId;
   const suggestedOptionIdText = typeof suggestedOptionIdRaw === "string" ? suggestedOptionIdRaw.trim() : "";
   const validOptionIds = new Set((opts.validOptionIds ?? []).map((v) => String(v)));
   let suggestedOptionId: string | null =
@@ -47,12 +69,12 @@ function normalizeSuggestion(raw: any, opts: { answerMode: "binary" | "options";
     suggestedOutcome = "unknown";
   }
 
-  const confidenceRaw = Number(raw?.confidence);
+  const confidenceRaw = Number(data.confidence);
   const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(100, Math.round(confidenceRaw))) : 0;
 
-  const note = typeof raw?.note === "string" ? raw.note.trim() : "";
+  const note = typeof data.note === "string" ? data.note.trim() : "";
 
-  const sourcesRaw: unknown[] = Array.isArray(raw?.sources) ? (raw.sources as unknown[]) : [];
+  const sourcesRaw: unknown[] = Array.isArray(data.sources) ? data.sources : [];
   const sources = sourcesRaw
     .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
     .filter(Boolean)
@@ -85,13 +107,20 @@ async function callPerplexity(opts: { apiKey: string; model: string; prompt: str
     }),
   });
 
-  const json = await res.json().catch(() => null);
+  const json: unknown = await res.json().catch(() => null);
+  const responseData = isRecord(json) ? json : {};
   if (!res.ok) {
-    const msg = (json as any)?.error?.message ?? (json as any)?.message ?? `Perplexity Fehler (${res.status})`;
+    const responseError = isRecord(responseData.error) ? responseData.error : {};
+    const msg =
+      (typeof responseError.message === "string" ? responseError.message : null) ??
+      (typeof responseData.message === "string" ? responseData.message : null) ??
+      `Perplexity Fehler (${res.status})`;
     return { ok: false as const, error: msg };
   }
 
-  const content = (json as any)?.choices?.[0]?.message?.content;
+  const firstChoice = Array.isArray(responseData.choices) && isRecord(responseData.choices[0]) ? responseData.choices[0] : {};
+  const responseMessage = isRecord(firstChoice.message) ? firstChoice.message : {};
+  const content = responseMessage.content;
   if (typeof content !== "string" || !content.trim()) {
     return { ok: false as const, error: "Perplexity hat keine Antwort geliefert." };
   }
@@ -139,7 +168,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: `Supabase Fehler: ${error.message}` }, { status: 500 });
   }
 
-  const candidatesAll = ((rows ?? []) as any[]).filter((q) => {
+  const candidatesAll = ((rows ?? []) as ResolutionCandidateRow[]).filter((q) => {
     const isResolvable = q.is_resolvable === false ? false : true;
     if (!isResolvable) return false;
     const answerMode = q.answer_mode === "options" ? "options" : "binary";
@@ -187,7 +216,7 @@ export async function GET(request: Request) {
   }
 
   const pendingSet = new Set(
-    (pendingRows ?? []).map((r: any) => `${String(r.question_id)}|${String(r.source_kind ?? "ai")}`)
+    ((pendingRows ?? []) as PendingSuggestionRow[]).map((r) => `${String(r.question_id)}|${String(r.source_kind ?? "ai")}`)
   );
   const candidates = candidatesAll
     .filter((q) => !pendingSet.has(`${String(q.id)}|ai`))
@@ -230,13 +259,14 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const optionsList = answerMode === "options" ? (((optionRows?.data ?? []) as any[]) || []) : [];
+    const optionsList: ResolutionOptionRow[] =
+      answerMode === "options" ? ((optionRows?.data ?? []) as ResolutionOptionRow[]) : [];
     const optionLines =
       answerMode === "options"
         ? [
             "",
             "Antwortoptionen (du MUSST eine dieser IDs wählen oder null):",
-            ...optionsList.map((o: any) => `- ${String(o.id)} | ${String(o.label ?? "")}`),
+            ...optionsList.map((o) => `- ${String(o.id)} | ${String(o.label ?? "")}`),
           ]
         : [];
 
@@ -315,7 +345,7 @@ export async function GET(request: Request) {
       const parsed = safeJsonFromText(resp.content);
       const suggestion = normalizeSuggestion(parsed, {
         answerMode,
-        validOptionIds: answerMode === "options" ? optionsList.map((o: any) => String(o.id)) : undefined,
+        validOptionIds: answerMode === "options" ? optionsList.map((o) => String(o.id)) : undefined,
       });
       if (!suggestion) {
         await supabase.from("question_resolution_suggestions").insert({

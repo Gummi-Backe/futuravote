@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
-type LastEvent = { createdAt: string | null; meta: any | null };
+type LastEvent = { createdAt: string | null; meta: unknown };
 
 type MonitoringPayload = {
   ok: true;
@@ -32,8 +33,8 @@ function formatDate(value: string | null) {
   });
 }
 
-function okFromMeta(meta: any | null): boolean | null {
-  const ok = meta?.ok;
+function okFromMeta(meta: unknown): boolean | null {
+  const ok = isRecord(meta) ? meta.ok : null;
   return typeof ok === "boolean" ? ok : null;
 }
 
@@ -90,11 +91,12 @@ function CronRow({
   }, [last.createdAt, last.meta, nowUtc]);
 
   const detail = useMemo(() => {
-    const meta = last.meta;
+    const meta = isRecord(last.meta) ? last.meta : null;
     if (!meta) return null;
     if (typeof meta.sent === "number") return `sent: ${meta.sent}`;
     if (typeof meta.created === "number") return `created: ${meta.created}`;
-    if (typeof meta.result?.snapshotRowsUpserted === "number") return `snapshots: ${meta.result.snapshotRowsUpserted}`;
+    const result = isRecord(meta.result) ? meta.result : null;
+    if (typeof result?.snapshotRowsUpserted === "number") return `snapshots: ${result.snapshotRowsUpserted}`;
     return null;
   }, [last.meta]);
 
@@ -135,8 +137,9 @@ export default function MonitoringClient() {
     setError(null);
     try {
       const res = await fetch("/api/admin/monitoring", { cache: "no-store" });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Monitoring konnte nicht geladen werden.");
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Monitoring konnte nicht geladen werden.");
       setData(json as MonitoringPayload);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Monitoring konnte nicht geladen werden.");
@@ -159,8 +162,9 @@ export default function MonitoringClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ limit: 25 }),
       });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Cron konnte nicht ausgeführt werden.");
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Cron konnte nicht ausgeführt werden.");
       await fetchData();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Cron konnte nicht ausgeführt werden.");
@@ -178,8 +182,9 @@ export default function MonitoringClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ daysBack: 120 }),
       });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Cron konnte nicht ausgeführt werden.");
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Cron konnte nicht ausgeführt werden.");
       await fetchData();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Cron konnte nicht ausgeführt werden.");

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { DirectImage } from "@/app/components/DirectImage";
 
 export function ZoomableImage(props: {
   src: string;
@@ -53,7 +54,7 @@ export function ZoomableImage(props: {
           >
             Schließen
           </button>
-          <img
+          <DirectImage
             src={src}
             alt={alt}
             className="max-h-[88vh] max-w-[95vw] rounded-2xl border border-white/15 bg-black/30 object-contain shadow-2xl shadow-black/70"
@@ -72,7 +73,7 @@ export function ZoomableImage(props: {
         aria-label="Bild groß anzeigen"
         title={title ?? "Bild groß anzeigen"}
       >
-        <img
+        <DirectImage
           src={src}
           alt={alt}
           loading={loading}

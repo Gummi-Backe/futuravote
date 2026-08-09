@@ -10,15 +10,60 @@ import {
 
 export const revalidate = 0;
 
+type NotificationPreferenceRow = {
+  all_emails_enabled?: boolean | null;
+  creator_public_question_ended?: boolean | null;
+  creator_public_question_resolved?: boolean | null;
+  creator_draft_accepted?: boolean | null;
+  creator_draft_rejected?: boolean | null;
+};
+
+type EndedQuestionRow = {
+  id: string;
+  title: string | null;
+  closes_at: string | null;
+  creator_id: string;
+  visibility: string | null;
+};
+
+type ResolvedQuestionRow = {
+  id: string;
+  title: string | null;
+  creator_id: string;
+  answer_mode: string | null;
+  resolved_outcome: string | null;
+  resolved_option_id: string | null;
+  resolved_at: string | null;
+  resolved_source: string | null;
+  visibility: string | null;
+};
+
+type DecidedDraftRow = {
+  id: string;
+  title: string | null;
+  creator_id: string;
+  status: string | null;
+  visibility: string | null;
+  share_id: string | null;
+};
+
+type QuestionSentRow = { question_id: string };
+type DraftSentRow = { draft_id: string };
+type OptionLabelRow = { id: string; label: string | null };
+type UserInfoRow = { email: string | null; display_name: string | null };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function isVercelCron(request: Request): boolean {
   const header = request.headers.get("x-vercel-cron");
   return header === "1" || header === "true";
 }
 
 function isMissingColumnSchemaCacheError(error: unknown): boolean {
-  const e = error as any;
-  const code = typeof e?.code === "string" ? e.code : "";
-  const message = typeof e?.message === "string" ? e.message : "";
+  const code = isRecord(error) && typeof error.code === "string" ? error.code : "";
+  const message = isRecord(error) && typeof error.message === "string" ? error.message : "";
   return (
     code === "PGRST204" ||
     message.includes("schema cache") ||
@@ -60,7 +105,7 @@ async function getPrefs(
       "all_emails_enabled, creator_public_question_ended, creator_public_question_resolved, creator_draft_accepted, creator_draft_rejected";
     const selectLegacy = "all_emails_enabled, creator_public_question_ended, creator_public_question_resolved";
 
-    let data: any = null;
+    let data: NotificationPreferenceRow | null = null;
     {
       const { data: row, error } = await supabase
         .from("notification_preferences")
@@ -75,21 +120,21 @@ async function getPrefs(
           .eq("user_id", userId)
           .maybeSingle();
         if (legacyErr) throw legacyErr;
-        data = legacyRow;
+        data = legacyRow as NotificationPreferenceRow | null;
       } else {
-        data = row;
+        data = row as NotificationPreferenceRow | null;
       }
     }
     return {
-      allEmailsEnabled: typeof (data as any)?.all_emails_enabled === "boolean" ? (data as any).all_emails_enabled : true,
+      allEmailsEnabled: typeof data?.all_emails_enabled === "boolean" ? data.all_emails_enabled : true,
       creatorPublicQuestionEnded:
-        typeof (data as any)?.creator_public_question_ended === "boolean" ? (data as any).creator_public_question_ended : true,
+        typeof data?.creator_public_question_ended === "boolean" ? data.creator_public_question_ended : true,
       creatorPublicQuestionResolved:
-        typeof (data as any)?.creator_public_question_resolved === "boolean"
-          ? (data as any).creator_public_question_resolved
+        typeof data?.creator_public_question_resolved === "boolean"
+          ? data.creator_public_question_resolved
           : true,
-      creatorDraftAccepted: typeof (data as any)?.creator_draft_accepted === "boolean" ? (data as any).creator_draft_accepted : true,
-      creatorDraftRejected: typeof (data as any)?.creator_draft_rejected === "boolean" ? (data as any).creator_draft_rejected : true,
+      creatorDraftAccepted: typeof data?.creator_draft_accepted === "boolean" ? data.creator_draft_accepted : true,
+      creatorDraftRejected: typeof data?.creator_draft_rejected === "boolean" ? data.creator_draft_rejected : true,
     };
   } catch {
     // Falls Setup fehlt: Default = an (wie in UI)
@@ -134,11 +179,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Konnte beendete Fragen nicht laden.", details: endedErr.message }, { status: 500 });
   }
 
-  const endedRows = (endedQuestions ?? []) as any[];
+  const endedRows = (endedQuestions ?? []) as EndedQuestionRow[];
   const endedIds = endedRows.map((r) => String(r.id));
   const { data: endedSentRows, error: endedSentErr } = endedIds.length
     ? await supabase.from("creator_question_ended_emails").select("question_id").in("question_id", endedIds)
-    : { data: [], error: null as any };
+    : { data: [] as QuestionSentRow[], error: null };
 
   if (endedSentErr) {
     return NextResponse.json(
@@ -152,7 +197,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const endedAlready = new Set((endedSentRows ?? []).map((r: any) => String(r.question_id)));
+  const endedAlready = new Set(((endedSentRows ?? []) as QuestionSentRow[]).map((r) => String(r.question_id)));
   const endedPending = endedRows.filter((r) => !endedAlready.has(String(r.id)));
 
   // 2) "Resolved" (Ergebnis eingetragen) fuer public questions
@@ -168,11 +213,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Konnte aufgeloeste Fragen nicht laden.", details: resolvedErr.message }, { status: 500 });
   }
 
-  const resolvedRows = (resolvedQuestions ?? []) as any[];
+  const resolvedRows = (resolvedQuestions ?? []) as ResolvedQuestionRow[];
   const resolvedIds = resolvedRows.map((r) => String(r.id));
   const { data: resolvedSentRows, error: resolvedSentErr } = resolvedIds.length
     ? await supabase.from("creator_question_resolved_emails").select("question_id").in("question_id", resolvedIds)
-    : { data: [], error: null as any };
+    : { data: [] as QuestionSentRow[], error: null };
 
   if (resolvedSentErr) {
     return NextResponse.json(
@@ -186,17 +231,17 @@ export async function GET(request: Request) {
     );
   }
 
-  const resolvedAlready = new Set((resolvedSentRows ?? []).map((r: any) => String(r.question_id)));
+  const resolvedAlready = new Set(((resolvedSentRows ?? []) as QuestionSentRow[]).map((r) => String(r.question_id)));
   const resolvedPending = resolvedRows.filter((r) => !resolvedAlready.has(String(r.id)));
 
   const optionLabelById = new Map<string, string>();
   const resolvedOptionIds = resolvedPending
-    .map((r) => String((r as any).resolved_option_id ?? ""))
+    .map((r) => String(r.resolved_option_id ?? ""))
     .filter(Boolean);
   for (let i = 0; i < resolvedOptionIds.length; i += 200) {
     const chunk = resolvedOptionIds.slice(i, i + 200);
     const { data: optionRows } = await supabase.from("question_options").select("id,label").in("id", chunk);
-    ((optionRows ?? []) as any[]).forEach((o) => optionLabelById.set(String(o.id), String(o.label ?? "")));
+    ((optionRows ?? []) as OptionLabelRow[]).forEach((o) => optionLabelById.set(String(o.id), String(o.label ?? "")));
   }
 
   // 3) Draft-Entscheide (accepted/rejected) fuer Creator
@@ -211,11 +256,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Konnte Draft-Entscheide nicht laden.", details: draftsErr.message }, { status: 500 });
   }
 
-  const draftRows = (decidedDrafts ?? []) as any[];
+  const draftRows = (decidedDrafts ?? []) as DecidedDraftRow[];
   const draftIds = draftRows.map((r) => String(r.id));
   const { data: draftSentRows, error: draftSentErr } = draftIds.length
     ? await supabase.from("creator_draft_decision_emails").select("draft_id").in("draft_id", draftIds)
-    : { data: [], error: null as any };
+    : { data: [] as DraftSentRow[], error: null };
 
   if (draftSentErr) {
     return NextResponse.json(
@@ -229,7 +274,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const draftsAlready = new Set((draftSentRows ?? []).map((r: any) => String(r.draft_id)));
+  const draftsAlready = new Set(((draftSentRows ?? []) as DraftSentRow[]).map((r) => String(r.draft_id)));
   const draftsPending = draftRows.filter((r) => !draftsAlready.has(String(r.id)));
 
   let endedSent = 0;
@@ -247,11 +292,12 @@ export async function GET(request: Request) {
       .select("email, display_name")
       .eq("id", creatorId)
       .maybeSingle();
-    if (userErr || !userRow || !(userRow as any).email) return null;
+    const typedUserRow = userRow as UserInfoRow | null;
+    if (userErr || !typedUserRow?.email) return null;
     const prefs = await getPrefs(supabase, creatorId);
     const info = {
-      email: String((userRow as any).email),
-      displayName: String((userRow as any).display_name ?? ""),
+      email: typedUserRow.email,
+      displayName: String(typedUserRow.display_name ?? ""),
       prefs,
     };
     userCache.set(creatorId, info);
@@ -311,9 +357,9 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const answerMode = String((row as any).answer_mode ?? "") === "options" ? "options" : "binary";
-    const outcome = String((row as any).resolved_outcome ?? "");
-    const resolvedOptionId = String((row as any).resolved_option_id ?? "");
+    const answerMode = String(row.answer_mode ?? "") === "options" ? "options" : "binary";
+    const outcome = String(row.resolved_outcome ?? "");
+    const resolvedOptionId = String(row.resolved_option_id ?? "");
     const resolvedOutcomeLabel =
       answerMode === "options" && resolvedOptionId
         ? optionLabelById.get(resolvedOptionId) || "Option"

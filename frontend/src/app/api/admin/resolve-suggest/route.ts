@@ -19,7 +19,27 @@ type Suggestion = {
   sources: string[];
 };
 
-function safeJsonFromText(text: string): any | null {
+type ResolutionQuestionRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  region: string | null;
+  closes_at: string | null;
+  resolution_criteria: string | null;
+  resolution_source: string | null;
+  resolution_deadline: string | null;
+  answer_mode: string | null;
+  is_resolvable: boolean | null;
+};
+
+type ResolutionOptionRow = { id: string; label: string | null; sort_order: number | null };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function safeJsonFromText(text: string): unknown {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
@@ -31,12 +51,13 @@ function safeJsonFromText(text: string): any | null {
   }
 }
 
-function normalizeSuggestion(raw: any, opts: { answerMode: "binary" | "options"; validOptionIds?: string[] }): Suggestion | null {
-  const outcome = raw?.suggestedOutcome;
+function normalizeSuggestion(raw: unknown, opts: { answerMode: "binary" | "options"; validOptionIds?: string[] }): Suggestion | null {
+  const data = isRecord(raw) ? raw : {};
+  const outcome = data.suggestedOutcome;
   let suggestedOutcome: Suggestion["suggestedOutcome"] =
     outcome === "yes" || outcome === "no" || outcome === "unknown" ? outcome : "unknown";
 
-  const suggestedOptionIdRaw = raw?.suggestedOptionId;
+  const suggestedOptionIdRaw = data.suggestedOptionId;
   const suggestedOptionIdText = typeof suggestedOptionIdRaw === "string" ? suggestedOptionIdRaw.trim() : "";
   const validOptionIds = new Set((opts.validOptionIds ?? []).map((v) => String(v)));
   let suggestedOptionId: string | null =
@@ -48,12 +69,12 @@ function normalizeSuggestion(raw: any, opts: { answerMode: "binary" | "options";
     suggestedOutcome = "unknown";
   }
 
-  const confidenceRaw = Number(raw?.confidence);
+  const confidenceRaw = Number(data.confidence);
   const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(100, Math.round(confidenceRaw))) : 0;
 
-  const note = typeof raw?.note === "string" ? raw.note.trim() : "";
+  const note = typeof data.note === "string" ? data.note.trim() : "";
 
-  const sourcesRaw: unknown[] = Array.isArray(raw?.sources) ? (raw.sources as unknown[]) : [];
+  const sourcesRaw: unknown[] = Array.isArray(data.sources) ? data.sources : [];
   const sources = sourcesRaw
     .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
     .filter(Boolean)
@@ -121,14 +142,15 @@ export async function POST(request: Request) {
   if (!row) {
     return NextResponse.json({ error: "Frage nicht gefunden." }, { status: 404 });
   }
+  const question = row as ResolutionQuestionRow;
 
   const model = process.env.PERPLEXITY_MODEL?.trim() || "sonar-pro";
 
-  if ((row as any).is_resolvable === false) {
+  if (question.is_resolvable === false) {
     return NextResponse.json({ ok: false, error: "Diese Frage ist keine Prognose und kann nicht aufgeloest werden." }, { status: 400 });
   }
 
-  const answerMode: "binary" | "options" = (row as any).answer_mode === "options" ? "options" : "binary";
+  const answerMode: "binary" | "options" = question.answer_mode === "options" ? "options" : "binary";
   const optionsRes =
     answerMode === "options"
       ? await supabase
@@ -142,13 +164,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: `Optionen konnten nicht geladen werden: ${optionsRes.error.message}` }, { status: 500 });
   }
 
-  const optionsList = answerMode === "options" ? (((optionsRes?.data ?? []) as any[]) || []) : [];
+  const optionsList: ResolutionOptionRow[] =
+    answerMode === "options" ? ((optionsRes?.data ?? []) as ResolutionOptionRow[]) : [];
   const optionLines =
     answerMode === "options"
       ? [
           "",
           "Antwortoptionen (du MUSST eine dieser IDs wählen oder null):",
-          ...optionsList.map((o: any) => `- ${String(o.id)} | ${String(o.label ?? "")}`),
+          ...optionsList.map((o) => `- ${String(o.id)} | ${String(o.label ?? "")}`),
         ]
       : [];
 
@@ -177,14 +200,14 @@ export async function POST(request: Request) {
           "{\"suggestedOutcome\":\"yes|no|unknown\",\"suggestedOptionId\":null,\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
           "",
           "Frage:",
-          `- Titel: ${String((row as any).title ?? "")}`,
-          `- Beschreibung: ${String((row as any).description ?? "")}`,
-          `- Kategorie: ${String((row as any).category ?? "")}`,
-          `- Region: ${String((row as any).region ?? "")}`,
-          `- Voting-Ende (closes_at): ${String((row as any).closes_at ?? "")}`,
-          `- Aufloesungs-Regeln: ${String((row as any).resolution_criteria ?? "")}`,
-          `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
-          `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
+          `- Titel: ${String(question.title ?? "")}`,
+          `- Beschreibung: ${String(question.description ?? "")}`,
+          `- Kategorie: ${String(question.category ?? "")}`,
+          `- Region: ${String(question.region ?? "")}`,
+          `- Voting-Ende (closes_at): ${String(question.closes_at ?? "")}`,
+          `- Aufloesungs-Regeln: ${String(question.resolution_criteria ?? "")}`,
+          `- Quelle-Hinweis: ${String(question.resolution_source ?? "")}`,
+          `- Aufloesungs-Deadline: ${String(question.resolution_deadline ?? "")}`,
           ...contextLines,
         ].join("\n")
       : [
@@ -202,14 +225,14 @@ export async function POST(request: Request) {
           "{\"suggestedOutcome\":\"unknown\",\"suggestedOptionId\":\"uuid|null\",\"confidence\":0-100,\"note\":\"kurze Begruendung (DE)\",\"sources\":[\"https://...\"]}",
           "",
           "Frage:",
-          `- Titel: ${String((row as any).title ?? "")}`,
-          `- Beschreibung: ${String((row as any).description ?? "")}`,
-          `- Kategorie: ${String((row as any).category ?? "")}`,
-          `- Region: ${String((row as any).region ?? "")}`,
-          `- Voting-Ende (closes_at): ${String((row as any).closes_at ?? "")}`,
-          `- Aufloesungs-Regeln: ${String((row as any).resolution_criteria ?? "")}`,
-          `- Quelle-Hinweis: ${String((row as any).resolution_source ?? "")}`,
-          `- Aufloesungs-Deadline: ${String((row as any).resolution_deadline ?? "")}`,
+          `- Titel: ${String(question.title ?? "")}`,
+          `- Beschreibung: ${String(question.description ?? "")}`,
+          `- Kategorie: ${String(question.category ?? "")}`,
+          `- Region: ${String(question.region ?? "")}`,
+          `- Voting-Ende (closes_at): ${String(question.closes_at ?? "")}`,
+          `- Aufloesungs-Regeln: ${String(question.resolution_criteria ?? "")}`,
+          `- Quelle-Hinweis: ${String(question.resolution_source ?? "")}`,
+          `- Aufloesungs-Deadline: ${String(question.resolution_deadline ?? "")}`,
           ...optionLines,
           ...contextLines,
         ].join("\n");
@@ -231,16 +254,20 @@ export async function POST(request: Request) {
     }),
   });
 
-  const json = await res.json().catch(() => null);
+  const json: unknown = await res.json().catch(() => null);
+  const responseData = isRecord(json) ? json : {};
   if (!res.ok) {
+    const responseError = isRecord(responseData.error) ? responseData.error : {};
     const msg =
-      (json as any)?.error?.message ??
-      (json as any)?.message ??
+      (typeof responseError.message === "string" ? responseError.message : null) ??
+      (typeof responseData.message === "string" ? responseData.message : null) ??
       `Perplexity Fehler (${res.status})`;
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  const content = (json as any)?.choices?.[0]?.message?.content;
+  const firstChoice = Array.isArray(responseData.choices) && isRecord(responseData.choices[0]) ? responseData.choices[0] : {};
+  const responseMessage = isRecord(firstChoice.message) ? firstChoice.message : {};
+  const content = responseMessage.content;
   if (typeof content !== "string" || !content.trim()) {
     return NextResponse.json({ error: "Perplexity hat keine Antwort geliefert." }, { status: 502 });
   }
@@ -248,7 +275,7 @@ export async function POST(request: Request) {
   const parsed = safeJsonFromText(content.trim());
   const suggestion = normalizeSuggestion(parsed, {
     answerMode,
-    validOptionIds: answerMode === "options" ? optionsList.map((o: any) => String(o.id)) : undefined,
+    validOptionIds: answerMode === "options" ? optionsList.map((o) => String(o.id)) : undefined,
   });
   if (!suggestion) {
     return NextResponse.json(

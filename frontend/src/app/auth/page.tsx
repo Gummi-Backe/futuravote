@@ -306,6 +306,7 @@ export default function AuthPage() {
               </>
             )}
 
+            {verifyInfo && <p className="text-sm text-emerald-200">{verifyInfo}</p>}
             {error && <p className="text-sm text-rose-300">{error}</p>}
 
             <button

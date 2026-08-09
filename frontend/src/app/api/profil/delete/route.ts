@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase, getUserPasswordHashByIdSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvUserClearCookieOptions } from "@/app/lib/fvUserCookie";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { getErrorCode, getErrorMessage } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -21,7 +22,7 @@ function logoutResponse(payload: unknown, status: number, request: Request) {
   response.cookies.set("fv_user", "", clearOptions);
   // Legacy host-only Cookie ebenfalls entfernen, falls vorhanden.
   if ("domain" in clearOptions) {
-    const { domain: _domain, ...hostOnlyClear } = clearOptions;
+    const hostOnlyClear = { ...clearOptions, domain: undefined };
     response.cookies.set("fv_user", "", hostOnlyClear);
   }
   return response;
@@ -36,8 +37,8 @@ async function tryUpdateOrIgnoreMissingTable(
 ) {
   const { error } = await supabase.from(table).update(values).eq(whereColumn, whereValue);
   if (!error) return;
-  const msg = String((error as any)?.message ?? "");
-  const code = String((error as any)?.code ?? "");
+  const msg = getErrorMessage(error, "");
+  const code = getErrorCode(error);
   const isMissing = code === "42P01" || msg.toLowerCase().includes("does not exist") || msg.toLowerCase().includes("schema cache");
   if (isMissing) return;
   throw new Error(`${table} update failed: ${msg || code || "unknown"}`);
@@ -51,8 +52,8 @@ async function tryDeleteOrIgnoreMissingTable(
 ) {
   const { error } = await supabase.from(table).delete().eq(whereColumn, whereValue);
   if (!error) return;
-  const msg = String((error as any)?.message ?? "");
-  const code = String((error as any)?.code ?? "");
+  const msg = getErrorMessage(error, "");
+  const code = getErrorCode(error);
   const isMissing = code === "42P01" || msg.toLowerCase().includes("does not exist") || msg.toLowerCase().includes("schema cache");
   if (isMissing) return;
   throw new Error(`${table} delete failed: ${msg || code || "unknown"}`);

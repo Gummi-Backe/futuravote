@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
+import { DirectImage } from "@/app/components/DirectImage";
 
 export const revalidate = 60;
 
@@ -12,8 +13,8 @@ function getMetadataBaseUrl() {
 export async function generateMetadata(props: {
   params: Promise<{ id: string }> | { id: string };
 }): Promise<Metadata> {
-  const resolvedParams = await (props as any).params;
-  const id = (resolvedParams?.id as string) ?? "";
+  const resolvedParams = await props.params;
+  const id = resolvedParams.id ?? "";
   const metadataBase = new URL(getMetadataBaseUrl());
 
   return {
@@ -102,7 +103,7 @@ export default async function QuestionWidgetPage(props: { params: Promise<{ id: 
 
           {question.imageUrl ? (
             <div className="flex-shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-              <img src={question.imageUrl} alt="" className="h-16 w-16 object-cover sm:h-20 sm:w-20" loading="lazy" />
+              <DirectImage src={question.imageUrl} alt="" className="h-16 w-16 object-cover sm:h-20 sm:w-20" loading="lazy" />
             </div>
           ) : null}
         </div>

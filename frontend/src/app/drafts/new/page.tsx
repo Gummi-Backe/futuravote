@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { categories, type AnswerMode, type PollVisibility } from "@/app/data/mock";
@@ -9,6 +8,7 @@ import { convertHtmlToMarkup } from "@/app/lib/htmlToMarkup";
 import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
 import { IMAGE_UPLOAD_TOO_LARGE_MESSAGE, MAX_IMAGE_UPLOAD_BYTES } from "@/app/lib/imageUploadLimits";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { DirectImage } from "@/app/components/DirectImage";
 import { AdminAiAssistant, type QuestionSuggestion } from "./AdminAiAssistant";
 import { AdminAiImageGenerator } from "./AdminAiImageGenerator";
 
@@ -389,7 +389,7 @@ export default function NewDraftPage() {
     const nextAnswerMode: AnswerMode = s.answerMode === "options" ? "options" : "binary";
     setAnswerMode(nextAnswerMode);
     if (nextAnswerMode === "options") {
-      const raw = Array.isArray((s as any).options) ? ((s as any).options as unknown[]) : [];
+      const raw: unknown[] = Array.isArray(s.options) ? s.options : [];
       const normalized = raw
         .map((v) => (typeof v === "string" ? v.trim() : ""))
         .filter(Boolean)
@@ -412,7 +412,7 @@ export default function NewDraftPage() {
     setTitle(s.title ?? "");
     setDescription(s.description ?? "");
     setLongDescription(longTextEnabled ? (s.longDescription ?? "").trim() : "");
-    setAiImagePrompt(typeof (s as any).imagePrompt === "string" ? (s as any).imagePrompt : "");
+    setAiImagePrompt(typeof s.imagePrompt === "string" ? s.imagePrompt : "");
 
     const knownCategory = categories.some((c) => c.label === s.category);
     if (knownCategory) {
@@ -862,7 +862,7 @@ export default function NewDraftPage() {
       <div className="mt-3 flex gap-3">
         {previewImageUrl && (
           <div className="flex w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/30">
-            <img
+            <DirectImage
               src={previewImageUrl}
               alt={title || "Vorschau-Bild"}
               className="max-h-20 max-w-[6rem] object-contain"
@@ -1546,7 +1546,7 @@ export default function NewDraftPage() {
                   {imageFile && previewImageUrl && (
                     <div className="flex items-center gap-2 text-xs text-slate-300">
                       <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded-md bg-black/40">
-                        <img
+                        <DirectImage
                           src={previewImageUrl}
                           alt={title || "Vorschau-Bild"}
                           className="max-h-16 max-w-[6rem] object-contain"

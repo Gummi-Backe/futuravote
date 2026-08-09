@@ -59,6 +59,16 @@ type CategoryCount = {
   count: number;
 };
 
+type CategoryRow = { category: string | null; category_icon: string | null; category_color: string | null };
+type QuestionOptionRow = {
+  question_id: string;
+  id: string;
+  label: string | null;
+  sort_order: number | null;
+  votes_count: number | null;
+};
+type ResolvedOptionRow = { question_id: string; id: string; votes_count: number | null };
+
 function timeUntilLabel(targetIso: string, nowMs: number) {
   const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(targetIso);
   if (isDateOnly) {
@@ -219,7 +229,7 @@ export default async function ArchivPage(props: {
 
   const categories: CategoryCount[] = (() => {
     const map = new Map<string, CategoryCount>();
-    for (const row of (categoryRows as any[]) ?? []) {
+    for (const row of (categoryRows as CategoryRow[]) ?? []) {
       const cat = String(row?.category ?? "").trim();
       if (!cat) continue;
       const entry = map.get(cat) ?? {
@@ -243,7 +253,7 @@ export default async function ArchivPage(props: {
     .gte("closes_at", todayIso)
     .order("closes_at", { ascending: true })
     .limit(3);
-  const openSoon = ((openSoonRows as any[]) ?? []) as PublicQuestionRow[];
+  const openSoon = (openSoonRows ?? []) as PublicQuestionRow[];
   const firstEndsLabel = openSoon.length > 0 ? timeUntilLabel(openSoon[0].closes_at, nowMs) : null;
 
   let endedQuery = supabase
@@ -264,7 +274,7 @@ export default async function ArchivPage(props: {
 
   const { data: endedRows, count: endedTotal } = await endedQuery.range(offset, offset + pageSize - 1);
 
-  const ended = ((endedRows as any[]) ?? []) as PublicQuestionRow[];
+  const ended = (endedRows ?? []) as PublicQuestionRow[];
   const endedIds = ended.map((r) => String(r.id)).filter(Boolean);
 
   const { data: optionRows } = endedIds.length
@@ -273,10 +283,10 @@ export default async function ArchivPage(props: {
         .select("question_id,id,label,sort_order,votes_count")
         .in("question_id", endedIds)
         .order("sort_order", { ascending: true })
-    : { data: [] as any[] };
+    : { data: [] as QuestionOptionRow[] };
 
   const optionsByQuestionId = new Map<string, Array<{ id: string; label: string; votesCount: number; sortOrder: number }>>();
-  (optionRows ?? []).forEach((r: any) => {
+  ((optionRows ?? []) as QuestionOptionRow[]).forEach((r) => {
     const qid = String(r?.question_id ?? "");
     if (!qid) return;
     const list = optionsByQuestionId.get(qid) ?? [];
@@ -296,7 +306,7 @@ export default async function ArchivPage(props: {
     .or("resolved_outcome.not.is.null,resolved_option_id.not.is.null")
     .limit(5000);
 
-  const resolved = ((resolvedRows as any[]) ?? []) as PublicQuestionRow[];
+  const resolved = (resolvedRows ?? []) as PublicQuestionRow[];
   const resolvedOptionsQuestionIds = resolved
     .filter((r) => normalizeAnswerMode(r.answer_mode) === "options" && r.resolved_option_id)
     .map((r) => String(r.id))
@@ -304,10 +314,10 @@ export default async function ArchivPage(props: {
 
   const { data: resolvedOptionRows } = resolvedOptionsQuestionIds.length
     ? await supabase.from("question_options").select("question_id,id,votes_count").in("question_id", resolvedOptionsQuestionIds)
-    : { data: [] as any[] };
+    : { data: [] as ResolvedOptionRow[] };
 
   const resolvedOptionsByQuestionId = new Map<string, Array<{ id: string; votesCount: number }>>();
-  (resolvedOptionRows ?? []).forEach((r: any) => {
+  ((resolvedOptionRows ?? []) as ResolvedOptionRow[]).forEach((r) => {
     const qid = String(r?.question_id ?? "");
     if (!qid) return;
     const list = resolvedOptionsByQuestionId.get(qid) ?? [];

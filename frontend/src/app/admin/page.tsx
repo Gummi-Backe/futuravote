@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ async function fetchHealth(href: string, label: string): Promise<HealthResult> {
   try {
     const origin = await getOrigin();
     const res = await fetch(`${origin}${href}`, { cache: "no-store" });
-    const json: any = await res.json().catch(() => null);
+    const parsed: unknown = await res.json().catch(() => null);
+    const json = isRecord(parsed) ? parsed : null;
     const ok = Boolean(res.ok && json && json.ok === true);
     const detail =
       typeof json?.note === "string"

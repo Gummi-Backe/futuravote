@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 
 type Status = "pending" | "applied" | "dismissed" | "failed";
@@ -79,12 +80,13 @@ export default function ResolutionSuggestionsClient() {
   const [error, setError] = useState<string | null>(null);
   const [cronLoading, setCronLoading] = useState(false);
   const [cronMessage, setCronMessage] = useState<string | null>(null);
-  const [cronLast, setCronLast] = useState<{ at: string | null; meta: any | null } | null>(null);
+  const [cronLast, setCronLast] = useState<{ at: string | null; meta: unknown } | null>(null);
 
   const fetchCronStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/resolution-status", { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as any;
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
       if (!res.ok) return;
       setCronLast({
         at: typeof json?.lastCronAt === "string" ? json.lastCronAt : null,
@@ -102,9 +104,10 @@ export default function ResolutionSuggestionsClient() {
       const res = await fetch(`/api/admin/resolution-suggestions?status=${encodeURIComponent(nextStatus)}&limit=200`, {
         cache: "no-store",
       });
-      const json = (await res.json().catch(() => null)) as any;
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
       if (!res.ok) {
-        throw new Error(json?.error ?? "Auflösungs-Vorschläge konnten nicht geladen werden.");
+        throw new Error(typeof json.error === "string" ? json.error : "Auflösungs-Vorschläge konnten nicht geladen werden.");
       }
       setRows((Array.isArray(json?.suggestions) ? json.suggestions : []) as SuggestionRow[]);
     } catch (e) {
@@ -133,8 +136,9 @@ export default function ResolutionSuggestionsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ limit: 25 }),
       });
-      const json = (await res.json().catch(() => null)) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Cron konnte nicht ausgeführt werden.");
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
+      if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Cron konnte nicht ausgeführt werden.");
 
       const created = Number(json?.created ?? 0) || 0;
       const checked = Number(json?.checked ?? 0) || 0;
@@ -159,9 +163,10 @@ export default function ResolutionSuggestionsClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, action }),
         });
-        const json = (await res.json().catch(() => null)) as any;
+        const rawJson: unknown = await res.json().catch(() => null);
+        const json = isRecord(rawJson) ? rawJson : {};
         if (!res.ok) {
-          throw new Error(json?.error ?? "Aktion fehlgeschlagen.");
+          throw new Error(typeof json.error === "string" ? json.error : "Aktion fehlgeschlagen.");
         }
         setRows((prev) => (prev ?? []).filter((r) => r.id !== id));
       } catch (e) {
@@ -204,10 +209,10 @@ export default function ResolutionSuggestionsClient() {
       {cronLast?.at ? (
         <div className="mt-4 text-xs text-slate-300">
           Zuletzt geprüft: {formatDate(cronLast.at)}
-          {cronLast.meta ? (
+          {isRecord(cronLast.meta) ? (
             <span className="text-slate-400">
               {" "}
-              (neu {Number(cronLast.meta?.created ?? 0) || 0}, Fehler {Number(cronLast.meta?.failed ?? 0) || 0})
+              (neu {Number(cronLast.meta.created ?? 0) || 0}, Fehler {Number(cronLast.meta.failed ?? 0) || 0})
             </span>
           ) : null}
         </div>

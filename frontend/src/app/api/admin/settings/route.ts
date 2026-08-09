@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getAdminSettings, updateAdminSettings } from "@/app/lib/adminSettings";
 import { mutationRequestGuard } from "@/app/lib/requestSecurity";
+import { getErrorMessage } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -56,7 +57,7 @@ export async function PUT(request: Request) {
   try {
     const settings = await updateAdminSettings(patch);
     return NextResponse.json({ ok: true, settings }, { status: 200 });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Speichern fehlgeschlagen." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: getErrorMessage(e, "Speichern fehlgeschlagen.") }, { status: 500 });
   }
 }

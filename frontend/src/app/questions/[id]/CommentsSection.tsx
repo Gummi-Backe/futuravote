@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type CommentStance = "yes" | "no" | "neutral";
 type AnswerMode = "binary" | "options";
@@ -98,9 +99,12 @@ export function CommentsSection({
     setError(null);
     try {
       const res = await fetch(`/api/questions/${encodeURIComponent(questionId)}/comments`, { cache: "no-store" });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Kommentare konnten nicht geladen werden.");
-      const list = Array.isArray(json?.comments) ? (json.comments as QuestionComment[]) : [];
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Kommentare konnten nicht geladen werden.");
+      }
+      const list = Array.isArray(json.comments) ? (json.comments as QuestionComment[]) : [];
       setComments(list);
     } catch (e: unknown) {
       setComments([]);
@@ -151,9 +155,12 @@ export function CommentsSection({
           sourceUrl: sourceUrl.trim() || null,
         }),
       });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Kommentar konnte nicht gespeichert werden.");
-      const next = json?.comment as QuestionComment | undefined;
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Kommentar konnte nicht gespeichert werden.");
+      }
+      const next = json.comment as QuestionComment | undefined;
       if (next) {
         setComments((prev) => ([...(prev ?? []), { ...next, upVotes: 0, myVote: null }] as QuestionComment[]));
       } else {
@@ -184,10 +191,13 @@ export function CommentsSection({
             body: JSON.stringify({ vote: "up" }),
           }
         );
-        const json: any = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(json?.error ?? "Vote konnte nicht gespeichert werden.");
-        const upVotes = Number(json?.upVotes ?? 0) || 0;
-        const myVote = json?.myVote === "up" ? "up" : null;
+        const parsed: unknown = await res.json().catch(() => null);
+        const json = isRecord(parsed) ? parsed : {};
+        if (!res.ok) {
+          throw new Error(typeof json.error === "string" ? json.error : "Vote konnte nicht gespeichert werden.");
+        }
+        const upVotes = Number(json.upVotes ?? 0) || 0;
+        const myVote = json.myVote === "up" ? "up" : null;
         setComments((prev) =>
           (prev ?? []).map((c) => (c.id === commentId ? { ...c, upVotes, myVote } : c))
         );

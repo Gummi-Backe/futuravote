@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getErrorStatus } from "@/app/lib/unknownValue";
 import { voteOnDraftInSupabase, type DraftReviewChoice } from "@/app/data/dbSupabase";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
@@ -91,10 +92,7 @@ export async function POST(request: Request) {
     response.cookies.set("fv_session", sessionId, getFvSessionCookieOptions());
     return response;
   } catch (err: unknown) {
-    const status =
-      typeof (err as any)?.status === "number" && Number.isFinite((err as any).status)
-        ? (err as any).status
-        : 500;
+    const status = getErrorStatus(err);
     const technicalMessage = err instanceof Error ? err.message : "Unbekannter Fehler";
     console.error("Draft review failed:", technicalMessage);
     const publicMessage =

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type Summary = {
   uniqueSessions7d: number;
@@ -23,7 +24,7 @@ type Summary = {
 };
 
 type TopPage = { path: string; count: number };
-type LatestRow = { event: string; path: string | null; created_at: string; meta: any };
+type LatestRow = { event: string; path: string | null; created_at: string; meta: unknown };
 type Kpis = {
   growth?: { wau: number; mau: number; wauMauRatioPct: number };
   referral?: {
@@ -73,13 +74,16 @@ export default function AnalyticsClient() {
     setError(null);
     try {
       const res = await fetch("/api/admin/analytics", { cache: "no-store" });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Analytics konnten nicht geladen werden.");
-      setSummary((json?.summary ?? null) as Summary | null);
-      setKpis((json?.kpis ?? null) as Kpis | null);
-      setTopPages((Array.isArray(json?.topPages) ? json.topPages : []) as TopPage[]);
-      setLatest((Array.isArray(json?.latest) ? json.latest : []) as LatestRow[]);
-      setSince7d(typeof json?.since7d === "string" ? json.since7d : null);
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Analytics konnten nicht geladen werden.");
+      }
+      setSummary((json.summary ?? null) as Summary | null);
+      setKpis((json.kpis ?? null) as Kpis | null);
+      setTopPages((Array.isArray(json.topPages) ? json.topPages : []) as TopPage[]);
+      setLatest((Array.isArray(json.latest) ? json.latest : []) as LatestRow[]);
+      setSince7d(typeof json.since7d === "string" ? json.since7d : null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Analytics konnten nicht geladen werden.");
       setSummary(null);

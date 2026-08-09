@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { Readable } from "stream";
 import { NextResponse } from "next/server";
 
 const DATA_ROOT =
@@ -22,7 +23,8 @@ export async function GET(
   }
 
   const stream = fs.createReadStream(fullPath);
-  return new NextResponse(stream as any, {
+  const webStream = Readable.toWeb(stream) as ReadableStream<Uint8Array>;
+  return new NextResponse(webStream, {
     status: 200,
     headers: {
       "Content-Type": "image/jpeg",
@@ -30,4 +32,3 @@ export async function GET(
     },
   });
 }
-

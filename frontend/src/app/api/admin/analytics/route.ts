@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getErrorCode } from "@/app/lib/unknownValue";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 
@@ -199,7 +200,7 @@ export async function GET() {
       { status: 200 }
     );
   } catch (e: unknown) {
-    const code = (e as any)?.code as string | undefined;
+    const code = getErrorCode(e);
     if (code === "42P01") {
       return NextResponse.json(
         { error: "Supabase table 'analytics_events' fehlt. Fuehre supabase/analytics_events.sql aus." },

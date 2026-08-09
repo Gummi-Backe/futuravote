@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { categories } from "@/app/data/mock";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type Mode = "category" | "theme";
 
@@ -131,13 +132,14 @@ export function AdminAiAssistant({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json: any = await res.json().catch(() => null);
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
       if (!res.ok) {
-        setErrorRaw(typeof json?.raw === "string" ? json.raw : null);
-        throw new Error(json?.error ?? "KI-Vorschläge konnten nicht geladen werden.");
+        setErrorRaw(typeof json.raw === "string" ? json.raw : null);
+        throw new Error(typeof json.error === "string" ? json.error : "KI-Vorschläge konnten nicht geladen werden.");
       }
 
-      const list = Array.isArray(json?.suggestions) ? (json.suggestions as QuestionSuggestion[]) : [];
+      const list = Array.isArray(json.suggestions) ? (json.suggestions as QuestionSuggestion[]) : [];
       if (list.length === 0) throw new Error("Keine Vorschläge erhalten.");
 
       setSuggestions(list);
@@ -156,6 +158,7 @@ export function AdminAiAssistant({
     count,
     longTextEnabled,
     mode,
+    optionsCount,
     region,
     requestedAnswerMode,
     requestedIsResolvable,

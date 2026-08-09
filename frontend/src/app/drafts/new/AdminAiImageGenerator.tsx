@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DirectImage } from "@/app/components/DirectImage";
+import { isRecord } from "@/app/lib/unknownValue";
 
 function b64ToBlob(b64: string, mime: string): Blob {
   const binary = atob(b64);
@@ -107,10 +109,13 @@ export function AdminAiImageGenerator({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, size }),
       });
-      const json: any = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error ?? "Bild konnte nicht generiert werden.");
-      setB64(typeof json?.b64 === "string" ? json.b64 : null);
-      setMime(typeof json?.mime === "string" ? json.mime : "image/png");
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Bild konnte nicht generiert werden.");
+      }
+      setB64(typeof json.b64 === "string" ? json.b64 : null);
+      setMime(typeof json.mime === "string" ? json.mime : "image/png");
     } catch (e: unknown) {
       setB64(null);
       setError(e instanceof Error ? e.message : "Bild konnte nicht generiert werden.");
@@ -173,7 +178,12 @@ export function AdminAiImageGenerator({
               <label className="text-xs font-medium text-slate-200">Format</label>
               <select
                 value={size}
-                onChange={(e) => setSize(e.target.value as any)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "1024x1024" || value === "1024x1536" || value === "1536x1024") {
+                    setSize(value);
+                  }
+                }}
                 className="rounded-xl border border-white/15 bg-slate-900/60 px-3 py-2 text-sm text-white shadow-inner shadow-black/40 outline-none focus:border-emerald-300"
               >
                 <option value="1024x1024">Quadrat</option>
@@ -210,7 +220,7 @@ export function AdminAiImageGenerator({
             <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
               <div className="text-xs font-semibold text-slate-200">Vorschau</div>
               <div className="mt-2 flex items-center justify-center overflow-hidden rounded-xl bg-black/30 p-2">
-                <img src={previewDataUrl} alt="KI Vorschau" className="max-h-72 w-auto rounded-lg object-contain" />
+                <DirectImage src={previewDataUrl} alt="KI Vorschau" className="max-h-72 w-auto rounded-lg object-contain" />
               </div>
             </div>
           ) : null}

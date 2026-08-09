@@ -196,7 +196,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Aehnliche Fragen konnten nicht geprueft werden." }, { status: 500 });
   }
 
-  const rows = ((data as any[]) ?? []) as MatchRow[];
+  const rows = (data ?? []) as MatchRow[];
   const scored = rows
     .map((row) => {
       const rowTitleTokens = tokens(row.title);

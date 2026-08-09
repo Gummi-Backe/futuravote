@@ -5,6 +5,7 @@ import type { Draft } from "@/app/data/mock";
 import { invalidateProfileCaches } from "@/app/lib/profileCache";
 import { splitDescriptionText } from "@/app/lib/descriptionText";
 import { ExpandableDescription } from "@/app/questions/[id]/ExpandableDescription";
+import { DirectImage } from "@/app/components/DirectImage";
 import {
   DEFAULT_DRAFT_REVIEW_RULES,
   getDraftDecisionText,
@@ -165,7 +166,7 @@ export function DraftReviewClient({
       <div className="flex gap-3">
         {draft.imageUrl && (
           <div className="inline-flex max-h-20 max-w-[6rem] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
-            <img
+            <DirectImage
               src={draft.imageUrl}
               alt={draft.title}
               className="h-auto w-auto max-h-20 max-w-[6rem] object-contain"

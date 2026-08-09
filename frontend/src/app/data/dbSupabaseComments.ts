@@ -53,7 +53,7 @@ export async function listQuestionComments(questionId: string, limit = 50): Prom
 
     if (usersError) throw usersError;
 
-    ((users ?? []) as any[]).forEach((u) => {
+    ((users ?? []) as Array<{ id: string | null; display_name: string | null }>).forEach((u) => {
       const id = String(u.id ?? "");
       const name = String(u.display_name ?? "").trim();
       if (id) displayNameByUserId.set(id, name || "User");
@@ -106,7 +106,7 @@ export async function addQuestionComment(input: {
     .eq("id", row.user_id)
     .maybeSingle();
   if (userError) throw userError;
-  authorName = String((userRow as any)?.display_name ?? "").trim() || "User";
+  authorName = String((userRow as { display_name: string | null } | null)?.display_name ?? "").trim() || "User";
 
   return {
     id: row.id,

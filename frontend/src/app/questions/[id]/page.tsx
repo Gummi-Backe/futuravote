@@ -38,8 +38,8 @@ function clampText(value: string, maxLen: number) {
 export async function generateMetadata(props: {
   params: Promise<{ id: string }> | { id: string };
 }): Promise<Metadata> {
-  const resolvedParams = await (props as any).params;
-  const id = (resolvedParams?.id as string) ?? "";
+  const resolvedParams = await props.params;
+  const id = resolvedParams.id ?? "";
 
   const metadataBase = new URL(getMetadataBaseUrl());
   const canonical = `/questions/${encodeURIComponent(id)}`;

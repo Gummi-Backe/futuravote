@@ -51,9 +51,14 @@ type FeedUiState = {
   typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   mainView: "all" | "feed" | "review";
+  showReviewOnly?: boolean;
   showAnsweredInFeed: boolean;
   ts: number;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
 function readFeedUiStateFromStorage(): Partial<FeedUiState> | null {
   try {
@@ -257,18 +262,7 @@ function EventCard({
         minute: "2-digit",
       })}`
     : "Diese Frage hat ein Update";
-  const optionsTotalVotes = isOptions
-    ? (question.options ?? []).reduce((sum, opt) => sum + Math.max(0, opt.votesCount ?? 0), 0)
-    : 0;
   const optionBars = (question.options ?? []).slice(0, 6);
-  const topOptionsLabel = isOptions
-    ? (question.options ?? [])
-        .slice()
-        .sort((a, b) => (b.votesCount ?? 0) - (a.votesCount ?? 0))
-        .slice(0, 3)
-        .map((opt) => `${opt.label} (${opt.pct ?? 0}%)`)
-        .join(" · ")
-    : "";
 
   return (
       <article
@@ -778,6 +772,7 @@ type HomeCache = {
   typeFilter: "all" | "prognose" | "meinung";
   draftStatusFilter: "all" | "open" | "accepted" | "rejected";
   mainView: "all" | "feed" | "review";
+  showReviewOnly?: boolean;
   showAnsweredInFeed: boolean;
   visibleQuestionCount: number;
   visibleDraftCount: number;
@@ -863,9 +858,9 @@ export default function Home() {
     homeCache?.draftReviewRules ?? DEFAULT_DRAFT_REVIEW_RULES
   );
   const [mainView, setMainView] = useState<"all" | "feed" | "review">(() => {
-    const cached = (homeCache as any)?.mainView;
+    const cached = homeCache?.mainView;
     if (cached === "all" || cached === "feed" || cached === "review") return cached;
-    return (homeCache as any)?.showReviewOnly ? "review" : "all";
+    return homeCache?.showReviewOnly ? "review" : "all";
   });
   const [favoriteQuestions, setFavoriteQuestions] = useState<Record<string, boolean>>(
     () => homeCache?.favoriteQuestions ?? {}
@@ -1280,9 +1275,9 @@ export default function Home() {
     (async () => {
       try {
         const res = await fetch("/api/favorites", { cache: "no-store" });
-        const json: any = await res.json().catch(() => null);
+        const json: unknown = await res.json().catch(() => null);
         if (!res.ok) return;
-        const ids: unknown = json?.favoriteIds;
+        const ids: unknown = isRecord(json) ? json.favoriteIds : null;
         const list = Array.isArray(ids) ? ids : [];
         const next: Record<string, boolean> = {};
         for (const id of list) {
@@ -1314,9 +1309,10 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ questionId, action: "toggle" }),
         });
-        const data: any = await res.json().catch(() => null);
+        const rawData: unknown = await res.json().catch(() => null);
+        const data = isRecord(rawData) ? rawData : {};
         if (!res.ok) {
-          showToast(data?.error ?? "Konnte Favorit nicht speichern.", "error");
+          showToast(typeof data.error === "string" ? data.error : "Konnte Favorit nicht speichern.", "error");
           return;
         }
         const favorited = Boolean(data?.favorited);
@@ -1444,10 +1440,10 @@ export default function Home() {
       if (stored.draftStatusFilter === "all" || stored.draftStatusFilter === "open" || stored.draftStatusFilter === "accepted" || stored.draftStatusFilter === "rejected") {
         setDraftStatusFilter(stored.draftStatusFilter);
       }
-      if ((stored as any).mainView === "all" || (stored as any).mainView === "feed" || (stored as any).mainView === "review") {
-        setMainView((stored as any).mainView);
-      } else if (typeof (stored as any).showReviewOnly === "boolean") {
-        setMainView((stored as any).showReviewOnly ? "review" : "all");
+      if (stored.mainView === "all" || stored.mainView === "feed" || stored.mainView === "review") {
+        setMainView(stored.mainView);
+      } else if (typeof stored.showReviewOnly === "boolean") {
+        setMainView(stored.showReviewOnly ? "review" : "all");
       }
       if (typeof stored.showAnsweredInFeed === "boolean") setShowAnsweredInFeed(stored.showAnsweredInFeed);
     } catch {
@@ -1538,7 +1534,7 @@ export default function Home() {
 
     // Reihenfolge so lassen, wie sie vom Server kommt (Cursor-Pagination + Ranking).
     return result;
-  }, [activeCategory, activeRegion, drafts, draftStatusFilter]);
+  }, [activeCategory, activeRegion, drafts]);
 
   useEffect(() => {
     // Der Filter ist in der UI entfernt; wir halten ihn defensiv auf "open".
@@ -1864,15 +1860,14 @@ export default function Home() {
           return;
         }
         if (!res.ok) throw new Error("Vote failed");
-        const data = await res.json();
-        const updated = data.question as Question;
+        const rawData: unknown = await res.json();
+        const data = isRecord(rawData) ? rawData : {};
+        if (!isRecord(data.question)) throw new Error("Vote response invalid");
+        const updated = data.question as unknown as Question;
         recordFeedVoteDelta({
           kind: "binary",
           questionId,
-          choice:
-            (updated as any)?.userChoice === "yes" || (updated as any)?.userChoice === "no"
-              ? (updated as any).userChoice
-              : choice,
+          choice: updated.userChoice === "yes" || updated.userChoice === "no" ? updated.userChoice : choice,
         });
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         setAnsweredQuestions((prev) =>
@@ -1880,8 +1875,8 @@ export default function Home() {
         );
         invalidateProfileCaches();
         setError(null);
-        triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
-        if (data?.alreadyVoted) {
+        triggerAhaMicrocopy({ closesAt: updated.closesAt ?? null });
+        if (data.alreadyVoted) {
           showToast("Du hast bereits abgestimmt.", "error");
         } else {
           showToast("Deine Stimme wurde gezählt.", "success");
@@ -1977,21 +1972,23 @@ export default function Home() {
           showToast(`Bitte warte ${retry} Sekunde(n), bevor du erneut votest.`, "error");
           return;
         }
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error ?? "Vote failed");
+        const rawData: unknown = await res.json().catch(() => ({}));
+        const data = isRecord(rawData) ? rawData : {};
+        if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Vote failed");
 
-        const updated = data.question as Question;
+        if (!isRecord(data.question)) throw new Error("Vote response invalid");
+        const updated = data.question as unknown as Question;
         recordFeedVoteDelta({
           kind: "options",
           questionId,
-          optionId: typeof (updated as any)?.userOptionId === "string" ? (updated as any).userOptionId : optionId,
+          optionId: typeof updated.userOptionId === "string" ? updated.userOptionId : optionId,
         });
         setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         setAnsweredQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updated } : q)));
         invalidateProfileCaches();
         setError(null);
-        triggerAhaMicrocopy({ closesAt: (updated as any)?.closesAt ?? null });
-        if (data?.alreadyVoted) {
+        triggerAhaMicrocopy({ closesAt: updated.closesAt ?? null });
+        if (data.alreadyVoted) {
           showToast("Du hast bereits abgestimmt.", "error");
         } else {
           showToast("Deine Stimme wurde gezählt.", "success");
@@ -2192,8 +2189,8 @@ export default function Home() {
       };
 
       const selector =
-        typeof (window as any).CSS?.escape === "function"
-          ? `[data-feed-item-id="${(window as any).CSS.escape(anchorId)}"]`
+        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+          ? `[data-feed-item-id="${CSS.escape(anchorId)}"]`
           : `[data-feed-item-id="${anchorId.replace(/\"/g, '\\\\\"')}"]`;
       const el = document.querySelector(selector) as HTMLElement | null;
       if (!el) return;
@@ -2309,8 +2306,8 @@ export default function Home() {
         const selectEl = (id: string): HTMLElement | null => {
           if (!id) return null;
           const selector =
-            typeof (window as any).CSS?.escape === "function"
-              ? `[data-feed-item-id="${(window as any).CSS.escape(id)}"]`
+            typeof CSS !== "undefined" && typeof CSS.escape === "function"
+              ? `[data-feed-item-id="${CSS.escape(id)}"]`
               : `[data-feed-item-id="${id.replace(/\"/g, '\\\\\"')}"]`;
           return document.querySelector(selector) as HTMLElement | null;
         };

@@ -26,6 +26,27 @@ type TokenRequest =
       client_secret?: string;
     };
 
+type AuthorizationCodeRow = {
+  id: string;
+  user_id: string;
+  client_id: string;
+  redirect_uri: string;
+  scope: string | null;
+  code_challenge: string | null;
+  code_challenge_method: string | null;
+  expires_at: string;
+  used_at: string | null;
+};
+
+type RefreshTokenRow = {
+  id: string;
+  user_id: string;
+  client_id: string;
+  scope: string | null;
+  refresh_expires_at: string;
+  revoked_at: string | null;
+};
+
 async function readTokenRequest(request: Request): Promise<TokenRequest | null> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
@@ -121,7 +142,7 @@ export async function POST(request: Request) {
     if (error) return badRequest(`code lookup failed: ${error.message}`);
     if (!data) return badRequest("invalid code");
 
-    const row = data as any;
+    const row = data as AuthorizationCodeRow;
     if (row.used_at) return badRequest("code already used");
 
     const expiresMs = Date.parse(String(row.expires_at));
@@ -190,7 +211,7 @@ export async function POST(request: Request) {
     if (error) return badRequest(`refresh lookup failed: ${error.message}`);
     if (!data) return badRequest("invalid refresh_token");
 
-    const row = data as any;
+    const row = data as RefreshTokenRow;
     if (row.revoked_at) return badRequest("refresh token revoked");
     if (String(row.client_id) !== cfg.clientId) return badRequest("invalid client");
 

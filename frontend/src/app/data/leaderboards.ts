@@ -62,14 +62,19 @@ function pointsTier(pointsTotal: number): "none" | "bronze" | "silver" | "gold" 
 async function fetchAdminUserIds(supabase: ReturnType<typeof getSupabaseAdminClient>): Promise<Set<string>> {
   const { data, error } = await supabase.from("users").select("id").eq("role", "admin").limit(50);
   if (error) throw new Error(`Rangliste: admin users query fehlgeschlagen: ${error.message}`);
-  return new Set(((data ?? []) as any[]).map((r) => String(r.id)).filter(Boolean));
+  return new Set(((data ?? []) as Array<{ id: string }>).map((r) => String(r.id)).filter(Boolean));
 }
+
+type LeaderboardFilterQuery = {
+  eq(column: string, value: unknown): LeaderboardFilterQuery;
+  not(column: string, operator: string, value: unknown): LeaderboardFilterQuery;
+};
 
 async function fetchAllRows<T>(options: {
   supabase: ReturnType<typeof getSupabaseAdminClient>;
   table: string;
   select: string;
-  filters?: (query: any) => any;
+  filters?: (query: LeaderboardFilterQuery) => LeaderboardFilterQuery;
   orderBy?: { column: string; ascending: boolean };
   chunkSize?: number;
   maxRows?: number;
@@ -87,7 +92,7 @@ async function fetchAllRows<T>(options: {
   const result: T[] = [];
   for (let offset = 0; offset < maxRows; offset += chunkSize) {
     let query = supabase.from(table).select(select);
-    if (filters) query = filters(query);
+    if (filters) query = filters(query as unknown as LeaderboardFilterQuery) as unknown as typeof query;
     if (orderBy) query = query.order(orderBy.column, { ascending: orderBy.ascending });
     query = query.range(offset, offset + chunkSize - 1);
 
@@ -376,12 +381,12 @@ export async function getCommunityLeaderboard(options: {
   await ensureCategories(
     Array.from(
       new Set(
-        appliedCommunity.map((s: any) => (s.question_id ? String(s.question_id) : null)).filter((x): x is string => Boolean(x))
+        appliedCommunity.map((s) => (s.question_id ? String(s.question_id) : null)).filter((x): x is string => Boolean(x))
       )
     )
   );
 
-  appliedCommunity.forEach((s: any) => {
+  appliedCommunity.forEach((s) => {
     const userId = s.created_by_user_id ? String(s.created_by_user_id) : null;
     const questionId = s.question_id ? String(s.question_id) : null;
     if (!userId || !questionId) return;
@@ -532,5 +537,9 @@ export async function getCommunityLeaderboard(options: {
     })
     .slice(0, limit);
 
-  return leaders.map(({ actionPoints, ...rest }) => rest);
+  return leaders.map((leader) => {
+    const result = { ...leader };
+    Reflect.deleteProperty(result, "actionPoints");
+    return result;
+  });
 }

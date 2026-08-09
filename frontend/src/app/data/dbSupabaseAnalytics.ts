@@ -22,7 +22,7 @@ export async function logAnalyticsEventServer(input: {
     });
     if (error) {
       // 42P01 = table missing (if SQL not executed yet). We never want to break the app because of analytics.
-      if ((error as any).code !== "42P01") {
+      if (error.code !== "42P01") {
         console.warn("logAnalyticsEventServer failed", error);
       }
     }
@@ -31,4 +31,3 @@ export async function logAnalyticsEventServer(input: {
     console.warn("logAnalyticsEventServer crashed", e);
   }
 }
-

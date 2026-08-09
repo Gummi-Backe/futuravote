@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export default function PasswordResetRequestPage() {
   const [email, setEmail] = useState("");
@@ -28,16 +29,18 @@ export default function PasswordResetRequestPage() {
       });
 
       if (res.status === 429) {
-        const json = await res.json().catch(() => ({}));
-        const retryAfterMs = (json as any)?.retryAfterMs as number | undefined;
-        const retry = Math.max(1, Math.ceil(((retryAfterMs ?? 60000) as number) / 1000));
+        const parsed: unknown = await res.json().catch(() => ({}));
+        const json = isRecord(parsed) ? parsed : {};
+        const retryAfterMs = typeof json.retryAfterMs === "number" ? json.retryAfterMs : 60000;
+        const retry = Math.max(1, Math.ceil(retryAfterMs / 1000));
         setError(`Bitte warte ${retry} Sekunde(n) und versuche es erneut.`);
         return;
       }
 
-      const data = await res.json().catch(() => ({}));
+      const parsed: unknown = await res.json().catch(() => ({}));
+      const data = isRecord(parsed) ? parsed : {};
       if (!res.ok) {
-        setError((data as any)?.error ?? "Passwort-Reset konnte nicht gestartet werden.");
+        setError(typeof data.error === "string" ? data.error : "Passwort-Reset konnte nicht gestartet werden.");
         return;
       }
 

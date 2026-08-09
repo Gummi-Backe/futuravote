@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type StatusResponse = {
   ok?: boolean;
   unresolvedCount?: number;
   lastCronAt?: string | null;
-  lastCronMeta?: any | null;
+  lastCronMeta?: unknown;
 };
 
 function formatDateTime(value: string | null | undefined): string | null {
@@ -37,8 +38,11 @@ export function AdminResolutionBanner({
     setError(null);
     try {
       const res = await fetch("/api/admin/resolution-status", { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Status konnte nicht geladen werden.");
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Status konnte nicht geladen werden.");
+      }
       setData(json as StatusResponse);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Status konnte nicht geladen werden.");
@@ -77,4 +81,3 @@ export function AdminResolutionBanner({
     </div>
   );
 }
-

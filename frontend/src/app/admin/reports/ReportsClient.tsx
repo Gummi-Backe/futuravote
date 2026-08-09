@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
 
@@ -64,9 +65,10 @@ export default function ReportsClient() {
       const res = await fetch(`/api/admin/reports?status=${encodeURIComponent(nextStatus)}&limit=150`, {
         cache: "no-store",
       });
-      const json = (await res.json().catch(() => null)) as any;
+      const rawJson: unknown = await res.json().catch(() => null);
+      const json = isRecord(rawJson) ? rawJson : {};
       if (!res.ok) {
-        throw new Error(json?.error ?? "Reports konnten nicht geladen werden.");
+        throw new Error(typeof json.error === "string" ? json.error : "Reports konnten nicht geladen werden.");
       }
       setReports((Array.isArray(json?.reports) ? json.reports : []) as ReportRow[]);
     } catch (e) {
@@ -90,9 +92,10 @@ export default function ReportsClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, status: next }),
         });
-        const json = (await res.json().catch(() => null)) as any;
+        const rawJson: unknown = await res.json().catch(() => null);
+        const json = isRecord(rawJson) ? rawJson : {};
         if (!res.ok) {
-          throw new Error(json?.error ?? "Update fehlgeschlagen.");
+          throw new Error(typeof json.error === "string" ? json.error : "Update fehlgeschlagen.");
         }
         setReports((prev) => (prev ?? []).filter((r) => r.id !== id));
       } catch (e) {
@@ -114,8 +117,9 @@ export default function ReportsClient() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ questionId: opts.id, action: opts.action }),
           });
-          const json = (await res.json().catch(() => null)) as any;
-          if (!res.ok) throw new Error(json?.error ?? "Admin-Aktion fehlgeschlagen.");
+          const rawJson: unknown = await res.json().catch(() => null);
+          const json = isRecord(rawJson) ? rawJson : {};
+          if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Admin-Aktion fehlgeschlagen.");
           return;
         }
 
@@ -126,8 +130,9 @@ export default function ReportsClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ draftId: opts.id, action: opts.action }),
         });
-        const json = (await res.json().catch(() => null)) as any;
-        if (!res.ok) throw new Error(json?.error ?? "Admin-Aktion fehlgeschlagen.");
+        const rawJson: unknown = await res.json().catch(() => null);
+        const json = isRecord(rawJson) ? rawJson : {};
+        if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Admin-Aktion fehlgeschlagen.");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Admin-Aktion fehlgeschlagen.");
       }

@@ -18,7 +18,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ ok: true, questionsInSupabase: count ?? 0 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Supabase health check threw:", err);
     return NextResponse.json(
       {

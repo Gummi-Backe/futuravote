@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type Outcome = "yes" | "no";
 
@@ -48,27 +49,32 @@ export function CommunityResolutionProposals({
     setError(null);
     try {
       const res = await fetch(`/api/questions/${encodeURIComponent(questionId)}/resolution-proposals`, { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Auflösungs-Vorschläge konnten nicht geladen werden.");
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Auflösungs-Vorschläge konnten nicht geladen werden.");
+      }
+      const counts = isRecord(json.counts) ? json.counts : {};
+      const mine = isRecord(json.mine) ? json.mine : null;
       const next: ApiState = {
-        eligible: Boolean(json?.eligible),
-        ended: Boolean(json?.ended),
-        resolvedOutcome: json?.resolvedOutcome === "yes" || json?.resolvedOutcome === "no" ? json.resolvedOutcome : null,
+        eligible: Boolean(json.eligible),
+        ended: Boolean(json.ended),
+        resolvedOutcome: json.resolvedOutcome === "yes" || json.resolvedOutcome === "no" ? json.resolvedOutcome : null,
         counts: {
-          yes: Number(json?.counts?.yes ?? 0) || 0,
-          no: Number(json?.counts?.no ?? 0) || 0,
-          total: Number(json?.counts?.total ?? 0) || 0,
+          yes: Number(counts.yes ?? 0) || 0,
+          no: Number(counts.no ?? 0) || 0,
+          total: Number(counts.total ?? 0) || 0,
         },
-        mine: json?.mine
+        mine: mine
           ? {
-              outcome: json.mine.outcome === "no" ? "no" : "yes",
-              sourceUrl: String(json.mine.sourceUrl ?? ""),
-              note: typeof json.mine.note === "string" ? json.mine.note : null,
+              outcome: mine.outcome === "no" ? "no" : "yes",
+              sourceUrl: String(mine.sourceUrl ?? ""),
+              note: typeof mine.note === "string" ? mine.note : null,
             }
           : null,
-        queueReady: Boolean(json?.queueReady),
-        majoritySourcesCount: Number(json?.majoritySourcesCount ?? 0) || 0,
-        canPropose: Boolean(json?.canPropose),
+        queueReady: Boolean(json.queueReady),
+        majoritySourcesCount: Number(json.majoritySourcesCount ?? 0) || 0,
+        canPropose: Boolean(json.canPropose),
       };
       setState(next);
       if (next.mine) {
@@ -134,10 +140,13 @@ export function CommunityResolutionProposals({
           note: note.trim() || null,
         }),
       });
-      const json = (await res.json().catch(() => null)) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Vorschlag konnte nicht gespeichert werden.");
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (!res.ok) {
+        throw new Error(typeof json.error === "string" ? json.error : "Vorschlag konnte nicht gespeichert werden.");
+      }
 
-      setSuccess(json?.createdSuggestion ? "Gespeichert. Damit ist jetzt ein Community-Vorschlag beim Admin gelandet." : "Gespeichert. Danke!");
+      setSuccess(json.createdSuggestion ? "Gespeichert. Damit ist jetzt ein Community-Vorschlag beim Admin gelandet." : "Gespeichert. Danke!");
       await fetchState();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Vorschlag konnte nicht gespeichert werden.");

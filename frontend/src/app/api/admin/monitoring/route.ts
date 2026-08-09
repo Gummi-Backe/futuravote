@@ -5,7 +5,8 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 
 export const revalidate = 0;
 
-type LastEvent = { createdAt: string | null; meta: any | null };
+type LastEvent = { createdAt: string | null; meta: unknown };
+type EventRow = { created_at: string | null; meta: unknown };
 
 function isoHoursAgo(hours: number): string {
   const ms = Date.now() - Math.max(1, hours) * 60 * 60 * 1000;
@@ -21,7 +22,7 @@ async function lastEvent(supabase: ReturnType<typeof getSupabaseAdminClient>, ev
       .order("created_at", { ascending: false })
       .limit(1);
     if (error) throw error;
-    const row: any = Array.isArray(data) && data.length ? data[0] : null;
+    const row = (Array.isArray(data) && data.length ? data[0] : null) as EventRow | null;
     return { createdAt: typeof row?.created_at === "string" ? row.created_at : null, meta: row?.meta ?? null };
   } catch {
     return { createdAt: null, meta: null };
@@ -91,4 +92,3 @@ export async function GET() {
     rateLimits24h: { votes429: vote429, comments429: comment429 },
   });
 }
-

@@ -43,9 +43,11 @@ export async function getUserByOauthAccessTokenSupabase(accessToken: string): Pr
   if (error) {
     throw new Error(`Supabase getUserByOauthAccessToken fehlgeschlagen: ${error.message}`);
   }
-  if (!data || !(data as any).users) return null;
+  if (!data) return null;
+  const user = getRelatedUser(data as OauthTokenUserRow);
+  if (!user) return null;
 
-  return mapUser((data as any).users as DbUser);
+  return mapUser(user);
 }
 
 export type OauthAccessContext = {
@@ -88,10 +90,18 @@ export async function getOauthAccessContextByTokenSupabase(accessToken: string):
   if (error) {
     throw new Error(`Supabase getOauthAccessContextByToken fehlgeschlagen: ${error.message}`);
   }
-  if (!data || !(data as any).users) return null;
+  if (!data) return null;
+  const row = data as OauthTokenUserRow;
+  const user = getRelatedUser(row);
+  if (!user) return null;
 
   return {
-    user: mapUser((data as any).users as DbUser),
-    scope: String((data as any).scope ?? ""),
+    user: mapUser(user),
+    scope: String(row.scope ?? ""),
   };
+}
+type OauthTokenUserRow = { users: DbUser | DbUser[] | null; scope?: string | null };
+
+function getRelatedUser(row: OauthTokenUserRow): DbUser | null {
+  return Array.isArray(row.users) ? row.users[0] ?? null : row.users;
 }

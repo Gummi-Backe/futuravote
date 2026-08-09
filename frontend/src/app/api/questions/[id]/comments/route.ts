@@ -6,12 +6,13 @@ import { addQuestionComment, listQuestionComments, type CommentStance } from "@/
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { getErrorCode, getErrorMessage, isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
 function isMissingRelation(error: unknown): boolean {
-  const code = String((error as any)?.code ?? "");
-  const msg = String((error as any)?.message ?? "").toLowerCase();
+  const code = getErrorCode(error);
+  const msg = getErrorMessage(error, "").toLowerCase();
   return code === "42P01" || msg.includes("does not exist") || msg.includes("schema cache");
 }
 
@@ -61,10 +62,10 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         if (countsError) {
           // Kommentar-Counts sind optional: ohne diese Tabelle/View sollen Kommentare trotzdem laden.
           if (!isMissingRelation(countsError)) {
-            console.warn("comment vote counts query failed:", (countsError as any)?.message ?? countsError);
+            console.warn("comment vote counts query failed:", getErrorMessage(countsError));
           }
         } else {
-          ((countRows ?? []) as any[]).forEach((r) => {
+          ((countRows ?? []) as Array<{ comment_id: string | null; up_votes: number | null }>).forEach((r) => {
             const cid = String(r.comment_id ?? "");
             if (!cid) return;
             countsByCommentId.set(cid, {
@@ -75,7 +76,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         }
       } catch (err) {
         // Optional: niemals Kommentare blockieren
-        console.warn("comment vote counts threw:", (err as any)?.message ?? err);
+        console.warn("comment vote counts threw:", getErrorMessage(err));
       }
     }
 
@@ -94,10 +95,10 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
         if (myError) {
           if (!isMissingRelation(myError)) {
-            console.warn("comment vote myVote query failed:", (myError as any)?.message ?? myError);
+            console.warn("comment vote myVote query failed:", getErrorMessage(myError));
           }
         } else {
-          ((myRows ?? []) as any[]).forEach((r) => {
+          ((myRows ?? []) as Array<{ comment_id: string | null; vote: string | null }>).forEach((r) => {
             const cid = String(r.comment_id ?? "");
             const vote = r.vote === "up" ? "up" : null;
             if (!cid) return;
@@ -105,7 +106,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
           });
         }
       } catch (err) {
-        console.warn("comment vote myVote threw:", (err as any)?.message ?? err);
+        console.warn("comment vote myVote threw:", getErrorMessage(err));
       }
     }
 
@@ -117,7 +118,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
     return NextResponse.json({ comments: merged }, { status: 200 });
   } catch (e: unknown) {
-    const code = (e as any)?.code as string | undefined;
+    const code = getErrorCode(e);
     if (code === "42P01") {
       return NextResponse.json(
         {
@@ -131,8 +132,8 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       return NextResponse.json(
         {
           error: "Kommentare konnten nicht geladen werden.",
-          code: (e as any)?.code ?? null,
-          details: String((e as any)?.message ?? e),
+          code: getErrorCode(e) || null,
+          details: getErrorMessage(e),
         },
         { status: 500 }
       );
@@ -192,10 +193,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     return rateLimitResponse(blockedRate, "Zu viele Kommentare. Bitte später erneut versuchen.");
   }
 
-  const body = (await request.json().catch(() => null)) as any;
-  const text = typeof body?.body === "string" ? body.body.trim() : "";
-  const stance = normalizeStance(body?.stance);
-  const sourceUrl = normalizeSourceUrl(body?.sourceUrl);
+  const rawBody: unknown = await request.json().catch(() => null);
+  const body = isRecord(rawBody) ? rawBody : {};
+  const text = typeof body.body === "string" ? body.body.trim() : "";
+  const stance = normalizeStance(body.stance);
+  const sourceUrl = normalizeSourceUrl(body.sourceUrl);
 
   if (text.length < 5) {
     return NextResponse.json({ error: "Kommentar ist zu kurz." }, { status: 400 });
@@ -214,7 +216,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     });
     return NextResponse.json({ ok: true, comment }, { status: 200 });
   } catch (e: unknown) {
-    const code = (e as any)?.code as string | undefined;
+    const code = getErrorCode(e);
     if (code === "42P01") {
       return NextResponse.json(
         { error: "Supabase table 'question_comments' fehlt. Führe supabase/question_comments.sql aus." },

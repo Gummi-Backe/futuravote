@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { categories } from "@/app/data/mock";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
 import { CategorySelectorRowClient } from "@/app/rangliste/CategorySelectorRowClient";
 import {
@@ -19,12 +18,6 @@ export const metadata: Metadata = {
   description: "Rangliste für Treffer (richtige Prognosen) und Community‑Beiträge auf Future‑Vote.",
   alternates: { canonical: "/rangliste" },
 };
-
-function clampInt(value: unknown, fallback: number, min: number, max: number) {
-  const n = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, Math.round(n)));
-}
 
 function medalForRankNumber(rank: number): { shortLabel: "G" | "S" | "B"; title: string; className: string } | null {
   if (rank === 1) return { shortLabel: "G", title: "Gold", className: "bg-amber-500/20 text-amber-200" };

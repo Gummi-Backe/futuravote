@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type AdminSettings = {
   reportQuarantineThreshold: number;
@@ -33,14 +34,15 @@ export default function SettingsClient(props: { initial: AdminSettings }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(form),
       });
-      const json = (await res.json().catch(() => null)) as any;
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
       if (!res.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+        throw new Error(typeof json.error === "string" ? json.error : `HTTP ${res.status}`);
       }
       setForm(json.settings as AdminSettings);
       setSaved(true);
-    } catch (e: any) {
-      setError(e?.message ?? "Speichern fehlgeschlagen.");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
     } finally {
       setSaving(false);
       window.setTimeout(() => setSaved(false), 2500);

@@ -3,13 +3,14 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 import { SmartBackButton } from "@/app/components/SmartBackButton";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export default function PasswordResetTokenPage() {
   const router = useRouter();
-  const params = useParams();
+  const params = useParams<{ token: string | string[] }>();
 
   const token = useMemo(() => {
-    const raw = (params as any)?.token as string | string[] | undefined;
+    const raw = params?.token;
     if (!raw) return "";
     return Array.isArray(raw) ? raw[0] ?? "" : raw;
   }, [params]);
@@ -48,9 +49,10 @@ export default function PasswordResetTokenPage() {
         body: JSON.stringify({ token, password, passwordConfirm }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const parsed: unknown = await res.json().catch(() => ({}));
+      const data = isRecord(parsed) ? parsed : {};
       if (!res.ok) {
-        setError((data as any)?.error ?? "Passwort konnte nicht zurückgesetzt werden.");
+        setError(typeof data.error === "string" ? data.error : "Passwort konnte nicht zurückgesetzt werden.");
         return;
       }
 

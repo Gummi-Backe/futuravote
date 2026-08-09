@@ -5,6 +5,20 @@ import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 
 export const revalidate = 0;
 
+type NotificationPreferenceRow = { all_emails_enabled?: boolean | null; private_poll_results?: boolean | null };
+type PrivatePollRow = {
+  id: string;
+  title: string | null;
+  closes_at: string | null;
+  yes_votes: number | null;
+  no_votes: number | null;
+  creator_id: string;
+  share_id: string;
+  visibility: string | null;
+};
+type SentRow = { question_id: string };
+type UserRow = { email: string | null; display_name: string | null };
+
 function isVercelCron(request: Request): boolean {
   const header = request.headers.get("x-vercel-cron");
   return header === "1" || header === "true";
@@ -36,8 +50,9 @@ async function canSendPrivatePollResultEmail(supabase: ReturnType<typeof getSupa
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
-    const allEnabled = (data as any)?.all_emails_enabled;
-    const resultsEnabled = (data as any)?.private_poll_results;
+    const prefs = data as NotificationPreferenceRow | null;
+    const allEnabled = prefs?.all_emails_enabled;
+    const resultsEnabled = prefs?.private_poll_results;
     if (typeof allEnabled === "boolean" && !allEnabled) return false;
     if (typeof resultsEnabled === "boolean" && !resultsEnabled) return false;
     return true;
@@ -86,7 +101,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const rows = (questions ?? []) as any[];
+  const rows = (questions ?? []) as PrivatePollRow[];
   if (rows.length === 0) {
     const payload = { ok: true, sent: 0, skipped: 0, checked: 0, note: "Keine faelligen privaten Umfragen." };
     await logAnalyticsEventServer({
@@ -117,7 +132,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const alreadySent = new Set((sentRows ?? []).map((r: any) => String(r.question_id)));
+  const alreadySent = new Set(((sentRows ?? []) as SentRow[]).map((r) => String(r.question_id)));
   const pending = rows.filter((r) => !alreadySent.has(String(r.id)));
 
   let sent = 0;
@@ -136,13 +151,14 @@ export async function GET(request: Request) {
       .eq("id", creatorId)
       .maybeSingle();
 
-    if (userErr || !userRow || !(userRow as any).email) {
+    const typedUser = userRow as UserRow | null;
+    if (userErr || !typedUser?.email) {
       skipped += 1;
       continue;
     }
 
-    const to = String((userRow as any).email);
-    const displayName = String((userRow as any).display_name ?? "");
+    const to = typedUser.email;
+    const displayName = String(typedUser.display_name ?? "");
     const closesAt = String(row.closes_at ?? "");
 
     const pollUrl = `${siteUrl}/p/${encodeURIComponent(shareId)}`;

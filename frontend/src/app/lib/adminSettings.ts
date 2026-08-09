@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export type AdminSettingKey =
   | "report_quarantine_threshold"
@@ -35,20 +36,24 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v));
 }
 
+function unwrapSettingValue(value: unknown): unknown {
+  return isRecord(value) && "value" in value ? value.value : value;
+}
+
 async function loadRawSettings(): Promise<Partial<Record<AdminSettingKey, unknown>>> {
   const supabase = getSupabaseAdminClient();
   try {
     const { data, error } = await supabase.from("admin_settings").select("key,value");
     if (error) {
-      const code = (error as any)?.code as string | undefined;
+      const code = error.code;
       if (code === "42P01") return {};
       return {};
     }
     const map: Partial<Record<AdminSettingKey, unknown>> = {};
-    for (const row of (data as any[]) ?? []) {
-      const key = String((row as any).key ?? "") as AdminSettingKey;
+    for (const row of (data as Array<{ key: string | null; value: unknown }>) ?? []) {
+      const key = String(row.key ?? "") as AdminSettingKey;
       if (!key) continue;
-      map[key] = (row as any).value;
+      map[key] = row.value;
     }
     return map;
   } catch {
@@ -73,21 +78,21 @@ export async function getAdminSettings(): Promise<AdminSettings> {
   ]);
 
   const reportQuarantineThreshold = clampInt(
-    toNumber(reportQuarantineThresholdRaw ?? (reportQuarantineThresholdRaw as any)?.value) ??
+    toNumber(unwrapSettingValue(reportQuarantineThresholdRaw)) ??
       ADMIN_SETTINGS_DEFAULTS.reportQuarantineThreshold,
     1,
     50
   );
 
   const draftMinTotalReviews = clampInt(
-    toNumber(draftMinTotalReviewsRaw ?? (draftMinTotalReviewsRaw as any)?.value) ??
+    toNumber(unwrapSettingValue(draftMinTotalReviewsRaw)) ??
       ADMIN_SETTINGS_DEFAULTS.draftMinTotalReviews,
     1,
     100
   );
 
   const draftMinLead = clampInt(
-    toNumber(draftMinLeadRaw ?? (draftMinLeadRaw as any)?.value) ?? ADMIN_SETTINGS_DEFAULTS.draftMinLead,
+    toNumber(unwrapSettingValue(draftMinLeadRaw)) ?? ADMIN_SETTINGS_DEFAULTS.draftMinLead,
     1,
     50
   );
@@ -98,7 +103,7 @@ export async function getAdminSettings(): Promise<AdminSettings> {
 export async function updateAdminSettings(patch: Partial<AdminSettings>): Promise<AdminSettings> {
   const supabase = getSupabaseAdminClient();
 
-  const rows: { key: AdminSettingKey; value: any; updated_at: string }[] = [];
+  const rows: { key: AdminSettingKey; value: unknown; updated_at: string }[] = [];
   const nowIso = new Date().toISOString();
 
   if (typeof patch.reportQuarantineThreshold === "number") {
@@ -126,7 +131,7 @@ export async function updateAdminSettings(patch: Partial<AdminSettings>): Promis
   if (rows.length) {
     const { error } = await supabase.from("admin_settings").upsert(rows, { onConflict: "key" });
     if (error) {
-      const code = (error as any)?.code as string | undefined;
+      const code = error.code;
       if (code === "42P01") {
         throw new Error("Supabase table 'admin_settings' fehlt. Führe supabase/admin_settings.sql aus.");
       }

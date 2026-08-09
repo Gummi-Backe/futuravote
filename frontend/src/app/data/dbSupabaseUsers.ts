@@ -26,6 +26,16 @@ export type User = {
    defaultRegion: string | null;
 };
 
+type EmailVerificationRow = {
+  id: string;
+  user_id: string;
+  expires_at: string;
+  users: DbUser | DbUser[] | null;
+};
+
+type UserSessionRow = { expires_at: string; users: DbUser | DbUser[] | null };
+type PasswordResetRow = { id: string; user_id: string; expires_at: string; used_at: string | null };
+
 export function mapUser(row: DbUser): User {
   return {
     id: row.id,
@@ -86,7 +96,7 @@ export async function getUserPasswordHashByEmailSupabase(email: string): Promise
     throw new Error(`Supabase getUserPasswordHashByEmail fehlgeschlagen: ${error.message}`);
   }
 
-  return (data as any)?.password_hash ?? null;
+  return (data as { password_hash: string | null } | null)?.password_hash ?? null;
 }
 
 export async function getUserPasswordHashByIdSupabase(userId: string): Promise<string | null> {
@@ -102,7 +112,7 @@ export async function getUserPasswordHashByIdSupabase(userId: string): Promise<s
     throw new Error(`Supabase getUserPasswordHashById fehlgeschlagen: ${error.message}`);
   }
 
-  return (data as any)?.password_hash ?? null;
+  return (data as { password_hash: string | null } | null)?.password_hash ?? null;
 }
 
 
@@ -160,19 +170,19 @@ export async function verifyEmailByTokenSupabase(token: string): Promise<User | 
   if (error) {
     throw new Error(`Supabase verifyEmailByToken Select fehlgeschlagen: ${error.message}`);
   }
-  if (!data || !(data as any).users) {
+  if (!data) {
     return null;
   }
 
-  const row = data as any;
-  const expiresAt = Date.parse(row.expires_at as string);
+  const row = data as EmailVerificationRow;
+  const userRow = Array.isArray(row.users) ? row.users[0] ?? null : row.users;
+  if (!userRow) return null;
+  const expiresAt = Date.parse(row.expires_at);
   if (Number.isNaN(expiresAt) || expiresAt < Date.now()) {
     // Abgelaufenes Token loeschen
-    await supabase.from("email_verifications").delete().eq("id", row.id as string);
+    await supabase.from("email_verifications").delete().eq("id", row.id);
     return null;
   }
-
-  const userRow = row.users as DbUser;
 
   if (!userRow.email_verified) {
     const { error: updateError } = await supabase
@@ -274,7 +284,9 @@ export async function getUserBySessionSupabase(sessionId: string): Promise<User 
   }
   if (!data || !("users" in data) || !data.users) return null;
 
-  const userRow = (data as any).users as DbUser;
+  const sessionRow = data as UserSessionRow;
+  const userRow = Array.isArray(sessionRow.users) ? sessionRow.users[0] ?? null : sessionRow.users;
+  if (!userRow) return null;
   return mapUser(userRow);
 }
 
@@ -358,7 +370,7 @@ export async function resetPasswordByTokenSupabase(options: {
     return { ok: false, reason: "invalid" };
   }
 
-  const row = data as any;
+  const row = data as PasswordResetRow;
   if (row.used_at) {
     return { ok: false, reason: "used" };
   }
@@ -366,11 +378,11 @@ export async function resetPasswordByTokenSupabase(options: {
   const expiresMs = Date.parse(row.expires_at as string);
   if (Number.isNaN(expiresMs) || expiresMs < Date.now()) {
     // Abgelaufene Tokens entfernen
-    await supabase.from("password_resets").delete().eq("id", row.id as string);
+    await supabase.from("password_resets").delete().eq("id", row.id);
     return { ok: false, reason: "expired" };
   }
 
-  const userId = row.user_id as string;
+  const userId = row.user_id;
 
   const { error: updateUserError } = await supabase
     .from("users")
@@ -384,7 +396,7 @@ export async function resetPasswordByTokenSupabase(options: {
   const { error: markUsedError } = await supabase
     .from("password_resets")
     .update({ used_at: new Date().toISOString() })
-    .eq("id", row.id as string);
+    .eq("id", row.id);
 
   if (markUsedError) {
     throw new Error(`Supabase resetPasswordByToken (mark used) fehlgeschlagen: ${markUsedError.message}`);

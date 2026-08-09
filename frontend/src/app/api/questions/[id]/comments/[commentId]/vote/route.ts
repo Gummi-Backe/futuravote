@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { getErrorCode, getErrorMessage, isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -14,8 +15,8 @@ function normalizeVote(input: unknown): VoteValue | null {
 }
 
 function isMissingRelation(error: unknown): boolean {
-  const code = String((error as any)?.code ?? "");
-  const msg = String((error as any)?.message ?? "").toLowerCase();
+  const code = getErrorCode(error);
+  const msg = getErrorMessage(error, "").toLowerCase();
   return code === "42P01" || msg.includes("does not exist") || msg.includes("schema cache");
 }
 
@@ -29,7 +30,7 @@ async function getCountsForComment(commentId: string) {
     .maybeSingle();
 
   if (!error) {
-    const row: any = data ?? null;
+    const row = data as { up_votes: number | null } | null;
     return {
       upVotes: Math.max(0, Number(row?.up_votes ?? 0) || 0),
       downVotes: 0,
@@ -49,7 +50,7 @@ async function getCountsForComment(commentId: string) {
   if (rowsError) throw rowsError;
 
   let upVotes = 0;
-  ((rows ?? []) as any[]).forEach((r) => {
+  ((rows ?? []) as Array<{ vote: string | null }>).forEach((r) => {
     if (r.vote === "up") upVotes += 1;
   });
 
@@ -93,14 +94,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     return rateLimitResponse(voteRate, "Zu viele Kommentarbewertungen. Bitte später erneut versuchen.");
   }
 
-  let body: any;
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
-  const vote = normalizeVote(body?.vote);
+  const vote = normalizeVote(isRecord(body) ? body.vote : null);
   if (!vote) return NextResponse.json({ error: "Ungültige Stimme." }, { status: 400 });
 
   const supabase = getSupabaseAdminClient();
@@ -113,7 +114,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     .maybeSingle();
 
   if (commentError) {
-    const code = (commentError as any)?.code as string | undefined;
+    const code = getErrorCode(commentError);
     if (code === "42P01") {
       return NextResponse.json(
         { error: "Supabase table 'question_comments' fehlt. Führe supabase/question_comments.sql aus." },
@@ -123,7 +124,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Kommentar nicht gefunden." }, { status: 404 });
   }
 
-  if (!commentRow || String((commentRow as any).question_id) !== questionId) {
+  if (!commentRow || String((commentRow as { question_id: string | null }).question_id) !== questionId) {
     return NextResponse.json({ error: "Kommentar nicht gefunden." }, { status: 404 });
   }
 
@@ -137,7 +138,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     if (existingError) throw existingError;
 
-    const existingVote = (existing as any)?.vote === "up" ? ("up" as const) : null;
+    const existingVote = (existing as { vote: string | null } | null)?.vote === "up" ? ("up" as const) : null;
     const nowIso = new Date().toISOString();
 
     if (existingVote === vote) {
@@ -166,8 +167,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const myVote: VoteValue | null = existingVote === vote ? null : "up";
 
     return NextResponse.json({ ok: true, ...counts, myVote }, { status: 200 });
-  } catch (e: any) {
-    const code = e?.code as string | undefined;
+  } catch (e: unknown) {
+    const code = getErrorCode(e);
     if (code === "42P01") {
       return NextResponse.json(
         { error: "Supabase table 'question_comment_votes' fehlt. Führe supabase/question_comment_votes.sql aus." },

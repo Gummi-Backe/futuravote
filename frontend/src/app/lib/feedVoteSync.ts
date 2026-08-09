@@ -2,7 +2,7 @@ export type FeedVoteDelta =
   | { kind: "binary"; questionId: string; choice: "yes" | "no"; ts: number }
   | { kind: "options"; questionId: string; optionId: string; ts: number };
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends any ? Omit<T, K> : never;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 type FeedVoteDeltaInput = DistributiveOmit<FeedVoteDelta, "ts">;
 
 const FEED_VOTE_DELTAS_STORAGE_KEY = "fv_feed_vote_deltas_v1";
@@ -16,13 +16,13 @@ function safeReadDeltas(): FeedVoteDelta[] {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((item): item is FeedVoteDelta => {
-      if (!item || typeof item !== "object") return false;
-      const kind = (item as any).kind;
-      const questionId = (item as any).questionId;
-      const ts = (item as any).ts;
+      if (!isRecord(item)) return false;
+      const kind = item.kind;
+      const questionId = item.questionId;
+      const ts = item.ts;
       if (typeof questionId !== "string" || typeof ts !== "number") return false;
-      if (kind === "binary") return (item as any).choice === "yes" || (item as any).choice === "no";
-      if (kind === "options") return typeof (item as any).optionId === "string";
+      if (kind === "binary") return item.choice === "yes" || item.choice === "no";
+      if (kind === "options") return typeof item.optionId === "string";
       return false;
     });
   } catch {
@@ -34,7 +34,11 @@ export function recordFeedVoteDelta(delta: FeedVoteDeltaInput & { ts?: number })
   try {
     if (typeof window === "undefined") return;
     const existing = safeReadDeltas();
-    const next: FeedVoteDelta = { ...(delta as any), ts: typeof delta.ts === "number" ? delta.ts : Date.now() };
+    const ts = typeof delta.ts === "number" ? delta.ts : Date.now();
+    const next: FeedVoteDelta =
+      delta.kind === "binary"
+        ? { kind: "binary", questionId: delta.questionId, choice: delta.choice, ts }
+        : { kind: "options", questionId: delta.questionId, optionId: delta.optionId, ts };
     const merged = [next, ...existing].slice(0, MAX_DELTAS);
     window.sessionStorage.setItem(FEED_VOTE_DELTAS_STORAGE_KEY, JSON.stringify(merged));
   } catch {
@@ -52,3 +56,4 @@ export function consumeFeedVoteDeltas(): FeedVoteDelta[] {
     return [];
   }
 }
+import { isRecord } from "@/app/lib/unknownValue";

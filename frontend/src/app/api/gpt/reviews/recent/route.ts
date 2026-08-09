@@ -4,6 +4,16 @@ import { guardGptRateLimit, withCacheHeaders } from "../../_lib";
 
 export const revalidate = 0;
 
+type RecentReviewRow = {
+  created_at: string | null;
+  draft_id: string | null;
+  choice: string | null;
+  drafts:
+    | { title: string | null; category: string | null }
+    | Array<{ title: string | null; category: string | null }>
+    | null;
+};
+
 export async function GET(request: Request) {
   const limited = guardGptRateLimit(request);
   if (limited) return limited;
@@ -34,14 +44,16 @@ export async function GET(request: Request) {
   try {
     const { data: rows } = await query;
 
-    const items =
-      (rows as any[])?.map((row) => ({
+    const items = ((rows ?? []) as unknown as RecentReviewRow[]).map((row) => {
+      const draft = Array.isArray(row.drafts) ? row.drafts[0] : row.drafts;
+      return {
         createdAt: typeof row.created_at === "string" ? row.created_at : null,
         draftId: typeof row.draft_id === "string" ? row.draft_id : null,
-        draftTitle: typeof row?.drafts?.title === "string" ? row.drafts.title : null,
-        category: typeof row?.drafts?.category === "string" ? row.drafts.category : null,
+        draftTitle: typeof draft?.title === "string" ? draft.title : null,
+        category: typeof draft?.category === "string" ? draft.category : null,
         choice: typeof row.choice === "string" ? row.choice : null,
-      })) ?? [];
+      };
+    });
 
     const nextCursor =
       items.length > 0 && items[items.length - 1]?.createdAt ? String(items[items.length - 1].createdAt) : null;

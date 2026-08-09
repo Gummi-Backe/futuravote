@@ -4,6 +4,7 @@ import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -17,6 +18,27 @@ type ProposalRow = {
   created_at: string;
   updated_at: string;
 };
+
+type RawProposalRow = {
+  user_id: string | null;
+  suggested_outcome: string | null;
+  source_url: string | null;
+  note: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function normalizeProposalRows(data: unknown): ProposalRow[] {
+  if (!Array.isArray(data)) return [];
+  return (data as RawProposalRow[]).map((r) => ({
+    user_id: String(r.user_id ?? ""),
+    suggested_outcome: r.suggested_outcome === "no" ? "no" : "yes",
+    source_url: String(r.source_url ?? ""),
+    note: typeof r.note === "string" ? r.note : null,
+    created_at: String(r.created_at ?? ""),
+    updated_at: String(r.updated_at ?? ""),
+  }));
+}
 
 function todayUtcDateIso() {
   return new Date().toISOString().slice(0, 10);
@@ -160,7 +182,7 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
     .limit(200);
 
   if (error) {
-    const code = (error as any)?.code as string | undefined;
+    const code = error.code;
     if (code === "42P01") {
       return NextResponse.json(
         { error: "Supabase table 'question_resolution_proposals' fehlt. Fuehre supabase/question_resolution_proposals.sql aus." },
@@ -171,17 +193,7 @@ export async function GET(_request: Request, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Aufloesungsvorschlaege konnten nicht geladen werden." }, { status: 500 });
   }
 
-  const rows: ProposalRow[] = ((data ?? []) as any[]).map((r: any) => {
-    const suggestedOutcome: Outcome = r?.suggested_outcome === "no" ? "no" : "yes";
-    return {
-      user_id: String(r?.user_id ?? ""),
-      suggested_outcome: suggestedOutcome,
-      source_url: String(r?.source_url ?? ""),
-      note: typeof r?.note === "string" ? r.note : null,
-      created_at: String(r?.created_at ?? ""),
-      updated_at: String(r?.updated_at ?? ""),
-    };
-  });
+  const rows = normalizeProposalRows(data);
 
   const stats = computeStats(rows, user?.id ?? null);
   const majoritySources = stats.majority ? uniqueSourcesForOutcome(rows, stats.majority) : [];
@@ -245,10 +257,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   if (!ended) return NextResponse.json({ error: "Diese Frage ist noch nicht beendet." }, { status: 400 });
   if (resolvedOutcome) return NextResponse.json({ error: "Diese Frage ist bereits aufgeloest." }, { status: 400 });
 
-  const body = (await request.json().catch(() => null)) as any;
-  const outcome = normalizeOutcome(body?.outcome);
-  const sourceUrl = normalizeSourceUrl(body?.sourceUrl);
-  const note = normalizeNote(body?.note);
+  const rawBody: unknown = await request.json().catch(() => null);
+  const body = isRecord(rawBody) ? rawBody : {};
+  const outcome = normalizeOutcome(body.outcome);
+  const sourceUrl = normalizeSourceUrl(body.sourceUrl);
+  const note = normalizeNote(body.note);
 
   if (!outcome) return NextResponse.json({ error: "Bitte Ja oder Nein auswählen." }, { status: 400 });
   if (!sourceUrl) return NextResponse.json({ error: "Bitte eine gueltige Quelle (URL) angeben." }, { status: 400 });
@@ -271,7 +284,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     );
 
   if (upsertErr) {
-    const code = (upsertErr as any)?.code as string | undefined;
+    const code = upsertErr.code;
     if (code === "42P01") {
       return NextResponse.json(
         { error: "Supabase table 'question_resolution_proposals' fehlt. Fuehre supabase/question_resolution_proposals.sql aus." },
@@ -295,17 +308,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Aufloesungsvorschlaege konnten nicht geladen werden." }, { status: 500 });
   }
 
-  const normalizedRows: ProposalRow[] = ((rows ?? []) as any[]).map((r: any) => {
-    const suggestedOutcome: Outcome = r?.suggested_outcome === "no" ? "no" : "yes";
-    return {
-      user_id: String(r?.user_id ?? ""),
-      suggested_outcome: suggestedOutcome,
-      source_url: String(r?.source_url ?? ""),
-      note: typeof r?.note === "string" ? r.note : null,
-      created_at: String(r?.created_at ?? ""),
-      updated_at: String(r?.updated_at ?? ""),
-    };
-  });
+  const normalizedRows = normalizeProposalRows(rows);
 
   const createdSuggestion = await maybeCreateCommunitySuggestion({
     questionId,

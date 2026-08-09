@@ -89,7 +89,7 @@ async function fetchLatestQuestionUpdatesMeta(options: {
       .order("created_at", { ascending: false });
 
     if (error) {
-      const code = (error as any)?.code as string | undefined;
+      const code = error.code;
       if (code === "42P01") return out;
       return out;
     }
@@ -156,7 +156,7 @@ function decodeCursor(raw?: string | null): CursorPayload | null {
   try {
     const parsed = JSON.parse(fromBase64Url(raw)) as Partial<CursorPayload>;
     if (parsed?.v != 1) return null;
-    if (typeof (parsed as any).kind !== "string") return null;
+    if (typeof parsed.kind !== "string") return null;
     return parsed as CursorPayload;
   } catch {
     return null;
@@ -209,7 +209,7 @@ async function computeDynamicLowVotesThreshold(options: {
   try {
     const minCreatedAt = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    let query: any = supabase
+    let query = supabase
       .from("questions")
       .select("yes_votes,no_votes")
       .eq("visibility", "public")
@@ -236,7 +236,7 @@ async function computeDynamicLowVotesThreshold(options: {
       return DEFAULT_THRESHOLD;
     }
 
-    const values = ((rows as any[]) ?? [])
+    const values = ((rows as Array<{ yes_votes: number | null; no_votes: number | null }>) ?? [])
       .map((r) => {
         const yes = Number(r?.yes_votes ?? 0);
         const no = Number(r?.no_votes ?? 0);
@@ -309,6 +309,21 @@ type DraftOptionRow = {
   sort_order: number;
   votes_count: number;
   created_at?: string;
+};
+
+type DraftReviewAtomicRow = {
+  already_voted?: boolean | null;
+  votes_for?: number | null;
+  votes_against?: number | null;
+};
+
+type SupabaseFilterBuilderLike = {
+  eq(column: string, value: unknown): SupabaseFilterBuilderLike;
+  gte(column: string, value: unknown): SupabaseFilterBuilderLike;
+  in(column: string, values: readonly unknown[]): SupabaseFilterBuilderLike;
+  lte(column: string, value: unknown): SupabaseFilterBuilderLike;
+  not(column: string, operator: string, value: unknown): SupabaseFilterBuilderLike;
+  or(filters: string): SupabaseFilterBuilderLike;
 };
 
 const IMAGE_BUCKET = process.env.SUPABASE_IMAGE_BUCKET || "question-images";
@@ -701,7 +716,7 @@ export async function getQuestionsFromSupabase(sessionId?: string): Promise<Ques
     sessionVotesMap = new Map(
       ((votes as VoteRow[]) ?? []).map((v) => [
         v.question_id,
-        { choice: v.choice ?? null, optionId: (v as any).option_id ?? null },
+        { choice: v.choice ?? null, optionId: v.option_id ?? null },
       ])
     );
   }
@@ -759,7 +774,7 @@ export async function getQuestionsVotedByUserFromSupabase(options: {
       perQuestion.set(v.question_id, {
         question_id: v.question_id,
         choice: v.choice ?? null,
-        optionId: (v as any).option_id ?? null,
+        optionId: v.option_id ?? null,
         created_at: createdAt,
       });
     }
@@ -911,7 +926,7 @@ export async function getQuestionsPageFromSupabase(options: {
     sessionVotesMap = new Map(
       voteRows.map((v) => [
         v.question_id,
-        { choice: v.choice ?? null, optionId: (v as any).option_id ?? null },
+        { choice: v.choice ?? null, optionId: v.option_id ?? null },
       ])
     );
 
@@ -971,17 +986,18 @@ export async function getQuestionsPageFromSupabase(options: {
       throw new Error(`Supabase getQuestionsPage (UserVotesForItems) fehlgeschlagen: ${userVotesError.message}`);
     }
 
-    for (const row of (userVotes as any[]) ?? []) {
-      const qid = String((row as any)?.question_id ?? "");
+    for (const row of (userVotes as VoteRow[]) ?? []) {
+      const qid = String(row.question_id ?? "");
       if (!qid) continue;
       // Bei mehreren Votes (Legacy) nimmt die Map durch order(created_at desc) automatisch den neuesten.
       if (map.has(qid)) continue;
-      map.set(qid, { choice: (row as any)?.choice ?? null, optionId: (row as any)?.option_id ?? null });
+      map.set(qid, { choice: row.choice ?? null, optionId: row.option_id ?? null });
     }
     return map;
   };
 
-  const applyFilters = (query: any) => {
+  const applyFilters = <T,>(source: T): T => {
+    let query = source as unknown as SupabaseFilterBuilderLike;
     query = query.not("status", "eq", "archived");
     query = query.eq("visibility", "public");
     // Abgelaufene Fragen sollen nicht im Feed auftauchen.
@@ -1034,7 +1050,7 @@ export async function getQuestionsPageFromSupabase(options: {
       query = query.not("id", "in", inList);
     }
 
-    return query;
+    return query as unknown as T;
   };
 
   const scoreTitle = (title: string) => {
@@ -1130,13 +1146,13 @@ export async function getQuestionsPageFromSupabase(options: {
       .filter((x) => x.score > 0)
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        const br = Number((b.row as any).ranking_score ?? 0);
-        const ar = Number((a.row as any).ranking_score ?? 0);
+        const br = Number(b.row.ranking_score ?? 0);
+        const ar = Number(a.row.ranking_score ?? 0);
         if (br !== ar) return br - ar;
-        const bc = String((b.row as any).created_at ?? "");
-        const ac = String((a.row as any).created_at ?? "");
+        const bc = String(b.row.created_at ?? "");
+        const ac = String(a.row.created_at ?? "");
         if (bc !== ac) return bc < ac ? -1 : 1;
-        return String((b.row as any).id ?? "").localeCompare(String((a.row as any).id ?? ""), "de");
+        return String(b.row.id ?? "").localeCompare(String(a.row.id ?? ""), "de");
       });
 
     const picked = scored.slice(0, limit).map((x) => x.row);
@@ -1244,11 +1260,11 @@ export async function getQuestionByIdFromSupabase(
       if (voteError) {
         throw new Error(`Supabase getQuestionById (Vote) fehlgeschlagen: ${voteError.message}`);
       }
-      const voteRow = ((voteRows as any[]) ?? [])[0] ?? null;
+      const voteRow = ((voteRows as VoteRow[]) ?? [])[0] ?? null;
       if (!voteRow) return undefined;
       return {
-        choice: (voteRow as any).choice ?? null,
-        optionId: (voteRow as any).option_id ?? null,
+        choice: voteRow.choice ?? null,
+        optionId: voteRow.option_id ?? null,
       };
     })(),
     (async (): Promise<SessionVote | undefined> => {
@@ -1264,9 +1280,9 @@ export async function getQuestionByIdFromSupabase(
       if (voteError) {
         throw new Error(`Supabase getQuestionById (UserVote) fehlgeschlagen: ${voteError.message}`);
       }
-      const voteRow = ((voteRows as any[]) ?? [])[0] ?? null;
+      const voteRow = ((voteRows as VoteRow[]) ?? [])[0] ?? null;
       if (!voteRow) return undefined;
-      return { choice: (voteRow as any).choice ?? null, optionId: (voteRow as any).option_id ?? null };
+      return { choice: voteRow.choice ?? null, optionId: voteRow.option_id ?? null };
     })(),
   ]);
 
@@ -1319,7 +1335,8 @@ export async function getPollByShareIdFromSupabase(options: {
           throw new Error(`Supabase getPollByShareId (vote) fehlgeschlagen: ${voteError.message}`);
         }
         if (!voteRow) return undefined;
-        return { choice: (voteRow as any).choice ?? null, optionId: (voteRow as any).option_id ?? null };
+        const typedVoteRow = voteRow as Pick<VoteRow, "choice" | "option_id">;
+        return { choice: typedVoteRow.choice ?? null, optionId: typedVoteRow.option_id ?? null };
       })(),
     ]);
 
@@ -1413,12 +1430,12 @@ export async function getPollByShareIdFromSupabase(options: {
     const { data: reviewRow, error: reviewError } = await supabase
       .from("draft_reviews")
       .select("id")
-      .eq("draft_id", (draftRow as any).id)
+      .eq("draft_id", (draftRow as DraftRow).id)
       .eq(userId ? "reviewer_user_id" : "session_id", userId ?? sessionId)
       .maybeSingle();
 
     if (reviewError) {
-      const code = (reviewError as any).code as string | undefined;
+      const code = reviewError.code;
       if (code !== "42P01") {
         throw new Error(`Supabase getPollByShareId (draft review) fehlgeschlagen: ${reviewError.message}`);
       }
@@ -1461,15 +1478,17 @@ export async function voteOnQuestionInSupabase(
       alreadyVoted: Boolean(atomicResult),
     };
   }
-  const atomicMessage = String((atomicError as any)?.message ?? "");
-  const err = new Error(
-    atomicMessage.includes("question_closed")
-      ? "Diese Abstimmung ist bereits beendet."
-      : atomicMessage.includes("question_not_found")
-        ? "Frage nicht gefunden."
-        : "Deine Stimme konnte nicht sicher gespeichert werden."
+  const atomicMessage = atomicError.message;
+  const err = Object.assign(
+    new Error(
+      atomicMessage.includes("question_closed")
+        ? "Diese Abstimmung ist bereits beendet."
+        : atomicMessage.includes("question_not_found")
+          ? "Frage nicht gefunden."
+          : "Deine Stimme konnte nicht sicher gespeichert werden."
+    ),
+    { status: atomicMessage.includes("question_not_found") ? 404 : atomicMessage.includes("question_closed") ? 409 : 500 }
   );
-  (err as any).status = atomicMessage.includes("question_not_found") ? 404 : atomicMessage.includes("question_closed") ? 409 : 500;
   throw err;
 }
 
@@ -1495,17 +1514,27 @@ export async function voteOnQuestionOptionInSupabase(options: {
       alreadyVoted: Boolean(atomicResult),
     };
   }
-  const atomicMessage = String((atomicError as any)?.message ?? "");
-  const err = new Error(
-    atomicMessage.includes("question_closed")
-      ? "Diese Abstimmung ist bereits beendet."
-      : atomicMessage.includes("question_not_found")
-        ? "Frage nicht gefunden."
-        : atomicMessage.includes("invalid_option")
-          ? "Ungültige Antwortoption."
-          : "Deine Stimme konnte nicht sicher gespeichert werden."
+  const atomicMessage = atomicError.message;
+  const err = Object.assign(
+    new Error(
+      atomicMessage.includes("question_closed")
+        ? "Diese Abstimmung ist bereits beendet."
+        : atomicMessage.includes("question_not_found")
+          ? "Frage nicht gefunden."
+          : atomicMessage.includes("invalid_option")
+            ? "Ungültige Antwortoption."
+            : "Deine Stimme konnte nicht sicher gespeichert werden."
+    ),
+    {
+      status: atomicMessage.includes("question_not_found")
+        ? 404
+        : atomicMessage.includes("question_closed")
+          ? 409
+          : atomicMessage.includes("invalid_option")
+            ? 400
+            : 500,
+    }
   );
-  (err as any).status = atomicMessage.includes("question_not_found") ? 404 : atomicMessage.includes("question_closed") ? 409 : atomicMessage.includes("invalid_option") ? 400 : 500;
   throw err;
 }
 
@@ -1516,8 +1545,8 @@ export async function incrementViewsForQuestionInSupabase(questionId: string): P
     p_question_id: questionId,
   });
   if (!atomicError) return;
-  const atomicMessage = String((atomicError as any)?.message ?? "");
-  const atomicCode = String((atomicError as any)?.code ?? "");
+  const atomicMessage = atomicError.message;
+  const atomicCode = atomicError.code;
   if (atomicCode !== "PGRST202" && !atomicMessage.includes("increment_question_views")) {
     throw new Error("Supabase View-Update fehlgeschlagen.");
   }
@@ -1533,7 +1562,7 @@ export async function incrementViewsForQuestionInSupabase(questionId: string): P
   }
   if (!row) return;
 
-  const current = (row as any).views ?? 0;
+  const current = (row as { views: number | null }).views ?? 0;
   const next = Math.max(0, Number(current) || 0) + 1;
   const { error: updateError } = await supabase
     .from("questions")
@@ -1721,13 +1750,13 @@ export async function getDraftsPageFromSupabase(options: {
       .limit(MAX_REVIEWED_DRAFT_IDS_FOR_FILTER);
 
     if (reviewsError) {
-      const code = (reviewsError as any)?.code as string | undefined;
+      const code = reviewsError.code;
       if (code !== "42P01") {
         throw new Error(`Supabase getDraftsPage (DraftReviews) fehlgeschlagen: ${reviewsError.message}`);
       }
     } else {
-      reviewedDraftIds = ((reviews as any[]) ?? [])
-        .map((r) => String((r as any).draft_id ?? ""))
+      reviewedDraftIds = ((reviews as Array<{ draft_id: string | null }>) ?? [])
+        .map((r) => String(r.draft_id ?? ""))
         .filter((id) => id.length > 0);
     }
   }
@@ -1736,7 +1765,8 @@ export async function getDraftsPageFromSupabase(options: {
     return { items: [], total: 0, nextCursor: null };
   }
 
-  const applyFilters = (query: any) => {
+  const applyFilters = <T,>(source: T): T => {
+    let query = source as unknown as SupabaseFilterBuilderLike;
     query = query.eq("visibility", "public");
 
     if (status && status !== "all") {
@@ -1764,7 +1794,7 @@ export async function getDraftsPageFromSupabase(options: {
       }
     }
 
-    return query;
+    return query as unknown as T;
   };
 
   const scoreTitle = (title: string) => {
@@ -1834,10 +1864,10 @@ export async function getDraftsPageFromSupabase(options: {
       .filter((x) => x.score > 0)
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        const bc = String((b.row as any).created_at ?? "");
-        const ac = String((a.row as any).created_at ?? "");
+        const bc = String(b.row.created_at ?? "");
+        const ac = String(a.row.created_at ?? "");
         if (bc !== ac) return bc < ac ? -1 : 1;
-        return String((b.row as any).id ?? "").localeCompare(String((a.row as any).id ?? ""), "de");
+        return String(b.row.id ?? "").localeCompare(String(a.row.id ?? ""), "de");
       });
 
     const picked = scored.slice(0, limit).map((x) => x.row);
@@ -1979,7 +2009,7 @@ export async function createDraftInSupabase(input: {
       throw new Error(`Supabase createDraft (draft_options) fehlgeschlagen: ${optionsError.message}`);
     }
 
-    const options = ((insertedOptions as any[]) ?? [])
+    const options = ((insertedOptions as DraftOptionRow[]) ?? [])
       .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
       .map((opt) => ({
         id: String(opt.id),
@@ -2117,7 +2147,7 @@ export async function createLinkOnlyQuestionInSupabase(input: {
       throw new Error(`Supabase createLinkOnlyQuestion (question_options) fehlgeschlagen: ${optionsError.message}`);
     }
 
-    const options = ((insertedOptions as any[]) ?? [])
+    const options = ((insertedOptions as QuestionOptionRow[]) ?? [])
       .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
       .map((opt) => ({
         id: String(opt.id),
@@ -2251,8 +2281,7 @@ export async function voteOnDraftInSupabase(
   if (Number.isFinite(createdMs)) {
     const diffHours = (Date.now() - createdMs) / (1000 * 60 * 60);
     if (diffHours >= reviewHours) {
-      const err = new Error("Review-Zeitraum abgelaufen.");
-      (err as any).status = 410;
+      const err = Object.assign(new Error("Review-Zeitraum abgelaufen."), { status: 410 });
       throw err;
     }
   }
@@ -2264,12 +2293,12 @@ export async function voteOnDraftInSupabase(
     p_choice: choice,
   });
   if (!atomicError) {
-    const atomicRow = Array.isArray(atomicData) ? atomicData[0] : atomicData;
-    const alreadyVoted = Boolean((atomicRow as any)?.already_voted);
+    const atomicRow = (Array.isArray(atomicData) ? atomicData[0] : atomicData) as DraftReviewAtomicRow | null;
+    const alreadyVoted = Boolean(atomicRow?.already_voted);
     const effectiveRow = {
       ...draftRow,
-      votes_for: Number((atomicRow as any)?.votes_for ?? draftRow.votes_for ?? 0),
-      votes_against: Number((atomicRow as any)?.votes_against ?? draftRow.votes_against ?? 0),
+      votes_for: Number(atomicRow?.votes_for ?? draftRow.votes_for ?? 0),
+      votes_against: Number(atomicRow?.votes_against ?? draftRow.votes_against ?? 0),
     } as DraftRow;
 
     if (!alreadyVoted) await maybePromoteDraftInSupabase(effectiveRow);
@@ -2284,23 +2313,27 @@ export async function voteOnDraftInSupabase(
     return { draft: mapDraftRow(finalRow, optionsMap.get(finalRow.id)), alreadyVoted };
   }
 
-  const atomicMessage = String((atomicError as any)?.message ?? "");
-  const err = new Error(
-    atomicMessage.includes("review_expired")
-      ? "Review-Zeitraum abgelaufen."
-      : atomicMessage.includes("self_review_not_allowed")
-        ? "Du kannst deinen eigenen Vorschlag nicht bewerten."
-        : atomicMessage.includes("draft_not_found")
-          ? "Draft nicht gefunden."
-          : "Review konnte nicht sicher gespeichert werden."
+  const atomicMessage = atomicError.message;
+  const err = Object.assign(
+    new Error(
+      atomicMessage.includes("review_expired")
+        ? "Review-Zeitraum abgelaufen."
+        : atomicMessage.includes("self_review_not_allowed")
+          ? "Du kannst deinen eigenen Vorschlag nicht bewerten."
+          : atomicMessage.includes("draft_not_found")
+            ? "Draft nicht gefunden."
+            : "Review konnte nicht sicher gespeichert werden."
+    ),
+    {
+      status: atomicMessage.includes("review_expired")
+        ? 410
+        : atomicMessage.includes("self_review_not_allowed")
+          ? 403
+          : atomicMessage.includes("draft_not_found")
+            ? 404
+            : 500,
+    }
   );
-  (err as any).status = atomicMessage.includes("review_expired")
-    ? 410
-    : atomicMessage.includes("self_review_not_allowed")
-      ? 403
-      : atomicMessage.includes("draft_not_found")
-        ? 404
-        : 500;
   throw err;
 }
 export async function adminAcceptDraftInSupabase(id: string): Promise<Draft | null> {

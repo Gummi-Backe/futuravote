@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { categories } from "@/app/data/mock";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -37,7 +38,7 @@ export type QuestionSuggestion = {
   sources: string[];
 };
 
-function safeJsonFromText(text: string): any | null {
+function safeJsonFromText(text: string): unknown {
   const cleaned = text
     .trim()
     .replace(/^```(?:json)?/i, "")
@@ -120,7 +121,7 @@ function safeJsonFromText(text: string): any | null {
   if (keyIdx >= 0) {
     const arrayStart = cleaned.indexOf("[", keyIdx);
     if (arrayStart >= 0) {
-      const objects: any[] = [];
+      const objects: unknown[] = [];
       let inString = false;
       let escaping = false;
       let depth = 0;
@@ -168,7 +169,7 @@ function safeJsonFromText(text: string): any | null {
 }
 
 function normalizeSuggestion(
-  raw: any,
+  raw: unknown,
   defaults?: {
     isResolvable?: boolean;
     answerMode?: "binary" | "options";
@@ -176,14 +177,15 @@ function normalizeSuggestion(
     withLongDescription?: boolean;
   },
 ): QuestionSuggestion | null {
+  const data = isRecord(raw) ? raw : {};
   const countWords = (value: string) => value.split(/\s+/).filter(Boolean).length;
-  const title = typeof raw?.title === "string" ? raw.title.trim() : "";
-  const description = typeof raw?.description === "string" ? raw.description.trim() : "";
-  const longDescription = typeof raw?.longDescription === "string" ? raw.longDescription.trim() : "";
-  const category = typeof raw?.category === "string" ? raw.category.trim() : "";
-  const region = typeof raw?.region === "string" ? raw.region.trim() : "";
+  const title = typeof data.title === "string" ? data.title.trim() : "";
+  const description = typeof data.description === "string" ? data.description.trim() : "";
+  const longDescription = typeof data.longDescription === "string" ? data.longDescription.trim() : "";
+  const category = typeof data.category === "string" ? data.category.trim() : "";
+  const region = typeof data.region === "string" ? data.region.trim() : "";
 
-  const isResolvableRaw = raw?.isResolvable ?? raw?.is_resolvable;
+  const isResolvableRaw = data.isResolvable ?? data.is_resolvable;
   const isResolvable =
     typeof isResolvableRaw === "boolean"
       ? isResolvableRaw
@@ -191,7 +193,7 @@ function normalizeSuggestion(
         ? defaults.isResolvable
         : true;
 
-  const answerModeRaw = raw?.answerMode ?? raw?.answer_mode;
+  const answerModeRaw = data.answerMode ?? data.answer_mode;
   const answerMode: "binary" | "options" =
     answerModeRaw === "options" || answerModeRaw === "binary"
       ? answerModeRaw
@@ -199,7 +201,7 @@ function normalizeSuggestion(
         ? "options"
         : "binary";
 
-  const optionsRaw: unknown[] = Array.isArray(raw?.options) ? (raw.options as unknown[]) : [];
+  const optionsRaw: unknown[] = Array.isArray(data.options) ? data.options : [];
   const optionsCount =
     typeof defaults?.optionsCount === "number" ? Math.max(2, Math.min(6, Math.round(defaults.optionsCount))) : null;
   const optionsLimit = optionsCount ?? 6;
@@ -225,23 +227,23 @@ function normalizeSuggestion(
     return out;
   })();
 
-  const reviewHoursRaw = Number(raw?.reviewHours);
+  const reviewHoursRaw = Number(data.reviewHours);
   const reviewHours = Number.isFinite(reviewHoursRaw)
     ? Math.max(12, Math.min(24 * 30, Math.round(reviewHoursRaw)))
     : 72;
 
-  const pollEndAt = typeof raw?.pollEndAt === "string" ? raw.pollEndAt.trim() : "";
-  const resolutionCriteria = typeof raw?.resolutionCriteria === "string" ? raw.resolutionCriteria.trim() : "";
-  const resolutionSource = typeof raw?.resolutionSource === "string" ? raw.resolutionSource.trim() : "";
-  const resolutionDeadlineAt = typeof raw?.resolutionDeadlineAt === "string" ? raw.resolutionDeadlineAt.trim() : "";
+  const pollEndAt = typeof data.pollEndAt === "string" ? data.pollEndAt.trim() : "";
+  const resolutionCriteria = typeof data.resolutionCriteria === "string" ? data.resolutionCriteria.trim() : "";
+  const resolutionSource = typeof data.resolutionSource === "string" ? data.resolutionSource.trim() : "";
+  const resolutionDeadlineAt = typeof data.resolutionDeadlineAt === "string" ? data.resolutionDeadlineAt.trim() : "";
 
-  const resolutionSourcesRaw: unknown[] = Array.isArray(raw?.resolutionSources) ? (raw.resolutionSources as unknown[]) : [];
+  const resolutionSourcesRaw: unknown[] = Array.isArray(data.resolutionSources) ? data.resolutionSources : [];
   const resolutionSources = resolutionSourcesRaw
     .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
     .filter(Boolean)
     .slice(0, 8);
 
-  const sourcesRaw: unknown[] = Array.isArray(raw?.sources) ? (raw.sources as unknown[]) : [];
+  const sourcesRaw: unknown[] = Array.isArray(data.sources) ? data.sources : [];
   const sources = sourcesRaw
     .map((s: unknown) => (typeof s === "string" ? s.trim() : ""))
     .filter(Boolean);
@@ -258,7 +260,7 @@ function normalizeSuggestion(
     if (dedupedSources.length >= 8) break;
   }
 
-  const imagePrompt = typeof raw?.imagePrompt === "string" ? raw.imagePrompt.trim() : "";
+  const imagePrompt = typeof data.imagePrompt === "string" ? data.imagePrompt.trim() : "";
   const normalizedImagePrompt = imagePrompt.length >= 20 ? imagePrompt.slice(0, 900) : "";
   const wantsLongDescription = defaults?.withLongDescription === true;
 
@@ -454,14 +456,21 @@ async function callPerplexity(opts: { apiKey: string; model: string; prompt: str
     }),
   });
 
-  const json = await res.json().catch(() => null);
+  const json: unknown = await res.json().catch(() => null);
+  const responseData = isRecord(json) ? json : {};
   if (!res.ok) {
-    const msg = (json as any)?.error?.message ?? (json as any)?.message ?? `Perplexity Fehler (${res.status})`;
+    const responseError = isRecord(responseData.error) ? responseData.error : {};
+    const msg =
+      (typeof responseError.message === "string" ? responseError.message : null) ??
+      (typeof responseData.message === "string" ? responseData.message : null) ??
+      `Perplexity Fehler (${res.status})`;
     return { ok: false as const, error: msg };
   }
 
-  const content = (json as any)?.choices?.[0]?.message?.content;
-  const finishReason = String((json as any)?.choices?.[0]?.finish_reason ?? "");
+  const firstChoice = Array.isArray(responseData.choices) && isRecord(responseData.choices[0]) ? responseData.choices[0] : {};
+  const responseMessage = isRecord(firstChoice.message) ? firstChoice.message : {};
+  const content = responseMessage.content;
+  const finishReason = String(firstChoice.finish_reason ?? "");
   if (typeof content !== "string" || !content.trim()) {
     return { ok: false as const, error: "Perplexity hat keine Antwort geliefert." };
   }
@@ -585,8 +594,8 @@ export async function POST(request: Request) {
     const parsed = safeJsonFromText(resp.content);
     const rawSuggestions: unknown[] = Array.isArray(parsed)
       ? (parsed as unknown[])
-      : Array.isArray((parsed as any)?.suggestions)
-        ? (((parsed as any).suggestions as unknown[]) ?? [])
+      : isRecord(parsed) && Array.isArray(parsed.suggestions)
+        ? parsed.suggestions
         : [];
 
     const normalized = rawSuggestions

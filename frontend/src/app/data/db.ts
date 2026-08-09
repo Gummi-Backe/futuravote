@@ -191,7 +191,7 @@ if (!hasQuestions) {
       ...q,
       region: q.region ?? null,
       imageUrl: q.imageUrl ?? null,
-      imageCredit: (q as any).imageCredit ?? null,
+      imageCredit: q.imageCredit ?? null,
       yesVotes,
       noVotes,
       views: q.views ?? 0,
@@ -352,7 +352,7 @@ if (!hasDrafts) {
       ...d,
       region: d.region ?? null,
       imageUrl: d.imageUrl ?? null,
-      imageCredit: (d as any).imageCredit ?? null,
+      imageCredit: d.imageCredit ?? null,
     });
   }
 }

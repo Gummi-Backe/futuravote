@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getOAuthClientConfig, isAllowedRedirectUri, randomToken, sha256Hex } from "../_lib";
+import { getErrorMessage } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -137,8 +138,8 @@ export async function GET(request: Request) {
     const res = NextResponse.redirect(u.toString(), { status: 302 });
     res.headers.set("Cache-Control", "no-store");
     return res;
-  } catch (err: any) {
-    const msg = typeof err?.message === "string" ? err.message : "unknown";
+  } catch (err: unknown) {
+    const msg = getErrorMessage(err, "unknown");
     return buildRedirectError(redirectUri, state, "server_error", msg);
   }
 }

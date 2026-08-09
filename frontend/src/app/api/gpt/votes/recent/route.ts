@@ -4,6 +4,17 @@ import { guardGptRateLimit, withCacheHeaders } from "../../_lib";
 
 export const revalidate = 0;
 
+type RecentVoteRow = {
+  created_at: string | null;
+  question_id: string | null;
+  choice: string | null;
+  questions:
+    | { title: string | null; category: string | null; answer_mode: string | null }
+    | Array<{ title: string | null; category: string | null; answer_mode: string | null }>
+    | null;
+  question_options: { label: string | null } | Array<{ label: string | null }> | null;
+};
+
 export async function GET(request: Request) {
   const limited = guardGptRateLimit(request);
   if (limited) return limited;
@@ -36,16 +47,19 @@ export async function GET(request: Request) {
   try {
     const { data: rows } = await query;
 
-    const items =
-      (rows as any[])?.map((row) => ({
+    const items = ((rows ?? []) as unknown as RecentVoteRow[]).map((row) => {
+      const question = Array.isArray(row.questions) ? row.questions[0] : row.questions;
+      const option = Array.isArray(row.question_options) ? row.question_options[0] : row.question_options;
+      return {
         createdAt: typeof row.created_at === "string" ? row.created_at : null,
         questionId: typeof row.question_id === "string" ? row.question_id : null,
-        questionTitle: typeof row?.questions?.title === "string" ? row.questions.title : null,
-        category: typeof row?.questions?.category === "string" ? row.questions.category : null,
-        answerMode: typeof row?.questions?.answer_mode === "string" ? row.questions.answer_mode : null,
+        questionTitle: typeof question?.title === "string" ? question.title : null,
+        category: typeof question?.category === "string" ? question.category : null,
+        answerMode: typeof question?.answer_mode === "string" ? question.answer_mode : null,
         choice: typeof row.choice === "string" ? row.choice : null,
-        optionLabel: typeof row?.question_options?.label === "string" ? row.question_options.label : null,
-      })) ?? [];
+        optionLabel: typeof option?.label === "string" ? option.label : null,
+      };
+    });
 
     const nextCursor =
       items.length > 0 && items[items.length - 1]?.createdAt ? String(items[items.length - 1].createdAt) : null;

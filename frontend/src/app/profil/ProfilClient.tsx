@@ -85,9 +85,9 @@ function writeCache(user: UserMe, stats: ProfileStats) {
 function normalizeProfileStats(raw: unknown): ProfileStats | null {
   if (!isRecord(raw)) return null;
   const obj = raw as Record<string, unknown>;
-  const topCategories = Array.isArray(obj.topCategories) ? (obj.topCategories as any[]) : [];
-  const trackByCategory = Array.isArray(obj.trackByCategory) ? (obj.trackByCategory as any[]) : [];
-  const badges = Array.isArray(obj.badges) ? (obj.badges as any[]) : [];
+  const topCategories: unknown[] = Array.isArray(obj.topCategories) ? obj.topCategories : [];
+  const trackByCategory: unknown[] = Array.isArray(obj.trackByCategory) ? obj.trackByCategory : [];
+  const badges: unknown[] = Array.isArray(obj.badges) ? obj.badges : [];
 
   return {
     draftsTotal: Number(obj.draftsTotal ?? 0) || 0,
@@ -100,35 +100,44 @@ function normalizeProfileStats(raw: unknown): ProfileStats | null {
     trustScorePct: typeof obj.trustScorePct === "number" ? obj.trustScorePct : null,
     trustScoreSample: Number(obj.trustScoreSample ?? 0) || 0,
     topCategories: topCategories
-      .map((c) => ({
-        category: String((c as any).category ?? ""),
-        votes: Number((c as any).votes ?? 0) || 0,
-        yes: Number((c as any).yes ?? 0) || 0,
-        no: Number((c as any).no ?? 0) || 0,
-      }))
+      .map((c) => {
+        const row = isRecord(c) ? c : {};
+        return {
+          category: String(row.category ?? ""),
+          votes: Number(row.votes ?? 0) || 0,
+          yes: Number(row.yes ?? 0) || 0,
+          no: Number(row.no ?? 0) || 0,
+        };
+      })
       .filter((c) => c.category),
     trackTotal: Number(obj.trackTotal ?? 0) || 0,
     trackCorrect: Number(obj.trackCorrect ?? 0) || 0,
     trackIncorrect: Number(obj.trackIncorrect ?? 0) || 0,
     trackAccuracyPct: typeof obj.trackAccuracyPct === "number" ? obj.trackAccuracyPct : null,
     trackByCategory: trackByCategory
-      .map((r) => ({
-        category: String((r as any).category ?? ""),
-        total: Number((r as any).total ?? 0) || 0,
-        correct: Number((r as any).correct ?? 0) || 0,
-        incorrect: Number((r as any).incorrect ?? 0) || 0,
-        accuracyPct: typeof (r as any).accuracyPct === "number" ? (r as any).accuracyPct : null,
-      }))
+      .map((r) => {
+        const row = isRecord(r) ? r : {};
+        return {
+          category: String(row.category ?? ""),
+          total: Number(row.total ?? 0) || 0,
+          correct: Number(row.correct ?? 0) || 0,
+          incorrect: Number(row.incorrect ?? 0) || 0,
+          accuracyPct: typeof row.accuracyPct === "number" ? row.accuracyPct : null,
+        };
+      })
       .filter((r) => r.category),
     pointsTotal: Number(obj.pointsTotal ?? 0) || 0,
     pointsTier:
       obj.pointsTier === "bronze" || obj.pointsTier === "silver" || obj.pointsTier === "gold" ? obj.pointsTier : "none",
     badges: badges
-      .map((b) => ({
-        id: String((b as any).id ?? ""),
-        label: String((b as any).label ?? ""),
-        description: String((b as any).description ?? ""),
-      }))
+      .map((b) => {
+        const row = isRecord(b) ? b : {};
+        return {
+          id: String(row.id ?? ""),
+          label: String(row.label ?? ""),
+          description: String(row.description ?? ""),
+        };
+      })
       .filter((b) => b.id && b.label),
   };
 }
@@ -195,9 +204,10 @@ export function ProfilClient({ baseUrl }: { baseUrl: string }) {
         }),
       });
 
-      const data = (await res.json().catch(() => ({}))) as any;
+      const rawData: unknown = await res.json().catch(() => ({}));
+      const data = isRecord(rawData) ? rawData : {};
       if (!res.ok) {
-        setDeleteError(typeof data?.error === "string" ? data.error : "Account konnte nicht gelöscht werden.");
+        setDeleteError(typeof data.error === "string" ? data.error : "Account konnte nicht gelöscht werden.");
         return;
       }
 

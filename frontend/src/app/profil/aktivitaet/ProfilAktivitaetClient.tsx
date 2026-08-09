@@ -8,6 +8,7 @@ import { FormattedText } from "@/app/components/FormattedText";
 import type { Draft, Question } from "@/app/data/mock";
 import { getShortDescription } from "@/app/lib/descriptionText";
 import { PROFILE_ACTIVITY_CACHE_PREFIX } from "@/app/lib/profileCache";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type ViewConfig =
   | {
@@ -150,12 +151,12 @@ function DraftActivityCard({ draft }: { draft: Draft }) {
 function QuestionActivityCard({ question }: { question: QuestionWithUserVote }) {
   const answerMode = question.answerMode ?? "binary";
   const isOptions = answerMode === "options";
-  const voted = isOptions ? Boolean((question as any).userOptionId) : Boolean(question.userChoice);
+  const voted = isOptions ? Boolean(question.userOptionId) : Boolean(question.userChoice);
   const votedTooltip = voted
     ? isOptions
       ? (() => {
-          const optionId = String((question as any).userOptionId ?? "");
-          const label = optionId ? (question as any).options?.find((o: any) => o.id === optionId)?.label : null;
+          const optionId = String(question.userOptionId ?? "");
+          const label = optionId ? question.options?.find((o) => o.id === optionId)?.label : null;
           return label ? `Du hast abgestimmt: ${label}` : "Du hast abgestimmt";
         })()
       : question.userChoice === "yes"
@@ -309,15 +310,16 @@ export function ProfilAktivitaetClient() {
       url.searchParams.set("typ", typ);
       if (category) url.searchParams.set("category", category);
       const res = await fetch(url.toString(), { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as ActivityResponse | null;
+      const json: unknown = await res.json().catch(() => null);
       if (res.status === 401) {
         router.push("/auth");
         return;
       }
       if (!res.ok) {
-        throw new Error((json as any)?.error ?? "Profil-Aktivität konnte nicht geladen werden.");
+        throw new Error(isRecord(json) && typeof json.error === "string" ? json.error : "Profil-Aktivität konnte nicht geladen werden.");
       }
-      const payload = (json as ActivityResponse) ?? { error: "Profil-Aktivität konnte nicht geladen werden." };
+      if (!isRecord(json)) throw new Error("Profil-Aktivität konnte nicht geladen werden.");
+      const payload = json as unknown as ActivityResponse;
       applyResponse(payload);
       writeCache(payload);
       setUpdatedAt(Date.now());

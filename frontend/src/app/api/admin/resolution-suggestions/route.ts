@@ -4,6 +4,7 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { adminResolveQuestionInSupabase } from "@/app/data/dbSupabase";
 import { mutationRequestGuard } from "@/app/lib/requestSecurity";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -22,7 +23,18 @@ type SuggestionRow = {
   sources: string[] | null;
   model: string | null;
   created_at: string;
-  questions?: any;
+  questions?: SuggestionQuestionRow | SuggestionQuestionRow[] | null;
+};
+
+type SuggestionOptionRow = { id: string; label: string | null; sort_order?: number | null };
+
+type SuggestionQuestionRow = {
+  id: string;
+  title: string | null;
+  closes_at: string | null;
+  share_id: string | null;
+  answer_mode: string | null;
+  question_options?: SuggestionOptionRow[] | null;
 };
 
 function isStatus(v: string): v is Status {
@@ -70,7 +82,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: `Supabase Fehler: ${error.message}` }, { status: 500 });
   }
 
-  const suggestions = ((data ?? []) as any[]).map((r) => {
+  const suggestions = ((data ?? []) as SuggestionRow[]).map((r) => {
     const q = Array.isArray(r.questions) ? r.questions[0] ?? null : r.questions ?? null;
     return {
       id: String(r.id),
@@ -82,7 +94,7 @@ export async function GET(request: Request) {
       suggested_option_id: r.suggested_option_id ? String(r.suggested_option_id) : null,
       confidence: Number(r.confidence ?? 0) || 0,
       note: typeof r.note === "string" ? r.note : null,
-      sources: Array.isArray(r.sources) ? (r.sources as any[]).map((s) => String(s)) : null,
+      sources: Array.isArray(r.sources) ? r.sources.map((s) => String(s)) : null,
       model: typeof r.model === "string" ? r.model : null,
       created_at: String(r.created_at),
       questions: q
@@ -92,8 +104,8 @@ export async function GET(request: Request) {
             closes_at: q.closes_at ? String(q.closes_at) : null,
             share_id: q.share_id ? String(q.share_id) : null,
             answer_mode: q.answer_mode ? String(q.answer_mode) : null,
-            question_options: Array.isArray((q as any).question_options)
-              ? (q as any).question_options.map((o: any) => ({ id: String(o.id), label: String(o.label ?? "") }))
+            question_options: Array.isArray(q.question_options)
+              ? q.question_options.map((o) => ({ id: String(o.id), label: String(o.label ?? "") }))
               : [],
           }
         : null,
@@ -115,15 +127,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
   }
 
-  let body: any;
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
 
-  const id = String(body?.id ?? "").trim();
-  const action = String(body?.action ?? "").trim();
+  const bodyData = isRecord(body) ? body : {};
+  const id = String(bodyData.id ?? "").trim();
+  const action = String(bodyData.action ?? "").trim();
   if (!id || (action !== "apply" && action !== "dismiss")) {
     return NextResponse.json({ error: "ID oder Aktion fehlt/ungültig." }, { status: 400 });
   }
@@ -144,7 +157,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Vorschlag nicht gefunden." }, { status: 404 });
   }
 
-  const suggestion = row as any as SuggestionRow;
+  const suggestion = row as SuggestionRow;
   if (suggestion.status !== "pending") {
     return NextResponse.json({ error: "Vorschlag ist nicht mehr offen." }, { status: 400 });
   }
@@ -162,7 +175,7 @@ export async function POST(request: Request) {
 
   // apply
   const outcome = suggestion.suggested_outcome;
-  const suggestedOptionId = (suggestion as any).suggested_option_id ? String((suggestion as any).suggested_option_id) : null;
+  const suggestedOptionId = suggestion.suggested_option_id ? String(suggestion.suggested_option_id) : null;
   const resolvedOutcome = outcome === "yes" || outcome === "no" ? outcome : null;
   if (!suggestedOptionId && !resolvedOutcome) {
     return NextResponse.json({ error: "KI hat kein klares Ergebnis geliefert." }, { status: 400 });

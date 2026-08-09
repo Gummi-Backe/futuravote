@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const questions = await getQuestionsFromSupabase();
     return NextResponse.json({ ok: true, questions: questions.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "DB unavailable" },
       { status: 500 }

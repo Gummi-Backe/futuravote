@@ -7,8 +7,8 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
-      // Legacy Supabase mappings still use `any`. Keep this visible while allowing CI to block on behavioral errors.
-      "@typescript-eslint/no-explicit-any": "warn",
+      // Keep API and database boundaries explicit so unsafe types cannot silently return.
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
   {

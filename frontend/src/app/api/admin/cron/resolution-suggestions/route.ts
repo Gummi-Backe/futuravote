@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
+import { isRecord } from "@/app/lib/unknownValue";
 
 export const revalidate = 0;
 
@@ -13,14 +14,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nur Admins dürfen diese Route nutzen." }, { status: 403 });
   }
 
-  let body: any = null;
+  let body: unknown = null;
   try {
     body = await request.json();
   } catch {
     body = null;
   }
 
-  const limitRaw = Number(body?.limit ?? 25);
+  const limitRaw = Number(isRecord(body) ? body.limit ?? 25 : 25);
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(60, Math.trunc(limitRaw))) : 25;
 
   const origin = new URL(request.url).origin;
@@ -34,11 +35,14 @@ export async function POST(request: Request) {
     cache: "no-store",
   });
 
-  const json = (await res.json().catch(() => null)) as any;
+  const json: unknown = await res.json().catch(() => null);
+  const jsonData = isRecord(json) ? json : {};
   if (!res.ok) {
-    return NextResponse.json({ error: json?.error ?? "Cron konnte nicht ausgeführt werden.", details: json }, { status: res.status });
+    return NextResponse.json(
+      { error: typeof jsonData.error === "string" ? jsonData.error : "Cron konnte nicht ausgeführt werden.", details: json },
+      { status: res.status }
+    );
   }
 
   return NextResponse.json(json);
 }
-

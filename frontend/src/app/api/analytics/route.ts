@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getErrorCode } from "@/app/lib/unknownValue";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getFvSessionCookieOptions } from "@/app/lib/fvSessionCookie";
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      const code = (error as any).code as string | undefined;
+      const code = getErrorCode(error);
       if (code === "42P01") {
         const response = NextResponse.json(
           { ok: false, error: "Supabase table 'analytics_events' fehlt. Fuehre supabase/analytics_events.sql aus." },

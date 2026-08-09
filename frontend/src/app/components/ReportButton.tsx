@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { isRecord } from "@/app/lib/unknownValue";
 
 type ReportKind = "question" | "draft";
 type ReportReason = "spam" | "abuse" | "hate" | "misinfo" | "copyright" | "other";
@@ -80,16 +81,17 @@ export function ReportButton({
           pageUrl: typeof window !== "undefined" ? window.location.href : null,
         }),
       });
-      const json = (await res.json().catch(() => null)) as any;
-      if (res.ok && json?.ok) {
-        if (json?.duplicate) {
+      const parsed: unknown = await res.json().catch(() => null);
+      const json = isRecord(parsed) ? parsed : {};
+      if (res.ok && json.ok === true) {
+        if (json.duplicate === true) {
           setResult({ type: "duplicate", message: "Du hast diese Kachel bereits gemeldet. Danke!" });
         } else {
           setResult({ type: "ok", message: "Danke! Deine Meldung wurde gespeichert." });
         }
         return;
       }
-      const msg = json?.error ?? "Meldung konnte nicht gespeichert werden.";
+      const msg = typeof json.error === "string" ? json.error : "Meldung konnte nicht gespeichert werden.";
       setResult({ type: "error", message: msg });
     } catch {
       setResult({ type: "error", message: "Netzwerkfehler. Bitte versuche es erneut." });
@@ -208,4 +210,3 @@ export function ReportButton({
     </>
   );
 }
-

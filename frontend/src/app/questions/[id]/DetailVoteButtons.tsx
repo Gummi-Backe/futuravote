@@ -15,6 +15,14 @@ import type { PollOption } from "@/app/data/mock";
 
 type Choice = "yes" | "no";
 
+type VoteResponse = {
+  alreadyVoted?: boolean;
+  question?: {
+    userChoice?: unknown;
+    userOptionId?: unknown;
+  };
+};
+
 export function DetailVoteButtons({
   questionId,
   initialChoice,
@@ -95,7 +103,7 @@ export function DetailVoteButtons({
         return;
       }
 
-      const payload = (await res.json().catch(() => null)) as any;
+      const payload = (await res.json().catch(() => null)) as VoteResponse | null;
       if (payload?.alreadyVoted) {
         // Seriosität: pro Account nur eine Stimme – wir zeigen die echte gespeicherte Stimme an.
         const actual = payload?.question?.userChoice === "yes" || payload?.question?.userChoice === "no" ? payload.question.userChoice : prevChoice;
@@ -165,7 +173,7 @@ export function DetailVoteButtons({
         return;
       }
 
-      const payload = (await res.json().catch(() => null)) as any;
+      const payload = (await res.json().catch(() => null)) as VoteResponse | null;
       if (payload?.alreadyVoted) {
         const actual = typeof payload?.question?.userOptionId === "string" ? payload.question.userOptionId : prevOptionId;
         setOptionId(actual ?? null);

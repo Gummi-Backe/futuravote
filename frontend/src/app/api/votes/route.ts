@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getErrorStatus } from "@/app/lib/unknownValue";
 import {
   getQuestionByIdFromSupabase,
   voteOnQuestionInSupabase,
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unbekannter Fehler";
     console.error("Vote failed:", message);
-    const status = typeof (e as any)?.status === "number" ? (e as any).status : 500;
+    const status = getErrorStatus(e);
     const publicMessage =
       status < 500 && message
         ? message

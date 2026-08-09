@@ -72,7 +72,8 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as TrendResponse | { error?: string } | null;
         if (!res.ok) {
-          throw new Error((json as any)?.error ?? "Trend konnte nicht geladen werden.");
+          const message = json && "error" in json && typeof json.error === "string" ? json.error : "Trend konnte nicht geladen werden.";
+          throw new Error(message);
         }
         return json as TrendResponse;
       })
@@ -408,7 +409,7 @@ export function TrendSparkline({ questionId }: { questionId: string }) {
         chartRef.current = null;
       }
     };
-  }, [datasets, error, labels, loading, metric, totalSum, yMaxValue]);
+  }, [answerMode, datasets, error, labels, loading, metric, totalSum, yMaxValue]);
 
   return (
     <div className="flex min-w-0 flex-col gap-3">

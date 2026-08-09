@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ShareLinkButton } from "@/app/components/ShareLinkButton";
 import { PROFILE_LISTS_CACHE_KEY } from "@/app/lib/profileCache";
 
@@ -43,6 +43,18 @@ type FavoriteQuestion = {
   resolvedAt: string | null;
 };
 
+type ProfileListsCache = {
+  cachedAt: number;
+  drafts: MyDraft[] | null;
+  privateQuestions: PrivateQuestion[] | null;
+  privateDrafts: PrivateDraft[] | null;
+  favorites: FavoriteQuestion[] | null;
+};
+
+type ProfileListsCacheValue = Omit<ProfileListsCache, "cachedAt">;
+
+const LISTS_CACHE_TTL_MS = 30_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -52,6 +64,28 @@ function formatDate(value: string | null) {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function readListsCache(): ProfileListsCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PROFILE_LISTS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || typeof parsed.cachedAt !== "number") return null;
+    return parsed as unknown as ProfileListsCache;
+  } catch {
+    return null;
+  }
+}
+
+function writeListsCache(value: ProfileListsCacheValue) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PROFILE_LISTS_CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), ...value }));
+  } catch {
+    // ignore
+  }
 }
 
 function StatusChip({ status }: { status: string }) {
@@ -85,42 +119,6 @@ function SkeletonRows({ rows = 3 }: { rows?: number }) {
 }
 
 export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
-  const LISTS_CACHE_TTL_MS = 30_000;
-
-  const readListsCache = () => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = window.sessionStorage.getItem(PROFILE_LISTS_CACHE_KEY);
-      if (!raw) return null;
-      const parsed: unknown = JSON.parse(raw);
-      if (!isRecord(parsed)) return null;
-      if (typeof parsed.cachedAt !== "number") return null;
-      return parsed as unknown as {
-        cachedAt: number;
-        drafts: MyDraft[] | null;
-        privateQuestions: PrivateQuestion[] | null;
-        privateDrafts: PrivateDraft[] | null;
-        favorites: FavoriteQuestion[] | null;
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const writeListsCache = (value: {
-    drafts: MyDraft[] | null;
-    privateQuestions: PrivateQuestion[] | null;
-    privateDrafts: PrivateDraft[] | null;
-    favorites: FavoriteQuestion[] | null;
-  }) => {
-    if (typeof window === "undefined") return;
-    try {
-      window.sessionStorage.setItem(PROFILE_LISTS_CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), ...value }));
-    } catch {
-      // ignore
-    }
-  };
-
   const [activeTab, setActiveTab] = useState<Tab>("drafts");
   const [drafts, setDrafts] = useState<MyDraft[] | null>(null);
   const [privateQuestions, setPrivateQuestions] = useState<PrivateQuestion[] | null>(null);
@@ -180,7 +178,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
     }
   }, []);
 
-  const fetchDrafts = async (mode: "foreground" | "background") => {
+  const fetchDrafts = useCallback(async (mode: "foreground" | "background") => {
     if (inflightRef.current.drafts) return;
     inflightRef.current.drafts = true;
     if (mode === "foreground") {
@@ -209,9 +207,9 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
       if (mode === "foreground") setLoading(null);
       inflightRef.current.drafts = false;
     }
-  };
+  }, []);
 
-  const fetchPrivate = async (mode: "foreground" | "background") => {
+  const fetchPrivate = useCallback(async (mode: "foreground" | "background") => {
     if (inflightRef.current.private) return;
     inflightRef.current.private = true;
     if (mode === "foreground") {
@@ -242,9 +240,9 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
       if (mode === "foreground") setLoading(null);
       inflightRef.current.private = false;
     }
-  };
+  }, []);
 
-  const fetchFavorites = async (mode: "foreground" | "background") => {
+  const fetchFavorites = useCallback(async (mode: "foreground" | "background") => {
     if (inflightRef.current.favorites) return;
     inflightRef.current.favorites = true;
     if (mode === "foreground") {
@@ -273,7 +271,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
       if (mode === "foreground") setLoading(null);
       inflightRef.current.favorites = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
     // SWR: beim Tab-Wechsel immer refreshen (cache bleibt sichtbar)
@@ -304,7 +302,7 @@ export function ProfilePollTabs({ baseUrl }: { baseUrl: string }) {
       else void fetchFavorites("background");
     }, remaining);
     return () => window.clearTimeout(timer);
-  }, [activeTab, draftsUpdatedAt, privateUpdatedAt, favoritesUpdatedAt]);
+  }, [activeTab, draftsUpdatedAt, favoritesUpdatedAt, fetchDrafts, fetchFavorites, fetchPrivate, privateUpdatedAt]);
 
   const setTab = (tab: Tab) => {
     setActiveTab(tab);
