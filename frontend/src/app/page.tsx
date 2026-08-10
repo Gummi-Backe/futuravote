@@ -29,6 +29,9 @@ import {
 
 const QUESTIONS_PAGE_SIZE = 8;
 const DRAFTS_PAGE_SIZE = 6;
+// Fetch the next page before the user reaches the visible end of the feed.
+const FEED_PREFETCH_ROOT_MARGIN = "0px 0px 1200px 0px";
+const FEED_LOADING_PLACEHOLDER_COUNT = 2;
 const REVIEWED_DRAFTS_STORAGE_KEY = "fv_reviewed_drafts_v1";
 const REVIEWED_DRAFT_CHOICES_STORAGE_KEY = "fv_reviewed_draft_choices_v1";
 const FEED_SCROLL_ANCHOR_STORAGE_KEY = "fv_feed_scroll_anchor_v1";
@@ -1708,7 +1711,7 @@ export default function Home() {
           setLoadingMoreQuestions(false);
         }
       })();
-    });
+    }, { rootMargin: FEED_PREFETCH_ROOT_MARGIN });
     observer.observe(target);
     return () => observer.disconnect();
   }, [
@@ -1777,7 +1780,7 @@ export default function Home() {
           setLoadingMoreAnsweredQuestions(false);
         }
       })();
-    });
+    }, { rootMargin: FEED_PREFETCH_ROOT_MARGIN });
 
     observer.observe(target);
     return () => observer.disconnect();
@@ -1854,7 +1857,7 @@ export default function Home() {
           setLoadingMoreDrafts(false);
         }
       })();
-    });
+    }, { rootMargin: FEED_PREFETCH_ROOT_MARGIN });
     observer.observe(target);
     return () => observer.disconnect();
   }, [
@@ -3300,6 +3303,16 @@ export default function Home() {
                      />
                    ))}
             </div>
+            {loadingMoreQuestions ? (
+              <div role="status" aria-live="polite">
+                <span className="sr-only">Weitere Umfragen werden geladen.</span>
+                <div aria-hidden="true" className="grid gap-5 md:grid-cols-2">
+                  {Array.from({ length: FEED_LOADING_PLACEHOLDER_COUNT }).map((_, idx) => (
+                    <FeedCardSkeleton key={"q-more-skel-" + idx} variant="question" />
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {!loading && !error && visibleQuestions.length === 0 ? (
               <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-5 text-sm text-slate-200 shadow-xl shadow-black/20">
                 <div className="flex items-start gap-3">
@@ -3443,6 +3456,16 @@ export default function Home() {
                     />
                   ))}
           </div>
+          {loadingMoreDrafts ? (
+            <div role="status" aria-live="polite">
+              <span className="sr-only">Weitere Vorschlaege werden geladen.</span>
+              <div aria-hidden="true" className="grid gap-5 md:grid-cols-2">
+                {Array.from({ length: FEED_LOADING_PLACEHOLDER_COUNT }).map((_, idx) => (
+                  <FeedCardSkeleton key={"d-more-skel-" + idx} variant="draft" />
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div ref={draftsEndRef} className="h-1" />
         </section>
         ) : null}
