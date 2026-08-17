@@ -63,6 +63,7 @@ requireText("public review URL", publicUrls, "/review/drafts/");
 requireText("private share URL", draftsRoute, "shareUrl");
 requireText("explicit approval", draftsRoute, "if (isOauthGpt && !confirmSubmit)");
 requireText("reachable GPT image", draftsRoute, '"image_unavailable_for_gpt"');
+requireText("GPT image host diagnostics", draftsRoute, "receivedHost");
 requireText("private end date", draftsRoute, '"closes_at_required_for_link_only"');
 
 requireText("write schema", writeSchema, "version: 0.2.0");
@@ -87,5 +88,6 @@ requireText("GPT instructions", instructions, "Niemals `null`");
 requireText("GPT instructions", instructions, "confirmSubmit: true");
 requireText("GPT instructions", instructions, "Verwende niemals die eingebaute ChatGPT-Bildgenerierung");
 requireText("GPT instructions", instructions, "invalid_image_host_for_gpt");
+requireText("GPT instructions", instructions, "niemals wiederholt um Zustimmung bitten");
 
 console.log("FutureVote GPT contract: OK");

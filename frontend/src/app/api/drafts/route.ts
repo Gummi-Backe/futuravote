@@ -9,6 +9,11 @@ import { LONGTEXT_MARKER } from "@/app/lib/descriptionText";
 import { buildDraftReviewUrl, buildPrivatePollUrl } from "@/app/lib/publicUrls";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 import { computeDefaultResolutionDeadlineIso, resolutionDeadlineFollowsPollClose } from "@/app/lib/draftValidation";
+import {
+  getAllowedGptImageHosts,
+  getGptImageUrlHost,
+  isAllowedGptImageUrl,
+} from "@/app/lib/gptImageUrls";
 
 export const revalidate = 0;
 
@@ -147,36 +152,6 @@ function countWords(raw: string): number {
     .trim();
   if (!cleaned) return 0;
   return cleaned.split(" ").filter(Boolean).length;
-}
-
-function isAllowedGptImageUrl(rawUrl: string): boolean {
-  try {
-    const url = new URL(rawUrl);
-    if (url.protocol !== "https:") return false;
-
-    const allowed = (process.env.FV_GPT_ALLOWED_IMAGE_HOSTS ?? "")
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean);
-
-    if (allowed.length > 0) {
-      return allowed.includes(url.hostname);
-    }
-
-    const defaultUrl = normalizeImageUrl(process.env.FV_GPT_DEFAULT_IMAGE_URL);
-    if (defaultUrl) {
-      const defaultHost = new URL(defaultUrl).hostname;
-      if (url.hostname === defaultHost) return true;
-    }
-
-    if (url.hostname.endsWith(".supabase.co") && url.pathname.includes("/storage/v1/object/public/")) {
-      return true;
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
 }
 
 async function isReachableGptImageUrl(rawUrl: string): Promise<boolean> {
@@ -393,11 +368,19 @@ export async function POST(request: Request) {
   }
 
   if (isOauthGpt && imageUrl && !isAllowedGptImageUrl(imageUrl)) {
+    const receivedHost = getGptImageUrlHost(imageUrl);
+    const allowedHosts = [...getAllowedGptImageHosts()].sort();
     return errorResponse(
       400,
-      "imageUrl-Host ist für GPT-OAuth nicht freigegeben. Bitte nutze zuerst /api/gpt/generate-image.",
+      "imageUrl-Host ist für GPT-OAuth nicht freigegeben. Verwende imageUrl exakt aus der neuesten generateDraftImage-Antwort.",
       "invalid_image_host_for_gpt",
-      [{ field: "imageUrl", issue: "host_not_allowed_for_gpt" }]
+      [
+        {
+          field: "imageUrl",
+          issue: "host_not_allowed_for_gpt",
+          value: { receivedHost, allowedHosts },
+        },
+      ]
     );
   }
 
