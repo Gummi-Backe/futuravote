@@ -30,7 +30,14 @@ const nextConfig: NextConfig = {
       },
     ];
 
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      {
+        source: "/(.*)",
+        has: [{ type: "host", value: "gpt-write.future-vote.de" }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+      },
+    ];
   },
 };
 
