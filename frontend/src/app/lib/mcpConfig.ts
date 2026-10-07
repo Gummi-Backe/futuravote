@@ -41,6 +41,12 @@ export function secureEqual(left: string, right: string): boolean {
   return timingSafeEqual(Buffer.from(hashValue(left), "hex"), Buffer.from(hashValue(right), "hex"));
 }
 
+export function mcpConsentSecurityPolicy(config: Pick<McpConfig, "redirectUris">): string {
+  // Chromium checks form-action on redirects too; server-side callback matching stays exact.
+  const callbackOrigins = [...new Set(config.redirectUris.map((uri) => new URL(uri).origin))];
+  return `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${callbackOrigins.join(" ")}; base-uri 'none'; frame-ancestors 'none'`;
+}
+
 export function mcpChallenge(config: McpConfig, error = "invalid_token"): string {
   return `Bearer resource_metadata="${config.origin}/.well-known/oauth-protected-resource", scope="drafts:write", error="${error}", error_description="Connect your FutureVote account to continue"`;
 }

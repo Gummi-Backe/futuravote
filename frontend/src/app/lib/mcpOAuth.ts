@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { hashValue, secureEqual, type McpConfig } from "./mcpConfig.ts";
+import { hashValue, secureEqual, mcpConsentSecurityPolicy, type McpConfig } from "./mcpConfig.ts";
 
 export type McpCode = {
   code_hash: string; client_id: string; user_id: string; redirect_uri: string;
@@ -117,7 +117,7 @@ export async function handleMcpAuthorize(request: Request, deps: McpOAuthDepende
     const signed = `${value}.${consentSignature(config, session, params, value)}`;
     return new Response(renderMcpConsent(params, nonce, user.label), { headers: {
       ...noStore, "Content-Type": "text/html; charset=utf-8", "Set-Cookie": consentCookie(config, signed, 600),
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "Content-Security-Policy": mcpConsentSecurityPolicy(config),
       "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff",
     } });
   }

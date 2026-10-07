@@ -103,6 +103,29 @@ gegebenenfalls Pruefung. Das ist keine technische Einstellung am GPT.
 
 ## Pruefgrenzen
 
+### Browser-Rueckleitung am 07.10.2026
+
+Der erste echte Verbindungsversuch wurde nach der Freigabe von Edge mit
+`ERR_BLOCKED_BY_CLIENT` blockiert. Die Freigabeseite hatte `form-action 'self'`
+gesetzt. Chromium prueft diese CSP-Regel auch bei der anschliessenden
+HTTP-Weiterleitung zur ChatGPT-Domain.
+
+Die Ausnahme gilt jetzt nur fuer `/api/mcp/oauth/authorize`. Dort werden neben
+`'self'` ausschliesslich die Origins der serverseitig konfigurierten OAuth-
+Ruecksprungadressen erlaubt. Der Handler und die Next.js-Header-Konfiguration
+verwenden dieselbe Regel. Die exakte serverseitige Callback-Pruefung, PKCE,
+signierte Consent-Cookies, Ablaufzeiten und Rechte bleiben unveraendert.
+Alle normalen Website-Formulare behalten `form-action 'self'`.
+
+Mit `node scripts/serve-mcp-oauth-browser-test.mjs` kann die Freigabe ueber zwei
+verschiedene Loopback-Origins im echten Browser geprueft werden. Das ist ein
+isoliertes Testkonto ohne Supabase-, OpenAI- oder ChatGPT-Aufrufe. Vor der
+Korrektur blieb die Rueckleitung blockiert; danach erreichte Edge die lokale
+Callback-Seite auf Desktop und bei 390 Pixeln Breite. Der Server muss nach
+diesem manuellen Test beendet werden.
+
+Diese Browserpruefung ersetzt noch nicht die echte ChatGPT-Verknuepfung.
+
 Automatisierte Tests pruefen Protokoll, OAuth und Weitergabe an die bestehenden
 Handler mit kontrollierten Testdaten. Sie erzeugen keine kostenpflichtigen
 Bilder und schreiben keine Live-Umfragen. Ein erfolgreicher lokaler Test ist

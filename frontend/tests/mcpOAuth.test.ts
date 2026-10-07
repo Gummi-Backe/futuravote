@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getMcpConfig, hashValue } from "../src/app/lib/mcpConfig.ts";
+import { getMcpConfig, hashValue, mcpConsentSecurityPolicy } from "../src/app/lib/mcpConfig.ts";
 import { handleMcpAuthorize, handleMcpToken, handleMcpRevoke, pkceChallenge, renderMcpConsent, type McpCode, type McpTokens, type McpOAuthDependencies } from "../src/app/lib/mcpOAuth.ts";
 
 const config = getMcpConfig({ FV_MCP_OAUTH_CLIENT_SECRET: "test-secret" });
@@ -99,6 +99,29 @@ test("linking uses the existing FutureVote login and requires explicit consent",
   assert.equal(h.codes.length, 0);
   assert.match(response.headers.get("content-security-policy")!, /frame-ancestors 'none'/);
   assert.match(response.headers.get("set-cookie")!, /HttpOnly.*SameSite=Lax.*Secure/);
+});
+
+test("consent CSP allows only configured callback origins without relaxing exact redirect validation", async () => {
+  const h = harness();
+  const response = await handleMcpAuthorize(authorizeRequest(baseParams()), h.deps);
+  const policy = response.headers.get("content-security-policy")!;
+  assert.equal(policy, mcpConsentSecurityPolicy(config));
+  assert.match(policy, /form-action 'self' https:\/\/chatgpt\.com;/);
+  assert.match(policy, /default-src 'none'/);
+  assert.match(policy, /base-uri 'none'; frame-ancestors 'none'/);
+  assert.ok(!policy.includes("*") && !policy.includes("form-action https:"));
+  for (const uri of ["https://attacker.example/callback", "https://chatgpt.com/other-path"]) {
+    const params = baseParams(); params.set("redirect_uri", uri);
+    const rejected = await handleMcpAuthorize(authorizeRequest(params), h.deps);
+    assert.equal(rejected.status, 400);
+    assert.equal(rejected.headers.get("location"), null);
+  }
+});
+
+test("consent CSP derives unique origins from server configuration, not request input", () => {
+  const configured = getMcpConfig({ FV_MCP_OAUTH_REDIRECT_URIS: "https://chatgpt.com/callback,https://chatgpt.com/second,https://example.com/callback?state=test" });
+  assert.match(mcpConsentSecurityPolicy(configured), /form-action 'self' https:\/\/chatgpt\.com https:\/\/example\.com;/);
+  assert.ok(!mcpConsentSecurityPolicy(configured).includes("?state="));
 });
 
 test("consent cannot be forged, replayed for another scope, or posted cross-origin", async () => {

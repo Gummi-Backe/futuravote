@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { getMcpConfig, mcpConsentSecurityPolicy } from "./src/app/lib/mcpConfig.ts";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -32,6 +33,10 @@ const nextConfig: NextConfig = {
 
     return [
       { source: "/(.*)", headers: securityHeaders },
+      {
+        source: "/api/mcp/oauth/authorize",
+        headers: [{ key: "Content-Security-Policy", value: mcpConsentSecurityPolicy(getMcpConfig()) }],
+      },
       {
         source: "/(.*)",
         has: [{ type: "host", value: "gpt-write.future-vote.de" }],

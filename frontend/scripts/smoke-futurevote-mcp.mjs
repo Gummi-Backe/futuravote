@@ -66,8 +66,15 @@ console.log("MCP OAuth hostile redirect blocked");
 modern.searchParams.set("redirect_uri", "https://chatgpt.com/connector_platform_oauth_redirect");
 const login = await fetch(modern, { redirect: "manual", signal: AbortSignal.timeout(30000) });
 assert.equal(login.status, 303, "Configured OAuth must lead to FutureVote login");
+assert.match(login.headers.get("content-security-policy") ?? "", /form-action 'self' https:\/\/chatgpt\.com;/,
+  "OAuth consent must permit the configured ChatGPT callback through Chromium form redirects");
 const location = new URL(login.headers.get("location"));
 assert.equal(location.origin, origin);
 assert.equal(location.pathname, "/auth");
 assert.ok(location.searchParams.get("next").startsWith("/api/mcp/oauth/authorize?"));
 console.log("MCP OAuth login entry OK (no grant issued)");
+const authPage = await fetch(new URL("/auth", origin), { signal: AbortSignal.timeout(30000) });
+assert.equal(authPage.status, 200);
+assert.match(authPage.headers.get("content-security-policy") ?? "", /form-action 'self';/,
+  "Normal website forms must remain same-origin only");
+console.log("OAuth callback CSP exception OK; normal login forms remain same-origin only");
