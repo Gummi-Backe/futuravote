@@ -15,6 +15,22 @@ function failure(error: string, retryable = false): AiResult {
   return { ok: false, error, retryable };
 }
 
+function safeRequestDiagnostic(data: Record<string, unknown>): string {
+  if (!isRecord(data.error)) return "";
+  const error = data.error;
+  const knownParams = ["model", "reasoning", "reasoning.effort", "store", "max_output_tokens", "max_tool_calls", "tools", "tools[0].type", "tool_choice", "text", "text.format", "text.format.type", "input"];
+  const knownCodes = ["invalid_request_error", "unsupported_parameter", "unsupported_value", "invalid_value", "model_not_found"];
+  const details: string[] = [];
+  if (typeof error.param === "string" && knownParams.includes(error.param)) details.push(`Parameter: ${error.param}`);
+  if (typeof error.code === "string" && knownCodes.includes(error.code)) details.push(`Code: ${error.code}`);
+  // Classify in memory; never expose the provider's free-form message.
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  if ((message.includes("json") || message.includes("text.format")) && (message.includes("web_search") || message.includes("web search")) && (message.includes("not supported") || message.includes("unsupported"))) {
+    details.push("JSON-Format und Web-Suche nicht kombinierbar");
+  }
+  return details.length ? ` ${details.join("; ")}.` : "";
+}
+
 export async function callFutureVoteTextAi(opts: {
   apiKey: string;
   prompt: string;
@@ -67,7 +83,7 @@ export async function callFutureVoteTextAi(opts: {
       if (response.status === 401 || response.status === 403) return failure("OpenAI-Zugriff nicht erlaubt. API-Schluessel und Modellfreigabe pruefen.");
       if (response.status === 404) return failure("GPT-6.1 Sol ist fuer diesen OpenAI-Zugang nicht verfuegbar.");
       if (response.status === 429) return failure("OpenAI-Limit erreicht. Guthaben und API-Limits pruefen.", true);
-      return failure(`OpenAI-Anfrage fehlgeschlagen (${response.status}).`, response.status >= 500);
+      return failure(`OpenAI-Anfrage fehlgeschlagen (${response.status}).${response.status === 400 ? safeRequestDiagnostic(data) : ""}`, response.status >= 500);
     }
     if (data.status === "incomplete") {
       return failure("OpenAI-Antwort unvollstaendig. Keine abgeschnittenen Vorschlaege uebernommen.", true);

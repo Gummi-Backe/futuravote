@@ -55,7 +55,7 @@ test("incomplete, unresearched, malformed and refused responses are not accepted
 });
 
 test("API failures are redacted and never trigger automatic paid retries", async () => {
-  for (const status of [401, 403, 404, 429, 500]) {
+  for (const status of [400, 401, 403, 404, 429, 500]) {
     let calls = 0;
     const result = await callFutureVoteTextAi({ apiKey: "secret", prompt: "JSON", maxTokens: 700, fetchImpl: async () => {
       calls += 1;
@@ -65,6 +65,23 @@ test("API failures are redacted and never trigger automatic paid retries", async
     if (!result.ok) assert.ok(!result.error.includes("secret"));
     assert.equal(calls, 1);
   }
+});
+
+test("request diagnostics expose only known parameter names and fixed classifications", async () => {
+  const diagnostic = await callFutureVoteTextAi({ apiKey: "secret", prompt: "JSON", maxTokens: 700, fetchImpl: async () => Response.json({ error: {
+    param: "text.format", code: "unsupported_value", message: "JSON mode not supported with web_search: secret",
+  } }, { status: 400 }) });
+  assert.equal(diagnostic.ok, false);
+  if (!diagnostic.ok) {
+    assert.match(diagnostic.error, /Parameter: text\.format/);
+    assert.match(diagnostic.error, /Code: unsupported_value/);
+    assert.match(diagnostic.error, /JSON-Format und Web-Suche nicht kombinierbar/);
+    assert.ok(!diagnostic.error.includes("secret"));
+  }
+  const redacted = await callFutureVoteTextAi({ apiKey: "secret", prompt: "JSON", maxTokens: 700, fetchImpl: async () => Response.json({ error: {
+    param: "secret", code: "secret", message: "secret",
+  } }, { status: 400 }) });
+  assert.deepEqual(redacted, { ok: false, error: "OpenAI-Anfrage fehlgeschlagen (400).", retryable: false });
 });
 
 test("timeouts cancel the provider call and missing keys do not call it", async () => {
