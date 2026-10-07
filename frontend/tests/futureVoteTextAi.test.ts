@@ -82,6 +82,15 @@ test("request diagnostics expose only known parameter names and fixed classifica
     param: "secret", code: "secret", message: "secret",
   } }, { status: 400 }) });
   assert.deepEqual(redacted, { ok: false, error: "OpenAI-Anfrage fehlgeschlagen (400).", retryable: false });
+  const formatError = await callFutureVoteTextAi({ apiKey: "secret", prompt: "JSON", maxTokens: 700, fetchImpl: async () => Response.json({ error: {
+    type: "invalid_request_error", message: "tools cannot be used with JSON mode: secret",
+  } }, { status: 400 }) });
+  assert.equal(formatError.ok, false);
+  if (!formatError.ok) {
+    assert.match(formatError.error, /Typ: invalid_request_error/);
+    assert.match(formatError.error, /JSON-Format und Web-Suche nicht kombinierbar/);
+    assert.ok(!formatError.error.includes("secret"));
+  }
 });
 
 test("timeouts cancel the provider call and missing keys do not call it", async () => {

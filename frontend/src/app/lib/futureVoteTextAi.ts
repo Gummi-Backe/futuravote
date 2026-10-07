@@ -16,16 +16,23 @@ function failure(error: string, retryable = false): AiResult {
 }
 
 function safeRequestDiagnostic(data: Record<string, unknown>): string {
-  if (!isRecord(data.error)) return "";
-  const error = data.error;
+  const error = isRecord(data.error) ? data.error : data;
   const knownParams = ["model", "reasoning", "reasoning.effort", "store", "max_output_tokens", "max_tool_calls", "tools", "tools[0].type", "tool_choice", "text", "text.format", "text.format.type", "input"];
   const knownCodes = ["invalid_request_error", "unsupported_parameter", "unsupported_value", "invalid_value", "model_not_found"];
   const details: string[] = [];
   if (typeof error.param === "string" && knownParams.includes(error.param)) details.push(`Parameter: ${error.param}`);
   if (typeof error.code === "string" && knownCodes.includes(error.code)) details.push(`Code: ${error.code}`);
+  if (typeof error.type === "string" && knownCodes.includes(error.type)) details.push(`Typ: ${error.type}`);
   // Classify in memory; never expose the provider's free-form message.
-  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
-  if ((message.includes("json") || message.includes("text.format")) && (message.includes("web_search") || message.includes("web search")) && (message.includes("not supported") || message.includes("unsupported"))) {
+  const message = (typeof error.message === "string" ? error.message : typeof data.error === "string" ? data.error : "").toLowerCase();
+  const references = [
+    ["json", "JSON"], ["web_search", "Web-Suche"], ["web search", "Web-Suche"],
+    ["model", "Modell"], ["reasoning", "Reasoning"], ["max_output_tokens", "Ausgabetokenlimit"],
+    ["max_tool_calls", "Werkzeuglimit"], ["tool_choice", "Werkzeugauswahl"], ["tools", "Werkzeuge"],
+    ["text.format", "Textformat"], ["response_format", "Antwortformat"], ["store", "Speicherung"],
+  ].filter(([keyword]) => message.includes(keyword)).map(([, label]) => label);
+  if (references.length) details.push(`Fehler bezieht sich auf: ${[...new Set(references)].join(", ")}`);
+  if ((message.includes("json") || message.includes("text.format")) && (message.includes("web_search") || message.includes("web search") || message.includes("tools")) && (message.includes("not supported") || message.includes("unsupported") || message.includes("cannot be used"))) {
     details.push("JSON-Format und Web-Suche nicht kombinierbar");
   }
   return details.length ? ` ${details.join("; ")}.` : "";
