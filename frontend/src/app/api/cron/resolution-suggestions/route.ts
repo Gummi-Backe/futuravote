@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
 import { isRecord } from "@/app/lib/unknownValue";
+import { isAuthorizedCronRequest } from "@/app/lib/cronAuth";
+import { callFutureVoteTextAi, FUTUREVOTE_AI_MIN_CALL_MS, FUTUREVOTE_AI_REQUEST_BUDGET_MS, FUTUREVOTE_TEXT_MODEL, FUTUREVOTE_REASONING_EFFORT } from "@/app/lib/futureVoteTextAi";
 
 export const revalidate = 0;
+export const maxDuration = 300;
 
 type Suggestion = {
   suggestedOutcome: "yes" | "no" | "unknown";
@@ -32,11 +35,6 @@ type ResolutionCandidateRow = {
 
 type ResolutionOptionRow = { id: string; label: string | null; sort_order: number | null };
 type PendingSuggestionRow = { question_id: string; source_kind: string | null };
-
-function isVercelCron(request: Request): boolean {
-  const header = request.headers.get("x-vercel-cron");
-  return header === "1" || header === "true";
-}
 
 function safeJsonFromText(text: string): unknown {
   const start = text.indexOf("{");
@@ -85,69 +83,24 @@ function normalizeSuggestion(raw: unknown, opts: { answerMode: "binary" | "optio
   return { suggestedOutcome, suggestedOptionId, confidence, note, sources };
 }
 
-async function callPerplexity(opts: { apiKey: string; model: string; prompt: string; maxTokens: number }) {
-  const res = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${opts.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      temperature: 0.2,
-      max_tokens: opts.maxTokens,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Du antwortest strikt als JSON. Schreibe Deutsch mit Umlauten (ä, ö, ü, ß) und nutze keine ae/oe/ue/ss-Ersatzschreibweise.",
-        },
-        { role: "user", content: opts.prompt },
-      ],
-    }),
-  });
-
-  const json: unknown = await res.json().catch(() => null);
-  const responseData = isRecord(json) ? json : {};
-  if (!res.ok) {
-    const responseError = isRecord(responseData.error) ? responseData.error : {};
-    const msg =
-      (typeof responseError.message === "string" ? responseError.message : null) ??
-      (typeof responseData.message === "string" ? responseData.message : null) ??
-      `Perplexity Fehler (${res.status})`;
-    return { ok: false as const, error: msg };
-  }
-
-  const firstChoice = Array.isArray(responseData.choices) && isRecord(responseData.choices[0]) ? responseData.choices[0] : {};
-  const responseMessage = isRecord(firstChoice.message) ? firstChoice.message : {};
-  const content = responseMessage.content;
-  if (typeof content !== "string" || !content.trim()) {
-    return { ok: false as const, error: "Perplexity hat keine Antwort geliefert." };
-  }
-
-  return { ok: true as const, content: content.trim() };
-}
-
 export async function GET(request: Request) {
+  const deadline = Date.now() + FUTUREVOTE_AI_REQUEST_BUDGET_MS;
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? "25");
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(60, Math.trunc(limitRaw))) : 25;
   const source = String(url.searchParams.get("source") ?? "").trim().slice(0, 40);
 
-  const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
-  const providedSecret = url.searchParams.get("secret") ?? "";
-
-  if (!isVercelCron(request) && secret && providedSecret !== secret) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const trigger = isVercelCron(request) ? (source === "admin" ? "admin" : "vercel_cron") : "manual";
+  const trigger = source === "admin" ? "admin" : "vercel_cron";
 
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json({ ok: false, error: "PERPLEXITY_API_KEY ist nicht gesetzt." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "OPENAI_API_KEY ist nicht gesetzt." }, { status: 500 });
   }
-  const model = process.env.PERPLEXITY_MODEL?.trim() || "sonar-pro";
+  const model = FUTUREVOTE_TEXT_MODEL;
 
   const supabase = getSupabaseAdminClient();
   const nowIso = new Date().toISOString();
@@ -224,9 +177,11 @@ export async function GET(request: Request) {
 
   let created = 0;
   let failed = 0;
-  let skippedExisting = candidatesAll.length - candidates.length;
+  let skippedExisting = candidatesAll.filter((q) => pendingSet.has(`${String(q.id)}|ai`)).length;
+  let considered = 0;
 
   for (const q of candidates) {
+    if (deadline - Date.now() < FUTUREVOTE_AI_MIN_CALL_MS) break;
     const questionId = String(q.id);
 
     const answerMode = q.answer_mode === "options" ? "options" : "binary";
@@ -240,6 +195,7 @@ export async function GET(request: Request) {
         : null;
 
     if (answerMode === "options" && optionRows?.error) {
+      considered += 1;
       await supabase.from("question_resolution_suggestions").insert({
         question_id: questionId,
         source_kind: "ai",
@@ -322,8 +278,13 @@ export async function GET(request: Request) {
           ].join("\n");
 
     try {
-      const resp = await callPerplexity({ apiKey, model, prompt, maxTokens: 700 });
+      const timeoutMs = deadline - Date.now();
+      if (timeoutMs < FUTUREVOTE_AI_MIN_CALL_MS) break;
+      const resp = await callFutureVoteTextAi({ apiKey, prompt, maxTokens: 700, timeoutMs });
       if (!resp.ok) {
+        // Transient provider limits must not create dozens of failed queue entries.
+        if (resp.retryable) break;
+        considered += 1;
         await supabase.from("question_resolution_suggestions").insert({
           question_id: questionId,
           source_kind: "ai",
@@ -339,9 +300,10 @@ export async function GET(request: Request) {
           last_attempt_at: nowIso,
         });
         failed += 1;
-        continue;
+        break;
       }
 
+      considered += 1;
       const parsed = safeJsonFromText(resp.content);
       const suggestion = normalizeSuggestion(parsed, {
         answerMode,
@@ -400,10 +362,13 @@ export async function GET(request: Request) {
       const payload = {
         ok: true,
         checked: candidatesAll.length,
-        considered: candidates.length,
+        considered,
+        deferred: Math.max(0, candidatesAll.length - skippedExisting - created - failed),
         created,
         failed,
         skippedExisting,
+        model,
+        reasoningEffort: FUTUREVOTE_REASONING_EFFORT,
         todayUtc: nowIso.slice(0, 10),
         nowUtc: nowIso,
       };

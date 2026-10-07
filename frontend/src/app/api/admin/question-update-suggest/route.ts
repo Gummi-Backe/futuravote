@@ -4,8 +4,10 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { getQuestionByIdFromSupabase } from "@/app/data/dbSupabase";
 import { splitDescriptionText } from "@/app/lib/descriptionText";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
+import { callFutureVoteTextAi, FUTUREVOTE_TEXT_MODEL, FUTUREVOTE_REASONING_EFFORT } from "@/app/lib/futureVoteTextAi";
 
 export const revalidate = 0;
+export const maxDuration = 300;
 
 type Body = {
   questionId?: string;
@@ -176,12 +178,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Frage nicht gefunden." }, { status: 404 });
   }
 
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json({ error: "PERPLEXITY_API_KEY ist nicht gesetzt." }, { status: 500 });
+    return NextResponse.json({ error: "OPENAI_API_KEY ist nicht gesetzt." }, { status: 500 });
   }
 
-  const model = process.env.PERPLEXITY_MODEL?.trim() || "sonar-pro";
   const context = typeof body.context === "string" ? body.context.trim().slice(0, 2000) : "";
   const description = splitDescriptionText(question.description ?? null);
 
@@ -195,35 +196,9 @@ export async function POST(request: Request) {
     isResolvable: question.isResolvable ?? true,
   });
 
-  const res = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      max_tokens: 900,
-      messages: [
-        { role: "system", content: "Du antwortest strikt als JSON." },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-
-  const json = (await res.json().catch(() => null)) as
-    | { error?: { message?: string }; message?: string; choices?: Array<{ message?: { content?: string } }> }
-    | null;
-  if (!res.ok) {
-    const msg = json?.error?.message ?? json?.message ?? `Perplexity Fehler (${res.status})`;
-    return NextResponse.json({ error: msg }, { status: 502 });
-  }
-
-  const content = json?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) {
-    return NextResponse.json({ error: "Perplexity hat keine Antwort geliefert." }, { status: 502 });
-  }
+  const result = await callFutureVoteTextAi({ apiKey, prompt, maxTokens: 900 });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
+  const content = result.content;
 
   const parsed = safeJsonFromText(content);
   const suggestion = normalizeSuggestion(parsed);
@@ -234,5 +209,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, suggestion }, { status: 200 });
+  return NextResponse.json({ ok: true, suggestion, model: FUTUREVOTE_TEXT_MODEL, reasoningEffort: FUTUREVOTE_REASONING_EFFORT }, { status: 200 });
 }

@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { isAuthorizedCronRequest } from "@/app/lib/cronAuth";
 
 export const revalidate = 0;
-
-function isVercelCron(request: Request): boolean {
-  const header = request.headers.get("x-vercel-cron");
-  return header === "1" || header === "true";
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -15,10 +11,7 @@ export async function GET(request: Request) {
   const daysBack = Number.isFinite(daysBackRaw) ? Math.max(1, Math.min(3650, Math.trunc(daysBackRaw))) : 120;
   const nowIso = new Date().toISOString();
 
-  const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
-  const providedSecret = url.searchParams.get("secret") ?? "";
-
-  if (!isVercelCron(request) && secret && providedSecret !== secret) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

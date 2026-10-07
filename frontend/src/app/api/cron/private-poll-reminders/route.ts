@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/app/lib/supabaseAdminClient";
 import { sendPrivatePollEndingSoonEmail } from "@/app/lib/email";
 import { logAnalyticsEventServer } from "@/app/data/dbSupabaseAnalytics";
+import { isAuthorizedCronRequest } from "@/app/lib/cronAuth";
 
 export const revalidate = 0;
 
@@ -16,11 +17,6 @@ type PrivatePollRow = {
 };
 type SentRow = { question_id: string };
 type UserRow = { email: string | null; display_name: string | null };
-
-function isVercelCron(request: Request): boolean {
-  const header = request.headers.get("x-vercel-cron");
-  return header === "1" || header === "true";
-}
 
 function getSiteUrl(requestUrl: string) {
   const envBase = process.env.NEXT_PUBLIC_BASE_URL?.trim();
@@ -65,10 +61,7 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, Math.trunc(limitRaw))) : 50;
   const nowIso = new Date().toISOString();
 
-  const secret = process.env.FV_CRON_SECRET?.trim() ?? "";
-  const providedSecret = url.searchParams.get("secret") ?? "";
-
-  if (!isVercelCron(request) && secret && providedSecret !== secret) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

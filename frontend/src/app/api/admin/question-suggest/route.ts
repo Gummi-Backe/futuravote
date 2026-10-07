@@ -4,8 +4,10 @@ import { getUserBySessionSupabase } from "@/app/data/dbSupabaseUsers";
 import { categories } from "@/app/data/mock";
 import { consumeRateLimit, mutationRequestGuard, rateLimitResponse } from "@/app/lib/requestSecurity";
 import { isRecord } from "@/app/lib/unknownValue";
+import { callFutureVoteTextAi, FUTUREVOTE_AI_MIN_CALL_MS, FUTUREVOTE_AI_REQUEST_BUDGET_MS, FUTUREVOTE_TEXT_MODEL, FUTUREVOTE_REASONING_EFFORT } from "@/app/lib/futureVoteTextAi";
 
 export const revalidate = 0;
+export const maxDuration = 300;
 
 type Body = {
   category?: string;
@@ -434,51 +436,8 @@ function buildPrompt(opts: {
     .join("\n");
 }
 
-async function callPerplexity(opts: { apiKey: string; model: string; prompt: string; maxTokens: number }) {
-  const res = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${opts.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      temperature: 0.2,
-      max_tokens: opts.maxTokens,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Du antwortest strikt als JSON. Schreibe auf Deutsch.",
-        },
-        { role: "user", content: opts.prompt },
-      ],
-    }),
-  });
-
-  const json: unknown = await res.json().catch(() => null);
-  const responseData = isRecord(json) ? json : {};
-  if (!res.ok) {
-    const responseError = isRecord(responseData.error) ? responseData.error : {};
-    const msg =
-      (typeof responseError.message === "string" ? responseError.message : null) ??
-      (typeof responseData.message === "string" ? responseData.message : null) ??
-      `Perplexity Fehler (${res.status})`;
-    return { ok: false as const, error: msg };
-  }
-
-  const firstChoice = Array.isArray(responseData.choices) && isRecord(responseData.choices[0]) ? responseData.choices[0] : {};
-  const responseMessage = isRecord(firstChoice.message) ? firstChoice.message : {};
-  const content = responseMessage.content;
-  const finishReason = String(firstChoice.finish_reason ?? "");
-  if (typeof content !== "string" || !content.trim()) {
-    return { ok: false as const, error: "Perplexity hat keine Antwort geliefert." };
-  }
-
-  return { ok: true as const, content: content.trim(), finishReason };
-}
-
 export async function POST(request: Request) {
+  const deadline = Date.now() + FUTUREVOTE_AI_REQUEST_BUDGET_MS;
   const invalidSource = mutationRequestGuard(request);
   if (invalidSource) return invalidSource;
 
@@ -546,12 +505,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bitte gib eine Kategorie oder ein Thema an." }, { status: 400 });
   }
 
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
-    return NextResponse.json({ error: "PERPLEXITY_API_KEY ist nicht gesetzt." }, { status: 500 });
+    return NextResponse.json({ error: "OPENAI_API_KEY ist nicht gesetzt." }, { status: 500 });
   }
 
-  const model = process.env.PERPLEXITY_MODEL?.trim() || "sonar-pro";
   const allowedCategories = categories.map((c) => c.label).slice(0, 50);
 
   const collected: QuestionSuggestion[] = [];
@@ -562,6 +520,8 @@ export async function POST(request: Request) {
   // Bei Longtext nur 1 Vorschlag pro Call (Token-lastig), sonst bis zu 3 pro Call.
   const maxAttempts = withLongDescription ? Math.max(4, count + 2) : 4;
   for (let attempt = 0; attempt < maxAttempts && collected.length < count; attempt++) {
+    const timeoutMs = deadline - Date.now();
+    if (timeoutMs < FUTUREVOTE_AI_MIN_CALL_MS) break;
     const remaining = count - collected.length;
     const batchCount = withLongDescription ? Math.min(1, remaining) : Math.min(3, remaining);
 
@@ -579,13 +539,14 @@ export async function POST(request: Request) {
       withLongDescription,
     });
 
-    const resp = await callPerplexity({
+    const resp = await callFutureVoteTextAi({
       apiKey,
-      model,
       prompt,
       maxTokens: withLongDescription ? 4200 : 2200,
+      timeoutMs,
     });
     if (!resp.ok) {
+      if (collected.length > 0) break;
       return NextResponse.json({ error: resp.error }, { status: 502 });
     }
     lastRaw = resp.content;
@@ -631,8 +592,7 @@ export async function POST(request: Request) {
     if (rawSuggestions.length === 0 || constrained.length === 0) {
       const maybeCutOff =
         resp.finishReason.toLowerCase().includes("length") ||
-        !resp.content.trim().endsWith("}") ||
-        !resp.content.trim().endsWith("]");
+        (!resp.content.trim().endsWith("}") && !resp.content.trim().endsWith("]"));
       return NextResponse.json(
         {
           error: maybeCutOff
@@ -658,6 +618,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    model: FUTUREVOTE_TEXT_MODEL,
+    reasoningEffort: FUTUREVOTE_REASONING_EFFORT,
     suggestions: collected.slice(0, count),
     requestedCount: count,
     receivedCount: collected.length,
