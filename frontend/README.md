@@ -42,6 +42,9 @@ Prognose-Aufloesungsvorschlaege) verwenden `gpt-6.1-sol` mit `reasoning.effort=x
 ueber die OpenAI Responses API. Web-Recherche bleibt verpflichtend. Der vorhandene
 serverseitige `OPENAI_API_KEY` benoetigt Zugriff auf dieses Modell und Web Search.
 `PERPLEXITY_API_KEY` und `PERPLEXITY_MODEL` werden dafuer nicht mehr verwendet.
+Die Web-Suche akzeptiert keinen erzwungenen JSON-Modus. Der Prompt verlangt ein
+reines JSON-Objekt; ungueltige, abgeschnittene oder nicht recherchierte Antworten
+werden vor der Uebernahme verworfen. Kein automatischer Modellwechsel oder Retry.
 
 Sehr hohe Denktiefe erhoeht moeglicherweise Kosten und Laufzeit. Pro Aufruf sind
 Web-Tool-Aufrufe und die gemeinsame Ausgabe fuer Denken und JSON begrenzt.

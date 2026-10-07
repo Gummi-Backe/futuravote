@@ -27,7 +27,9 @@ test("FutureVote uses only GPT-6.1 Sol xhigh with researched JSON and enough rea
     assert.equal(body.max_tool_calls, 6);
     assert.deepEqual(body.tools, [{ type: "web_search" }]);
     assert.equal(body.tool_choice, "required");
-    assert.deepEqual(body.text.format, { type: "json_object" });
+    assert.equal(body.text, undefined);
+    assert.match(body.input[0].content, /ausschliesslich als JSON-Objekt/);
+    assert.match(body.input[0].content, /ohne Markdown-Codeblock/);
     assert.equal(body.temperature, undefined);
     assert.equal(body.messages, undefined);
     assert.equal(init?.cache, "no-store");
@@ -46,6 +48,8 @@ test("incomplete, unresearched, malformed and refused responses are not accepted
     { ...completed(), status: "failed" },
     { status: "completed", output: [] },
     completed("not JSON"),
+    completed('```json\n{"suggestions":[]}\n```'),
+    completed('{"suggestions":[]'),
     completed("[]"),
     { ...completed(), output: [{ type: "web_search_call", status: "completed" }, { type: "message", role: "assistant", content: [{ type: "refusal", refusal: "no" }] }] },
   ]) {
