@@ -53,6 +53,7 @@ export async function getUserByOauthAccessTokenSupabase(accessToken: string): Pr
 export type OauthAccessContext = {
   user: User;
   scope: string;
+  clientId: string;
 };
 
 export async function getOauthAccessContextByTokenSupabase(accessToken: string): Promise<OauthAccessContext | null> {
@@ -67,6 +68,7 @@ export async function getOauthAccessContextByTokenSupabase(accessToken: string):
     .from("oauth_tokens")
     .select(
       `
+      client_id,
       scope,
       access_expires_at,
       revoked_at,
@@ -98,9 +100,10 @@ export async function getOauthAccessContextByTokenSupabase(accessToken: string):
   return {
     user: mapUser(user),
     scope: String(row.scope ?? ""),
+    clientId: String(row.client_id ?? ""),
   };
 }
-type OauthTokenUserRow = { users: DbUser | DbUser[] | null; scope?: string | null };
+type OauthTokenUserRow = { users: DbUser | DbUser[] | null; scope?: string | null; client_id?: string | null };
 
 function getRelatedUser(row: OauthTokenUserRow): DbUser | null {
   return Array.isArray(row.users) ? row.users[0] ?? null : row.users;

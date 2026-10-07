@@ -86,7 +86,9 @@ export async function GET(request: Request) {
   const validation = validateAuthorizeParams(params);
 
   if (!validation.ok) {
-    if (params.redirect_uri && params.state) {
+    const cfg = getOAuthClientConfig();
+    if (params.client_id === cfg.clientId && params.redirect_uri && params.state &&
+        isAllowedRedirectUri(params.redirect_uri, cfg.allowedRedirectHosts)) {
       return buildRedirectError(params.redirect_uri, params.state, "invalid_request", validation.error);
     }
     return new NextResponse(validation.error, { status: 400, headers: { "Cache-Control": "no-store" } });

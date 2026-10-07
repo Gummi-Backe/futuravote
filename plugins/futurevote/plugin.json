@@ -1,0 +1,27 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "futurevote",
+  "version": "1.0.0",
+  "description": "Aktuelle FutureVote-Umfragen abrufen und nach Freigabe Prognosen, Meinungs-Umfragen und private Link-Umfragen einreichen.",
+  "author": { "name": "FutureVote", "url": "https://www.future-vote.de" },
+  "homepage": "https://www.future-vote.de",
+  "keywords": ["polls", "predictions", "community"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "FutureVote",
+        "shortDescription": "Umfragen erstellen und gemeinsam mitgestalten",
+        "longDescription": "Oeffentliche Prognosen, Meinungs-Umfragen mit Ja/Nein oder Optionen und private Link-Umfragen. Oeffentliche Vorschlaege durchlaufen die Community-Bewertung. Bilder werden dauerhaft bei FutureVote gespeichert.",
+        "developerName": "FutureVote",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://www.future-vote.de",
+        "privacyPolicyURL": "https://www.future-vote.de/datenschutz",
+        "termsOfServiceURL": "https://www.future-vote.de/terms",
+        "brandColor": "#38d7a0",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/icon.png",
+        "defaultPrompt": ["Zeige mir aktuelle FutureVote-Umfragen.", "Erstelle eine oeffentliche Meinungs-Umfrage.", "Erstelle eine Prognose mit klaren Aufloesungskriterien.", "Erstelle eine private Link-Umfrage."]
+      }
+    }
+  }
+}

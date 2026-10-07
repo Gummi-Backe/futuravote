@@ -163,11 +163,17 @@ export async function POST(request: Request) {
       if (computedChallenge !== expectedChallenge) return badRequest("invalid code_verifier");
     }
 
-    // mark used
-    await supabase
+    // Atomic consumption prevents concurrent exchanges from reusing the same code.
+    const consumedAt = new Date().toISOString();
+    const { data: consumed, error: consumeError } = await supabase
       .from("oauth_authorization_codes")
-      .update({ used_at: new Date().toISOString() })
-      .eq("id", row.id as string);
+      .update({ used_at: consumedAt })
+      .eq("id", row.id as string)
+      .is("used_at", null)
+      .gt("expires_at", consumedAt)
+      .select("id")
+      .maybeSingle();
+    if (consumeError || !consumed) return badRequest("code expired or already used");
 
     const accessToken = randomToken(32);
     const refreshToken = randomToken(32);
@@ -221,15 +227,21 @@ export async function POST(request: Request) {
     const accessToken = randomToken(32);
     const accessExpiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
 
-    const { error: upErr } = await supabase
+    const { data: refreshed, error: upErr } = await supabase
       .from("oauth_tokens")
       .update({
         access_token_hash: sha256Hex(accessToken),
         access_expires_at: accessExpiresAt,
       })
-      .eq("id", row.id as string);
+      .eq("id", row.id as string)
+      .eq("refresh_token_hash", refreshHash)
+      .is("revoked_at", null)
+      .gt("refresh_expires_at", new Date().toISOString())
+      .select("id")
+      .maybeSingle();
 
     if (upErr) return badRequest(`token update failed: ${upErr.message}`);
+    if (!refreshed) return badRequest("refresh token expired or revoked");
 
     return NextResponse.json(
       {

@@ -1,4 +1,5 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
+import { escapeHtml } from "./htmlEscaping.ts";
 
 const SMTP_HOST = process.env.FV_SMTP_HOST;
 const SMTP_PORT = process.env.FV_SMTP_PORT ? Number(process.env.FV_SMTP_PORT) : 587;
@@ -6,9 +7,9 @@ const SMTP_USER = process.env.FV_SMTP_USER;
 const SMTP_PASS = process.env.FV_SMTP_PASS;
 const EMAIL_FROM = process.env.FV_EMAIL_FROM ?? "no-reply@future-vote.de";
 
-let transporter: nodemailer.Transporter | null = null;
+let transporter: Transporter | null = null;
 
-function getTransporter(): nodemailer.Transporter | null {
+function getTransporter(): Transporter | null {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     return null;
   }
@@ -44,13 +45,14 @@ export async function sendVerificationEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
     <p>bitte bestätige deine E-Mail-Adresse, indem du auf den folgenden Link klickst:</p>
-    <p><a href="${options.verificationUrl}">${options.verificationUrl}</a></p>
+    <p><a href="${escapeHtml(options.verificationUrl)}">${escapeHtml(options.verificationUrl)}</a></p>
     <p>Wenn du keinen Account bei Future-Vote angelegt hast, kannst du diese E-Mail ignorieren.</p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     // Dev-/Fallback-Modus: Link nur im Log ausgeben
     console.log("[Future-Vote] Verifikationslink:", options.verificationUrl);
     return;
@@ -83,14 +85,15 @@ export async function sendPasswordResetEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
     <p>du hast (oder jemand anderes hat) ein Zurücksetzen deines Passworts angefordert.</p>
     <p>Klicke auf den folgenden Link, um ein neues Passwort zu setzen:</p>
-    <p><a href="${options.resetUrl}">${options.resetUrl}</a></p>
+    <p><a href="${escapeHtml(options.resetUrl)}">${escapeHtml(options.resetUrl)}</a></p>
     <p><strong>Hinweis:</strong> Der Link ist nur kurze Zeit gültig. Wenn du das nicht warst, ignoriere diese E-Mail.</p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Passwort-Reset-Link:", options.resetUrl);
     return;
   }
@@ -135,20 +138,21 @@ export async function sendPrivatePollResultEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
-    <p>deine private Umfrage ist beendet (<strong>${options.closesAtLabel}</strong>).</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
+    <p>deine private Umfrage ist beendet (<strong>${escapeHtml(options.closesAtLabel)}</strong>).</p>
     <p>
       <strong>Ergebnis:</strong>
       Ja ${options.yesVotes} (${yesPct}%) &middot; Nein ${options.noVotes} (${noPct}%) &middot;
       Stimmen gesamt ${totalVotes}
     </p>
     <p>
-      <a href="${options.pollUrl}">Umfrage öffnen</a>
+      <a href="${escapeHtml(options.pollUrl)}">Umfrage öffnen</a>
     </p>
     <p style="color:#94a3b8;font-size:12px">Hinweis: Das Ergebnis basiert auf den abgegebenen Stimmen.</p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Private Umfrage Ergebnis:", { to: options.to, pollUrl: options.pollUrl, subject });
     return;
   }
@@ -184,13 +188,14 @@ export async function sendPrivatePollEndingSoonEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
-    <p>deine private Umfrage endet bald (<strong>${options.closesAtLabel}</strong>).</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
+    <p>deine private Umfrage endet bald (<strong>${escapeHtml(options.closesAtLabel)}</strong>).</p>
     <p style="color:#cbd5e1">Wenn du noch Stimmen einsammeln willst, teile den Link jetzt noch einmal.</p>
-    <p><a href="${options.pollUrl}">Umfrage öffnen</a></p>
+    <p><a href="${escapeHtml(options.pollUrl)}">Umfrage öffnen</a></p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Private Umfrage Erinnerung (endet bald):", { to: options.to, pollUrl: options.pollUrl, subject });
     return;
   }
@@ -226,13 +231,14 @@ export async function sendCreatorPublicQuestionEndedEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
-    <p>deine öffentliche Frage ist beendet (<strong>${options.closesAtLabel}</strong>).</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
+    <p>deine öffentliche Frage ist beendet (<strong>${escapeHtml(options.closesAtLabel)}</strong>).</p>
     <p style="color:#cbd5e1">Die Abstimmung ist geschlossen. Das endgültige Ergebnis (Ja/Nein) wird später mit Quelle aufgelöst.</p>
-    <p><a href="${options.questionUrl}">Frage öffnen</a></p>
+    <p><a href="${escapeHtml(options.questionUrl)}">Frage öffnen</a></p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Creator Question Ended:", { to: options.to, questionUrl: options.questionUrl, subject });
     return;
   }
@@ -273,17 +279,18 @@ export async function sendCreatorPublicQuestionResolvedEmail(options: {
     .join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
-    <p>deine Frage wurde aufgelöst: <strong>Ergebnis = ${options.resolvedOutcomeLabel}</strong>.</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
+    <p>deine Frage wurde aufgelöst: <strong>Ergebnis = ${escapeHtml(options.resolvedOutcomeLabel)}</strong>.</p>
     ${
       options.resolvedSource
-        ? `<p style="color:#cbd5e1;font-size:12px">Quelle: <a href="${options.resolvedSource}">${options.resolvedSource}</a></p>`
+        ? `<p style="color:#cbd5e1;font-size:12px">Quelle: <a href="${escapeHtml(options.resolvedSource)}">${escapeHtml(options.resolvedSource)}</a></p>`
         : ""
     }
-    <p><a href="${options.questionUrl}">Frage öffnen</a></p>
+    <p><a href="${escapeHtml(options.questionUrl)}">Frage öffnen</a></p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Creator Question Resolved:", {
       to: options.to,
       questionUrl: options.questionUrl,
@@ -321,12 +328,13 @@ export async function sendCreatorDraftAcceptedEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
     <p>gute Nachrichten: Dein Draft wurde im Review-Bereich angenommen und ist jetzt live.</p>
-    <p><a href="${options.targetUrl}">Jetzt öffnen</a></p>
+    <p><a href="${escapeHtml(options.targetUrl)}">Jetzt öffnen</a></p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Creator Draft Accepted:", { to: options.to, targetUrl: options.targetUrl, subject });
     return;
   }
@@ -359,12 +367,13 @@ export async function sendCreatorDraftRejectedEmail(options: {
   ].join("\n");
 
   const html = `
-    <p>Hallo ${options.displayName || "Future-Vote Nutzer"},</p>
+    <p>Hallo ${escapeHtml(options.displayName || "Future-Vote Nutzer")},</p>
     <p>dein Draft wurde im Review-Bereich abgelehnt.</p>
-    <p><a href="${options.draftUrl}">Draft ansehen</a></p>
+    <p><a href="${escapeHtml(options.draftUrl)}">Draft ansehen</a></p>
   `;
 
   if (!transport) {
+    if (process.env.NODE_ENV === "production") throw new Error("E-Mail-Versand ist nicht konfiguriert.");
     console.log("[Future-Vote] Creator Draft Rejected:", { to: options.to, draftUrl: options.draftUrl, subject });
     return;
   }
